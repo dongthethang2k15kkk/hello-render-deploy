@@ -1,0 +1,65 @@
+import {expect, test} from '@playwright/test';
+test('English catalog, delivery form, persisted cart and disabled payment', async ({page}) => {
+  await page.goto('/en');
+  await expect(page.locator('html')).toHaveAttribute('lang', 'en');
+  await page.getByRole('link', {name: 'Package details'}).first().click();
+  await page.getByLabel('Recipient name (test data)').fill('Demo recipient');
+  await page.getByRole('button', {name: 'Add to cart'}).click();
+  await expect(page.getByRole('status')).toHaveText('Added to cart.');
+  await page.getByRole('link', {name: 'Cart', exact: true}).click();
+  await expect(page).toHaveURL(/\/en\/cart$/);
+  await expect(page.getByRole('heading', {name: 'Basic sample package'})).toBeVisible();
+  await page.reload();
+  await expect(page.getByText('Recipient name (test data): Demo recipient')).toBeVisible();
+  await expect(page.getByRole('button', {name: 'Payments not enabled'})).toBeDisabled();
+  await page.getByRole('button', {name: 'Remove', exact: true}).click();
+  await expect(page.getByText('Your cart is empty.')).toBeVisible();
+});
+test('Vietnamese storefront and unavailable product', async ({page}) => {
+  await page.goto('/vi');
+  await expect(page.locator('html')).toHaveAttribute('lang', 'vi');
+  await expect(page.getByRole('heading', {level: 1})).toContainText('Sản phẩm số.');
+  const response = await page.goto('/vi/products/not-a-product');
+  expect(response?.status()).toBe(404);
+});
+
+test('mobile discovery, quantity controls and simulated checkout', async ({page}) => {
+  await page.setViewportSize({width: 390,height: 844});
+  await page.goto('/en');
+  await page.getByRole('textbox', {name: 'Search products'}).fill('not found');
+  await expect(page.getByRole('heading', {name: 'No matching packages'})).toBeVisible();
+  await page.getByRole('button', {name: 'Reset filters'}).click();
+  await page.getByRole('link', {name: 'Package details'}).first().click();
+  await page.getByLabel('Recipient name (test data)').fill('Demo mobile');
+  await page.getByRole('button', {name: 'Add to cart'}).click();
+  await page.getByRole('link', {name: 'Cart', exact: true}).click();
+  await page.getByRole('button', {name: 'Increase item 1'}).click();
+  await expect(page.locator('output')).toHaveText('2');
+  await page.getByRole('link', {name: 'Preview checkout'}).click();
+  await page.getByRole('radio', {name: /Visa/}).check();
+  await expect(page.getByRole('radio', {name: /Visa/})).toBeChecked();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  await page.evaluate(() => {document.documentElement.style.scrollBehavior = 'auto'; window.scrollTo(0,0);});
+  await page.screenshot({path: 'test-results/mobile-checkout.png', fullPage: true});
+  await page.getByRole('button', {name: 'Complete simulation'}).click();
+  await expect(page.getByRole('heading', {name: 'Preview complete'})).toBeVisible();
+});
+
+test('desktop storefront layout and screenshot', async ({page}) => {
+  await page.setViewportSize({width:1440,height:1000});
+  await page.goto('/vi');
+  await expect(page.getByRole('heading', {level:1})).toContainText('Trải nghiệm');
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  await page.screenshot({path:'test-results/desktop-storefront.png',fullPage:true});
+});
+
+test('demo quote validates inputs and never enables payment', async ({request}) => {
+  const line = {productId: 'sample-basic', quantity: 2, delivery: {recipient: 'Demo'}};
+  const valid = await request.post('/api/demo/quote', {data: [line]});
+  expect(valid.status()).toBe(200);
+  expect(await valid.json()).toEqual({demo: true, currency: 'USD', totalMinor: 2000, paymentEnabled: false});
+  for (const data of [[], [{...line, usdCents: 1}], [{...line, quantity: 6}]]) {
+    const invalid = await request.post('/api/demo/quote', {data});
+    expect(invalid.status()).toBe(400);
+  }
+});

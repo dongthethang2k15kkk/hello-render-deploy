@@ -1,0 +1,12 @@
+node_modules/
+.next/
+.next-verify/
+.next-verify*/
+.env*
+!.env.example
+playwright-report/
+test-results/
+*.tsbuildinfo
+build-output.txt
+typecheck-output.txt
+git-inspect.tmp

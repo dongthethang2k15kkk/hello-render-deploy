@@ -1,0 +1,108 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// Staging only: manual reconciliation, no live inventory or automated settlement.
+model PaymentReceiver {
+  id           String   @id @default(cuid())
+  label        String
+  method       String
+  destination  String
+  bank         String
+  holder       String
+  qrPath       String
+  active       Boolean  @default(false)
+  pendingLimit Int      @default(10)
+  lastAssigned DateTime @default(now())
+  orders       PaymentOrder[]
+}
+
+model PaymentOrder {
+  id               String   @id @default(cuid())
+  requestKey       String   @unique
+  receiverId       String
+  receiver         PaymentReceiver @relation(fields: [receiverId], references: [id])
+  receiverSnapshot Json
+  lines            Json
+  usdCents         Int
+  amountMinor      BigInt
+  unitsPerUsd      BigInt
+  method           String
+  status           String   @default("PENDING")
+  reference        String   @unique
+  transactionKey   String?  @unique
+  deliveryNote     String?
+  expiresAt        DateTime
+  createdAt        DateTime @default(now())
+  events           PaymentEvent[]
+  @@index([receiverId, status])
+}
+
+model PaymentEvent {
+  id        String   @id @default(cuid())
+  orderId   String
+  order     PaymentOrder @relation(fields: [orderId], references: [id])
+  actor     String
+  action    String
+  createdAt DateTime @default(now())
+}
+
+model Product {
+  id           String               @id @default(cuid())
+  slug         String               @unique
+  active       Boolean              @default(false)
+  createdAt    DateTime             @default(now())
+  updatedAt    DateTime             @updatedAt
+  translations ProductTranslation[]
+  packages     Package[]
+}
+
+model ProductTranslation {
+  productId   String
+  locale      String
+  title       String
+  description String
+  product     Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@id([productId, locale])
+}
+
+model Package {
+  id                    String             @id @default(cuid())
+  productId             String
+  sku                   String             @unique
+  baseUsdCents          Int
+  stockOnHand           Int                @default(0)
+  active                Boolean            @default(false)
+  createdAt             DateTime           @default(now())
+  updatedAt             DateTime           @updatedAt
+  product               Product            @relation(fields: [productId], references: [id])
+  translations          PackageTranslation[]
+  deliveryForms         DeliveryForm[]
+}
+
+model PackageTranslation {
+  packageId   String
+  locale      String
+  title       String
+  description String
+  package     Package @relation(fields: [packageId], references: [id], onDelete: Cascade)
+
+  @@id([packageId, locale])
+}
+
+model DeliveryForm {
+  id        String   @id @default(cuid())
+  packageId String
+  version   Int
+  fields    Json
+  createdAt DateTime @default(now())
+  package   Package  @relation(fields: [packageId], references: [id])
+
+  @@unique([packageId, version])
+}
