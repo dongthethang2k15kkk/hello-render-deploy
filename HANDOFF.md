@@ -1,54 +1,55 @@
-# SHOP / CONCEPT — Tài liệu bàn giao
+# Jewish Horse — Project Handoff
 
-> Cập nhật: 2026-09-26
-> Project: `D:\H'Nam207`
-> Đây là storefront/demo UI, chưa phải production commerce.
+> Updated: 2026-09-28
+> Path: `E:\Tai_lieu_E\DONGTHETHANG\04_Cá_nhân\hello`
+> This is a demo storefront UI, not a production commerce system.
 
-## Mục tiêu
+## Overview
 
-Storefront demo sản phẩm số song ngữ Việt/Anh, gồm catalog, search/filter/sort, product detail, cart, checkout mô phỏng, login/register, Admin/User roles và chat tư vấn riêng.
+English-only digital package shop demo with catalog, product detail, cart, simulated checkout, login/register, admin/user roles, and private customer support chat.
 
-Tên SHOP / CONCEPT, màu olive/xanh và hình CSS chỉ là thiết kế thử, chưa phải thương hiệu chính thức.
+Brand "Jewish Horse" and the dark green/lime palette are placeholder designs for demo purposes.
 
-## Stack và lệnh
+## Stack & Commands
 
 - Next.js 15, React 19, TypeScript, next-intl, Zod.
-- CSS chính ở `src/app/globals.css`.
-- Vitest và Playwright có trong scripts.
-- Storefront demo chưa nối database; Prisma/payment staging là phạm vi riêng.
+- Main CSS: `src/app/globals.css`.
+- Vitest (unit) and Playwright (E2E) in scripts.
+- Demo storefront with no real database; Prisma/payment staging are separate scope.
 
-```bat
-cd /d "D:\H'Nam207"
+```powershell
+cd "E:\Tai_lieu_E\DONGTHETHANG\04_Cá_nhân\hello"
 npm install
 npm run dev
 ```
 
-Mở `http://localhost:3000/vi` hoặc `/en`.
+Open `http://localhost:3000/en` (default locale).
 
-```bat
+```powershell
 npm run typecheck
-npm test
+npm test              # Vitest unit tests
 npm run build
 ```
 
-Trước khi bàn giao, typecheck, build và 19 tests đã từng pass; luôn tin kết quả lệnh mới nhất.
+As of 2026-09-28: typecheck passes, 24 unit tests pass, 8 E2E tests pass (Edge, 1 worker).
 
-## Đã hoàn thành
+## Completed Features
 
 ### Storefront
 
-- Locale `vi`/`en`, header, navigation, language switch, account và cart.
-- Catalog demo với search/filter/sort, product detail, cart `localStorage`.
-- Checkout mô phỏng: không thanh toán thật, không tạo đơn thật.
+- English-only locale (`en`), header, navigation, account and cart.
+- Demo catalog with two sample packages, product detail, cart persisted in `localStorage`.
+- Simulated checkout: no real payment, no real order creation.
+- Legacy `/vi/*` URLs redirect to `/en/*`.
 
-### Auth và role
+### Auth & Roles
 
-- Login/logout/register/session ở `src/app/api/auth`.
-- HMAC session cookie trong `src/lib/demo-auth.ts`.
-- Roles `admin` và `user`.
-- Workspace protected; guest được chuyển login.
-- Checkout giữ `next=checkout`; login mặc định chuyển workspace.
-- Account đăng ký mới hash bằng `scrypt`.
+- Login/logout/register/session in `src/app/api/auth`.
+- HMAC session cookie in `src/lib/demo-auth.ts`.
+- Roles: `admin` and `user`.
+- Workspace is protected; guests are redirected to login.
+- Checkout preserves `next=checkout`; default login redirects to workspace.
+- New accounts hash passwords with `scrypt`.
 
 ### Chat
 
@@ -56,77 +57,76 @@ Trước khi bàn giao, typecheck, build và 19 tests đã từng pass; luôn ti
 - State: `src/lib/demo-chat.ts`.
 - UI: `src/components/chat-panel.tsx`.
 - Workspace: `src/app/[locale]/workspace/page.tsx`.
-- User có room `user:<accountId>`; Admin chuyển được giữa customer rooms.
-- Polling khoảng 5 giây; Enter gửi, Shift+Enter xuống dòng; giới hạn 1–1000 ký tự.
+- Each user has room `user:<accountId>`; admin can switch between customer rooms.
+- Polling ~5 seconds; Enter to send, Shift+Enter for newline; 1–1000 chars.
 
-## Giới hạn demo
+## Demo Scope & Limitations
 
-Demo credentials xem tại `src/lib/demo-credentials.ts`. Có Admin, Customer 1 và Customer 2 để test.
+Demo credentials are in `src/lib/demo-credentials.ts`. There are Admin, Customer 1, and Customer 2 accounts for testing.
 
-Account đăng ký và chat rooms/messages nằm trong `Map` của process Node. Restart server sẽ mất dữ liệu; nhiều process không chia sẻ state. Không nhập thông tin cá nhân, mật khẩu thật, seed phrase hoặc payment data thật.
+Registered accounts, chat rooms, and messages are stored in Node process `Map`s. Restarting the server clears all data; multiple processes do not share state. Do not enter real personal information, real passwords, seed phrases, or real payment data.
 
-README có payment staging nội bộ, nhưng checkout công khai chưa phải payment thật.
+README describes an internal payment staging system, but the public checkout is still simulated and **does not process real payments**.
 
-## Quyết định UX đã thống nhất
+## Agreed UX Decisions
 
 ### Floating consultation widget
 
-Hiện chat là link header tới `/vi/workspace` hoặc `/en/workspace`. Cần bổ sung/thay bằng nút kiểu Messenger/Intercom:
+Currently chat is a header link to `/en/workspace`. Should be supplemented or replaced by a Messenger/Intercom-style button:
 
-- fixed bottom-right, open/close state, unread badge;
-- guest thấy lời giải thích và CTA login/register;
-- customer đã login mở conversation riêng;
-- Admin không thấy Admin controls trong public widget, chỉ link Admin inbox;
-- label Việt/Anh;
-- mobile gần full-screen;
-- vẫn giữ workspace đầy đủ.
+- Fixed bottom-right, open/close state, unread badge.
+- Guest sees an explanation and CTA to login/register.
+- Logged-in customer opens their private conversation.
+- Admin does not see Admin controls in the public widget, only a link to the Admin inbox.
+- English labels.
+- Mobile near full-screen.
+- Keep the full workspace page.
 
 ### Admin inbox
 
-Không tiếp tục dùng panel user cho Admin. Thiết kế theo Messenger Inbox/Zendesk/WhatsApp Web:
+Stop reusing the user panel for Admin. Design like Messenger Inbox/Zendesk/WhatsApp Web:
 
-- sidebar conversations;
-- customer name, last message, timestamp, unread count, active state;
-- main panel có identity và lịch sử chat;
-- composer có loading/error;
-- empty/loading/offline states;
-- mobile chuyển giữa list và message panel;
-- reply phải đi đúng room.
+- Sidebar conversations list.
+- Customer name, last message, timestamp, unread count, active state.
+- Main panel with identity and chat history.
+- Composer with loading/error states.
+- Empty/loading/offline states.
+- Mobile switches between list and message panel.
+- Replies must go to the correct room.
 
 ### Login/register
 
-Auth card hiện đại với tab/segmented switch, label rõ, validation, show/hide password, focus/keyboard accessibility, loading/error states. Demo accounts là panel/accordion phụ. Giữ `next=checkout` và workspace redirect. Register nên có confirm password client-side và ghi rõ dữ liệu demo tạm thời.
+Modern auth card with tab/segmented switch, clear labels, validation, show/hide password, focus/keyboard accessibility, loading/error states. Demo accounts in a secondary panel/accordion. Preserve `next=checkout` and workspace redirect. Register should have client-side confirm password and clearly state that demo data is temporary.
 
-## Backlog ưu tiên
+## Priority Backlog
 
 ### P0
 
-1. Tạo `src/components/chat-widget.tsx`, mount trong `src/app/[locale]/layout.tsx`.
-2. Widget xuất hiện trên public storefront; tránh che login/admin/checkout nếu cần.
-3. Tách Admin thành `admin-inbox.tsx`, không dùng layout user.
-4. Sửa responsive header theo ảnh bàn giao: viewport hẹp làm `Demo Customer`, `Đăng xuất`, `Giỏ hàng` chật/cắt/tràn. Kiểm tra gap, overflow, font size, mobile collapse.
-5. Chạy typecheck, test, build sau mỗi nhóm thay đổi.
+1. Create `src/components/chat-widget.tsx`, mount in `src/app/[locale]/layout.tsx`.
+2. Widget appears on public storefront; avoid covering login/admin/checkout if needed.
+3. Split Admin into `admin-inbox.tsx`, don't reuse user layout.
+4. Fix responsive header per handoff images: narrow viewport causes `Demo Customer`, `Sign out`, `Cart` to be cramped/clipped/overflowing. Check gap, overflow, font size, mobile collapse.
+5. Run typecheck, test, build after each group of changes.
 
 ### P1 — chat
 
 - Room metadata: last message, time, unread count.
 - Mark-as-read, welcome/unread/sending/error states.
-- Scroll tới tin mới nhất khi đổi room/gửi.
-- Tách message list/composer nếu cần.
-- API Admin nên trả metadata và selected room thay vì tất cả messages.
+- Scroll to latest message when switching rooms or sending.
+- Split message list/composer if needed.
+- Admin API should return metadata and selected room instead of all messages.
 
 ### P1 — auth
 
-- Tách `auth-shell.tsx`, `demo-account-picker.tsx`.
+- Split `auth-shell.tsx`, `demo-account-picker.tsx`.
 - Show/hide password, confirm password.
-- Chuẩn hóa VI/EN vì một số text còn hard-code tiếng Việt.
-- Test redirect, session refresh và keyboard accessibility.
+- Test redirect, session refresh, and keyboard accessibility.
 
 ### P2 — production
 
-Chuyển account/session/chat sang database; session expiry/rotation/CSRF; rate limit/audit/monitoring; 2FA Admin; realtime; persistence/read receipts; catalog/order/payment/fulfillment thật. Không public payment staging trước security review.
+Move account/session/chat to database; session expiry/rotation/CSRF; rate limit/audit/monitoring; 2FA for Admin; realtime; persistence/read receipts; real catalog/order/payment/fulfillment. Do not make payment staging public before security review.
 
-## File cần đọc trước khi sửa
+## Files to Read Before Editing
 
 ```text
 src/app/globals.css
@@ -144,37 +144,37 @@ src/app/[locale]/checkout/page.tsx
 README.md
 ```
 
-## Ràng buộc
+## Constraints
 
-- User chỉ đọc/gửi room của mình; không phá role separation.
-- Không lộ Admin controls trong public widget.
-- Không biến checkout demo thành payment thật ngoài phạm vi yêu cầu.
-- Giữ `vi` và `en`.
-- Nhớ state account/chat mất sau restart.
-- Kiểm tra desktop/mobile, đặc biệt header và floating widget.
-- Project path Windows: `D:\H'Nam207`.
+- User can only read/send messages in their own room; do not break role separation.
+- Do not expose Admin controls in the public widget.
+- Do not turn demo checkout into real payment outside the requested scope.
+- Only use `en` (removed `vi` on 2026-09-28; `/vi/*` redirects 308 to `/en/*`). Do not re-add Vietnamese to the UI.
+- Remember account/chat state is lost after restart.
+- Check desktop/mobile, especially header and floating widget.
+- Project path Windows: `E:\Tai_lieu_E\DONGTHETHANG\04_Cá_nhân\hello`.
 
-## Checklist nghiệm thu
+## Acceptance Checklist
 
-- [ ] Guest mở/đóng widget và thấy CTA đúng locale.
-- [ ] User gửi đúng room riêng.
-- [ ] Hai customer không thấy room của nhau.
-- [ ] Admin chuyển room và reply đúng customer.
-- [ ] Unread/read state đúng.
-- [ ] Widget không che nội dung mobile.
-- [ ] Header không còn bị cắt như ảnh bàn giao.
-- [ ] Auth có focus, error, password toggle, loading.
-- [ ] `next=checkout` hoạt động.
+- [ ] Guest can open/close widget and sees the correct CTA.
+- [ ] User sends to their own room.
+- [ ] Two customers do not see each other's rooms.
+- [ ] Admin switches rooms and replies to the correct customer.
+- [ ] Unread/read state is correct.
+- [ ] Widget does not cover content on mobile.
+- [ ] Header is no longer clipped as in handoff images.
+- [ ] Auth has focus, error, password toggle, loading.
+- [ ] `next=checkout` works.
 - [ ] `npm run typecheck`, `npm test`, `npm run build` pass.
-- [ ] E2E riêng cho guest, customer 1, customer 2 và Admin.
+- [ ] Separate E2E for guest, customer 1, customer 2, and Admin.
 
-## Ghi chú cho người tiếp quản
+## Notes for the Next Developer
 
-Đây là điểm dừng giữa bản demo chức năng và đợt redesign UX. Auth, role, room separation và checkout gate đã có. Việc đầu tiên: đọc các file trên, triển khai P0 (floating widget, Admin inbox, responsive header), chạy kiểm tra; chưa cần viết lại backend ngay. Sau khi UX ổn định mới bổ sung persistence, unread/read receipts và realtime.
+This is a pause point between the functional demo and the UX redesign wave. Auth, roles, room separation, and checkout gate are already in place. First step: read the files above, implement P0 (floating widget, Admin inbox, responsive header), run checks; no need to rewrite the backend immediately. After UX stabilizes, add persistence, unread/read receipts, and realtime.
 
-## Nhật ký quyết định và triển khai — 2026-09-26
+## Decision and Implementation Log — 2026-09-26
 
-Yêu cầu mới của chủ dự án: từ nay các quyết định đã chốt trong hội thoại phải ghi lại trong file doc này. Ghi rõ phần đã làm và chưa làm, không đánh dấu đề xuất thành hoàn thành khi chưa kiểm chứng.
+New project owner requirement: from now on, agreed decisions in conversations must be recorded in this doc file. State clearly what was done and what was not; do not mark proposals as completed without verification.
 
 - **Widget:** triển khai nút nổi trên các storefront pages, ẩn ở `/workspace`, `/login`, `/admin`, `/checkout` để tránh trùng giao diện. Guest thấy CTA đăng nhập; user thấy chat riêng; Admin chỉ có link mở workspace. Mobile (<=480px) mở full-screen. File: `src/components/chat-widget.tsx`, mount trong locale layout.
 - **Unread badge:** vẫn là backlog. Chưa có read state server-side nên không hiển thị số chưa đọc giả. Muốn triển khai chính xác phải bổ sung last-read/mark-as-read per room và per user, rồi kiểm tra giữa các phiên.
@@ -236,3 +236,18 @@ Khi quyết định thay đổi phạm vi/thiết kế ở các phiên tới: b�
 - DEPLOYMENT.md đã cập nhật repo triển khai và lệnh git push render main. Không thay đổi visibility repo gốc hoặc repo mới.
 - Render vẫn trả 400 invalid or unfetchable cho repo mới. Cần người dùng hoàn tất Render Settings → Account Security → Git Deployment Credentials → Add credential → GitHub, cho phép đọc hello-render-deploy trong tài khoản dongthethang2k15kkk. Người dùng đã được gửi hướng dẫn; chưa có service hay URL public.
 - Khi tiếp tục, kiểm tra render services trước khi tạo để tránh trùng. Dùng repo mới, Docker, Free, Singapore, /api/health, secret ngẫu nhiên. CLI và config vẫn trong .local-cache trên ổ E.
+### Redesign "Jewish Horse" + bỏ tiếng Việt — 2026-09-28
+
+Quyết định đã chốt trong hội thoại và trạng thái:
+
+- **Chỉ tiếng Anh (đã làm):** bỏ locale `vi` khỏi `i18n/messages.ts`, `i18n/request.ts`, `middleware.ts`, `lib/catalog.ts`, `lib/product-rules.ts`, API admin products. `/` và `/vi/*` redirect (308) sang `/en/*`. Bỏ nút VI/EN ở header storefront và Admin. Lý do: font pixel Minecraft vỡ dấu tiếng Việt. Toàn bộ chuỗi tiếng Việt hard-code ở trang, component và lỗi API (login, register, chat) đã dịch sang tiếng Anh.
+- **Schema sản phẩm (đã làm):** `productInput` chỉ nhận `en` và `labelEn`; payload có `vi`/`labelVi` sẽ bị từ chối. Trang Admin Products lọc bỏ `labelVi` cũ trước khi lưu. Bản dịch `vi` cũ trong database (nếu có) không bị xóa tự động, nhưng lần lưu sau sẽ chỉ ghi `en`.
+- **Thương hiệu (đã làm):** logo "Jewish Horse" (font Minecraft) + tagline "Digital package shop" thay `SHOP / CONCEPT`. Title trang, footer, Admin header đã đổi.
+- **Font (đã làm):** Minecraft chỉ cho logo, h1/h2, eyebrow, tiêu đề bước. Inter (Google Fonts qua `@import` trong `globals.css`, không dùng `next/font` để giữ cách import sẵn có) cho body, menu, giá, nút, FAQ, form. Body 16–17px, line-height ~1.7.
+- **Tương phản (đã làm):** mô tả bước, câu trả lời FAQ, placeholder, `.muted`, caption, footer chuyển sang màu sáng hơn (#d4e8c8 / #b8d4a8). Ghi đè `.muted` màu xám cũ (#667368).
+- **Nút (đã làm):** "Explore packages" là nút lime đặc chữ tối; "How it works" là text link. Nút "Package details" trên card là nút chính; tag "Demo" nhỏ, nhạt; giá to, đậm.
+- **Hero (đã làm):** hộp trắng đè ảnh được thay bằng caption nền xanh đậm nằm trong khung ảnh, không bị cắt.
+- **Catalog (đã làm):** bỏ ô tìm kiếm, chip lọc, sort. Thêm ô ảnh preview (placeholder có ghi rõ), 2 điểm so sánh Basic/Extended lấy từ dữ liệu catalog hiện có, khối "What you get after purchase".
+- **Chưa làm, chờ người dùng cung cấp:** mô tả shop thật (thay "Digital goods. A better experience."), tên/giá/nội dung thật của 2 gói, điểm khác biệt thật, cách giao hàng sau mua, ảnh preview thật trong `public/`, và quyết định demo hay bán thật (các nhãn "Demo", "Sample prices", "no payments or delivery", "UI preview" vẫn giữ nguyên).
+- **Giữ nguyên có chủ ý:** "Bank / VND" và định dạng VND trong payment staging là đơn vị tiền tệ ngân hàng, không phải ngôn ngữ giao diện.
+- **Kiểm chứng:** `tsc --noEmit` pass; Vitest 24/24 pass; Playwright 8/8 pass (Edge, 1 worker), gồm test redirect `/vi` → `/en` và kiểm tra không tràn ngang ở viewport 390px. Đã xem ảnh chụp desktop. `npm run build` (NEXT_BUILD_DIR=.next-verify) thành công, có `.next-verify/BUILD_ID`. Mobile chỉ được kiểm tra tự động (không tràn ngang), chưa xem trực quan.

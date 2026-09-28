@@ -14,7 +14,7 @@ export function ProductForm({productId}: {productId: string}) {
   const product = products.find(p => p.id === productId)!;
   return <form onSubmit={event => {
     event.preventDefault();
-    if (!signedIn) {setStatus('Bạn cần đăng nhập hoặc đăng ký để mua sản phẩm.'); window.location.href = `/${window.location.pathname.split('/')[1] || 'vi'}/login?next=checkout`; return;}
+    if (!signedIn) {setStatus('Sign in or register to purchase.'); window.location.href = `/en/login?next=checkout`; return;}
     const form = new FormData(event.currentTarget);
     const parsed = cartLineSchema.safeParse({
       productId, quantity: Number(form.get('quantity')),

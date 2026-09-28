@@ -17,22 +17,22 @@ test('English catalog, delivery form, persisted cart and disabled payment', asyn
   await page.getByRole('button', {name: 'Remove', exact: true}).click();
   await expect(page.getByText('Your cart is empty.')).toBeVisible();
 });
-test('Vietnamese storefront and unavailable product', async ({page}) => {
+test('legacy /vi URLs redirect to English and unknown products 404', async ({page}) => {
   await page.goto('/vi');
-  await expect(page.locator('html')).toHaveAttribute('lang', 'vi');
-  await expect(page.getByRole('heading', {level: 1})).toContainText('Sản phẩm số.');
-  const response = await page.goto('/vi/products/not-a-product');
+  await expect(page).toHaveURL(/\/en$/);
+  await expect(page.locator('html')).toHaveAttribute('lang', 'en');
+  await expect(page.getByRole('heading', {level: 1})).toContainText('Digital goods.');
+  await expect(page.getByRole('link', {name: 'VI', exact: true})).toHaveCount(0);
+  const response = await page.goto('/en/products/not-a-product');
   expect(response?.status()).toBe(404);
 });
 
-test('mobile discovery, quantity controls and simulated checkout', async ({page}) => {
+test('mobile catalog, quantity controls and simulated checkout', async ({page}) => {
   await page.setViewportSize({width: 390,height: 844});
   const session = await page.request.post('/api/auth/login', {data: {username: 'customer', password: 'customer123'}});
   expect(session.ok()).toBe(true);
   await page.goto('/en');
-  await page.getByRole('textbox', {name: 'Search products'}).fill('not found');
-  await expect(page.getByRole('heading', {name: 'No matching packages'})).toBeVisible();
-  await page.getByRole('button', {name: 'Reset filters'}).click();
+  await expect(page.getByRole('link', {name: 'Package details'})).toHaveCount(2);
   await page.getByRole('link', {name: 'Package details'}).first().click();
   await page.getByLabel('Recipient name (test data)').fill('Demo mobile');
   await page.getByRole('button', {name: 'Add to cart'}).click();
@@ -59,8 +59,8 @@ test('mobile discovery, quantity controls and simulated checkout', async ({page}
 
 test('desktop storefront layout and screenshot', async ({page}) => {
   await page.setViewportSize({width:1440,height:1000});
-  await page.goto('/vi');
-  await expect(page.getByRole('heading', {level:1})).toContainText('Trải nghiệm');
+  await page.goto('/en');
+  await expect(page.getByRole('heading', {level:1})).toContainText('experience');
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
   await page.screenshot({path:'test-results/desktop-storefront.png',fullPage:true});
 });

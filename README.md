@@ -4,8 +4,7 @@ Docker / Render deployment: see [DEPLOYMENT.md](./DEPLOYMENT.md).
 
 ## Payment staging (bổ sung)
 
-Trang nội bộ: http://localhost:3001/vi/admin/payments hoặc
-http://localhost:3001/en/admin/payments. Checkout công khai vẫn mô phỏng;
+Trang nội bộ: http://localhost:3001/en/admin/payments (`/vi/*` tự chuyển sang `/en/*`). Checkout công khai vẫn mô phỏng;
 **không chuyển tiền thật**. Các ghi chú phạm vi demo bên dưới mô tả storefront,
 không bao gồm backend staging mới.
 
@@ -65,17 +64,22 @@ nguồn tỷ giá/chính sách quote, hủy/hoàn và thanh toán thiếu/thừa
 kiểm thử đồng thời với PostgreSQL, kiểm tra pháp lý và nghiệm thu end-to-end.
 
 Đợt 1: Next.js + TypeScript, next-intl, Tailwind CSS, Zod, Prisma/PostgreSQL,
-Vitest và Playwright. Giao diện Việt/Anh, danh mục mẫu, chi tiết gói, giỏ hàng
+Vitest và Playwright. Giao diện chỉ tiếng Anh (bỏ tiếng Việt ngày 2026-09-28 vì font
+pixel Minecraft vỡ dấu), danh mục mẫu, chi tiết gói, giỏ hàng
 nhiều mục và trường giao hàng riêng từng gói.
 
 ## Phạm vi thực tế
 
-- UI concept mới: hero, hình minh họa CSS, tìm kiếm/lọc/sắp xếp, hướng dẫn,
+- Thương hiệu tạm "Jewish Horse". Font Minecraft cho logo/tiêu đề lớn, Inter cho
+  nội dung, menu, giá, nút, FAQ, form.
+- UI: hero, hình minh họa CSS, catalog 2 gói có ô ảnh preview (placeholder),
+  so sánh Basic/Extended, khối "What you get after purchase", hướng dẫn,
   FAQ, trang chi tiết, điều chỉnh số lượng giỏ và checkout mô phỏng.
+  Đã bỏ tìm kiếm/lọc/sắp xếp vì chỉ có 2 gói.
 - Checkout không gửi email, không tạo đơn và không kết nối thanh toán.
-- Màu xanh olive và hình khối là phương án thiết kế thử để duyệt, không phải
+- Màu xanh đậm/lime và hình khối là phương án thiết kế thử để duyệt, không phải
   bộ nhận diện thương hiệu chính thức hoặc hình ảnh sản phẩm thật.
-- Server preview phiên làm việc dùng http://127.0.0.1:3001/vi và /en.
+- Server preview phiên làm việc dùng http://127.0.0.1:3001/en.
   Playwright dùng cổng 3001; local có thể dùng lại server đang chạy.
 
 - Đây là bản demo, không phải cửa hàng sẵn sàng production.

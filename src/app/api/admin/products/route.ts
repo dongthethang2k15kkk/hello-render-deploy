@@ -40,15 +40,15 @@ export async function POST(request: Request) {
     const product = await db.$transaction(async tx => {
       const fields = {slug: input.slug, category: input.category, sortOrder: input.sortOrder, imagePath: input.imagePath, active: input.active};
       const saved = input.id
-        ? await tx.product.update({where: {id: input.id}, data: {...fields, translations: {deleteMany: {}, create: [{locale: 'vi', ...input.vi}, {locale: 'en', ...input.en}]}}})
-        : await tx.product.create({data: {...fields, translations: {create: [{locale: 'vi', ...input.vi}, {locale: 'en', ...input.en}]}}});
+        ? await tx.product.update({where: {id: input.id}, data: {...fields, translations: {deleteMany: {}, create: [{locale: 'en', ...input.en}]}}})
+        : await tx.product.create({data: {...fields, translations: {create: [{locale: 'en', ...input.en}]}}});
       const existing = await tx.package.findMany({where: {productId: saved.id}, include: {deliveryForms: {orderBy: {version: 'desc'}, take: 1}}});
       for (const item of input.packages) {
         const previous = existing.find(p => p.sku === item.sku);
         if (previous) {
-          await tx.package.update({where: {id: previous.id}, data: {baseUsdCents: item.baseUsdCents, saleUsdCents: item.saleUsdCents, stockOnHand: item.stockOnHand, active: item.active, translations: {deleteMany: {}, create: [{locale: 'vi', ...item.vi}, {locale: 'en', ...item.en}]}}});
+          await tx.package.update({where: {id: previous.id}, data: {baseUsdCents: item.baseUsdCents, saleUsdCents: item.saleUsdCents, stockOnHand: item.stockOnHand, active: item.active, translations: {deleteMany: {}, create: [{locale: 'en', ...item.en}]}}});
           if (JSON.stringify(previous.deliveryForms[0]?.fields ?? []) !== JSON.stringify(item.fields)) await tx.deliveryForm.create({data: {packageId: previous.id, version: (previous.deliveryForms[0]?.version ?? 0) + 1, fields: item.fields}});
-        } else await tx.package.create({data: {productId: saved.id, sku: item.sku, baseUsdCents: item.baseUsdCents, saleUsdCents: item.saleUsdCents, stockOnHand: item.stockOnHand, active: item.active, translations: {create: [{locale: 'vi', ...item.vi}, {locale: 'en', ...item.en}]}, deliveryForms: {create: {version: 1, fields: item.fields}}}});
+        } else await tx.package.create({data: {productId: saved.id, sku: item.sku, baseUsdCents: item.baseUsdCents, saleUsdCents: item.saleUsdCents, stockOnHand: item.stockOnHand, active: item.active, translations: {create: [{locale: 'en', ...item.en}]}, deliveryForms: {create: {version: 1, fields: item.fields}}}});
       }
       await tx.package.updateMany({where: {productId: saved.id, sku: {notIn: input.packages.map((p: {sku: string}) => p.sku)}}, data: {active: false}});
       return tx.product.findUniqueOrThrow({where: {id: saved.id}, include: {translations: true, packages: {include: {translations: true, deliveryForms: true}}}});

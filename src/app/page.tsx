@@ -1,2 +1,2 @@
 import {redirect} from 'next/navigation';
-export default function Index() {redirect('/vi');}
+export default function Index() {redirect('/en');}
