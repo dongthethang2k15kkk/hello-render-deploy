@@ -20,7 +20,7 @@ Filesystem không bền vững. PostgreSQL miễn phí của Render hết hạn 
 vì vậy Blueprint này không tạo database.
 
 1. Đưa các thay đổi đã kiểm tra trong thư mục này lên GitHub
-   `https://github.com/elliotthewizerd/hello` (repo cần chứa Dockerfile và render.yaml).
+   `https://github.com/dongthethang2k15kkk/hello-render-deploy` (repo cần chứa Dockerfile và render.yaml).
 2. Đăng nhập https://dashboard.render.com bằng GitHub và cấp quyền đọc repo.
 3. Chọn **New → Blueprint**, kết nối repo, chọn branch có cấu hình triển khai.
 4. Kiểm tra service dùng **Docker**, plan **Free**, region **Singapore**.
@@ -35,6 +35,10 @@ Có thể dùng **New → Web Service** nếu không dùng Blueprint: chọn Doc
 Free, Dockerfile `./Dockerfile`, health check `/api/health`; tự tạo AUTH_SECRET.
 Không đặt Build Command/Start Command thay thế: dùng lệnh từ Dockerfile.
 Không nhập secret vào Dockerfile, GitHub hoặc build arguments.
+
+Repo triển khai riêng tư thuộc tài khoản dongthethang2k15kkk; remote Git là `render`.
+Repo nguồn elliotthewizerd/hello vẫn giữ ở remote `origin`. Sau khi commit thay đổi,
+dùng `git push render main` để cập nhật bản triển khai.
 
 ## Chạy Docker trên máy
 
