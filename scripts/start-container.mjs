@@ -15,9 +15,21 @@ process.env.HOSTNAME = HOSTNAME;
 
 console.log(`[start-container] PORT=${PORT}, HOSTNAME=${HOSTNAME}`);
 
-// Run Prisma migrations before starting the app
+if (!process.env.DATABASE_URL) {
+  console.error('[start-container] DATABASE_URL is not set. Link the Render PostgreSQL database to this service.');
+  process.exit(1);
+}
+
+// Run Prisma migrations before starting the app.
+// The CLI lives in ./prisma-cli (self-contained install, see Dockerfile).
 console.log('[start-container] Running database migrations...');
-const migrate = spawn('node', ['node_modules/prisma/build/index.js', 'migrate', 'deploy'], {
+const migrate = spawn('node', [
+  'prisma-cli/node_modules/prisma/build/index.js',
+  'migrate',
+  'deploy',
+  '--schema',
+  'prisma/schema.prisma'
+], {
   stdio: 'inherit',
   env: process.env
 });
