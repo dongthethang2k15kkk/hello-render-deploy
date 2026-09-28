@@ -1,0 +1,15 @@
+# Public demo only: no payment secrets or production database.
+services:
+  - type: web
+    name: shop-concept-demo
+    runtime: docker
+    plan: free
+    region: singapore
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    healthCheckPath: /api/health
+    envVars:
+      - key: AUTH_SECRET
+        generateValue: true
+      - key: PAYMENT_ADMIN_KEY
+        value: ""

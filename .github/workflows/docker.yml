@@ -1,0 +1,35 @@
+name: Docker checks
+on:
+  push:
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run db:generate
+      - run: npm run typecheck
+      - run: npm test
+      - name: Build and start with PostgreSQL migrations
+        env:
+          AUTH_SECRET: ci-only-secret-at-least-32-characters-long
+          POSTGRES_PASSWORD: ci_only_database_password
+        run: docker compose -f compose.yaml -f compose.db.yaml up --build -d
+      - name: Check HTTP and database-backed Admin
+        run: node scripts/smoke-container.mjs
+      - name: Logs and cleanup
+        if: always()
+        env:
+          AUTH_SECRET: ci-only-secret-at-least-32-characters-long
+          POSTGRES_PASSWORD: ci_only_database_password
+        run: |
+          docker compose -f compose.yaml -f compose.db.yaml logs --tail=100
+          docker compose -f compose.yaml -f compose.db.yaml down

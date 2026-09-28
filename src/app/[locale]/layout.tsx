@@ -5,6 +5,7 @@ import {CartProvider} from '@/components/cart-provider';
 import Link from 'next/link';
 import {StoreHeader} from '@/components/store-ui';
 import ChatWidget from '@/components/chat-widget';
+import {headers} from 'next/headers';
 
 export default async function LocaleLayout({children, params}: {
   children: React.ReactNode; params: Promise<{locale: string}>;
@@ -12,6 +13,9 @@ export default async function LocaleLayout({children, params}: {
   const {locale} = await params;
   if (locale !== 'vi' && locale !== 'en') notFound();
   const t = messages[locale];
+  if ((await headers()).get('x-shop-admin') === '1') {
+    return <NextIntlClientProvider locale={locale} messages={t}><CartProvider>{children}</CartProvider></NextIntlClientProvider>;
+  }
   return <NextIntlClientProvider locale={locale} messages={t}>
       <CartProvider>
         <div className="demo">{t.demo}</div>

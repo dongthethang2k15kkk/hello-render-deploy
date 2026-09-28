@@ -29,7 +29,7 @@ export default function LoginPage() {
       if (!response.ok) setError(data.error || (vi ? 'Không thể xử lý yêu cầu.' : 'Could not complete request.'));
       else {
         const next = new URLSearchParams(window.location.search).get('next');
-        router.push(`/${locale}/${next === 'checkout' ? 'checkout' : 'workspace'}`);
+        router.push(`/${locale}/${data.role === 'admin' ? 'admin/chat' : next === 'checkout' ? 'checkout' : 'workspace'}`);
         router.refresh();
       }
     } catch {setError(vi ? 'Không thể kết nối máy chủ.' : 'Could not connect to the server.');}

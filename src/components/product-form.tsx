@@ -27,7 +27,7 @@ export function ProductForm({productId}: {productId: string}) {
       <input name={field.key} required={field.required} maxLength={field.maxLength} autoComplete="off" />
     </label>)}
     <label>{t('quantity')}<input name="quantity" type="number" min="1" max={product.stock} defaultValue="1" required /></label>
-    <button className="full-width" disabled={!ready} type="submit">{t('add')} <span aria-hidden="true">→</span></button>
+    <button className="full-width" disabled={!ready || signedIn === null} type="submit">{t('add')} <span aria-hidden="true">→</span></button>
     <p role="status" aria-live="polite">{status}</p>
   </form>;
 }

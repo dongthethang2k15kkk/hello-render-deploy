@@ -1,5 +1,7 @@
 import {expect, test} from '@playwright/test';
 test('English catalog, delivery form, persisted cart and disabled payment', async ({page}) => {
+  const session = await page.request.post('/api/auth/login', {data: {username: 'customer', password: 'customer123'}});
+  expect(session.ok()).toBe(true);
   await page.goto('/en');
   await expect(page.locator('html')).toHaveAttribute('lang', 'en');
   await page.getByRole('link', {name: 'Package details'}).first().click();
@@ -25,6 +27,8 @@ test('Vietnamese storefront and unavailable product', async ({page}) => {
 
 test('mobile discovery, quantity controls and simulated checkout', async ({page}) => {
   await page.setViewportSize({width: 390,height: 844});
+  const session = await page.request.post('/api/auth/login', {data: {username: 'customer', password: 'customer123'}});
+  expect(session.ok()).toBe(true);
   await page.goto('/en');
   await page.getByRole('textbox', {name: 'Search products'}).fill('not found');
   await expect(page.getByRole('heading', {name: 'No matching packages'})).toBeVisible();
@@ -35,7 +39,15 @@ test('mobile discovery, quantity controls and simulated checkout', async ({page}
   await page.getByRole('link', {name: 'Cart', exact: true}).click();
   await page.getByRole('button', {name: 'Increase item 1'}).click();
   await expect(page.locator('output')).toHaveText('2');
+  await page.request.post('/api/auth/logout');
   await page.getByRole('link', {name: 'Preview checkout'}).click();
+  await expect(page.getByRole('heading', {name: 'Sign in to purchase'})).toBeVisible();
+  await page.getByRole('main').getByRole('link', {name: 'Sign in / Register'}).click();
+  await expect(page).toHaveURL(/\/en\/login\?next=checkout$/);
+  await page.getByLabel('Username', {exact: true}).fill('customer');
+  await page.locator('input[autocomplete="current-password"]').fill('customer123');
+  await page.locator('form').getByRole('button', {name: 'Sign in', exact: true}).click();
+  await expect(page).toHaveURL(/\/en\/checkout$/);
   await page.getByRole('radio', {name: /Visa/}).check();
   await expect(page.getByRole('radio', {name: /Visa/})).toBeChecked();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);

@@ -55,6 +55,9 @@ model PaymentEvent {
 model Product {
   id           String               @id @default(cuid())
   slug         String               @unique
+  category     String               @default("general")
+  sortOrder    Int                  @default(0)
+  imagePath    String               @default("")
   active       Boolean              @default(false)
   createdAt    DateTime             @default(now())
   updatedAt    DateTime             @updatedAt
@@ -77,13 +80,15 @@ model Package {
   productId             String
   sku                   String             @unique
   baseUsdCents          Int
+  saleUsdCents          Int?
   stockOnHand           Int                @default(0)
   active                Boolean            @default(false)
   createdAt             DateTime           @default(now())
   updatedAt             DateTime           @updatedAt
-  product               Product            @relation(fields: [productId], references: [id])
+  product               Product            @relation(fields: [productId], references: [id], onDelete: Cascade)
   translations          PackageTranslation[]
   deliveryForms         DeliveryForm[]
+  @@index([productId, active])
 }
 
 model PackageTranslation {
@@ -102,7 +107,7 @@ model DeliveryForm {
   version   Int
   fields    Json
   createdAt DateTime @default(now())
-  package   Package  @relation(fields: [packageId], references: [id])
+  package   Package  @relation(fields: [packageId], references: [id], onDelete: Cascade)
 
   @@unique([packageId, version])
 }

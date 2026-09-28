@@ -1,3 +1,5 @@
+Docker / Render deployment: see [DEPLOYMENT.md](./DEPLOYMENT.md).
+
 # Shop foundation / Nền tảng cửa hàng
 
 ## Payment staging (bổ sung)

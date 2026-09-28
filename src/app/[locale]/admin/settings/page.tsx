@@ -1,0 +1,7 @@
+import Link from 'next/link';
+
+export default async function AdminSettings({params}: {params: Promise<{locale: string}>}) {
+  const {locale} = await params;
+  const vi = locale === 'vi';
+  return <div className="page-heading"><p className="eyebrow">ADMIN / SETTINGS</p><h1>{vi ? 'Cài đặt gian hàng' : 'Store settings'}</h1><p className="notice">{vi ? 'Quản lý các cấu hình vận hành của gian hàng.' : 'Manage store operations and configuration.'}</p><div className="grid"><section className="card"><h2>{vi ? 'Sản phẩm' : 'Products'}</h2><p className="muted">{vi ? 'Thêm, sửa, ẩn/hiện sản phẩm, giá sale, tồn kho và package.' : 'Create, edit, activate products, sale prices, stock and packages.'}</p><Link className="button" href={`/${locale}/admin/settings/products`}>{vi ? 'Quản lý sản phẩm' : 'Manage products'}</Link></section><section className="card"><h2>{vi ? 'Thanh toán staging' : 'Staging payments'}</h2><p className="muted">{vi ? 'Chỉ dành cho vận hành nội bộ; yêu cầu khóa Bearer riêng.' : 'For internal operations only; requires a separate Bearer key.'}</p><Link className="button secondary" href={`/${locale}/admin/payments`}>{vi ? 'Mở trang staging' : 'Open staging'}</Link></section></div></div>;
+}

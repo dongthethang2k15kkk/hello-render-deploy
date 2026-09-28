@@ -3,7 +3,7 @@ import {isDeepStrictEqual} from 'node:util';
 import {Prisma} from '@prisma/client';
 import {z} from 'zod';
 import {canManageReceivers, canProcessOrders, paymentRole} from '@/lib/payment-auth';
-import {paymentDb as db} from '@/lib/payment-db';
+import {getPaymentDb} from '@/lib/payment-db';
 import {receiverSchema, quoteMinor, nextPaymentStatus} from '@/lib/payment-rules';
 import {cartSchema, totalUsdCents} from '@/lib/cart';
 
@@ -20,6 +20,7 @@ export async function GET(request: Request) {
   if (!role) return reply({error: 'Unauthorized'}, 401);
   if (!process.env.DATABASE_URL) return reply({error: 'Database is not configured'}, 503);
   try {
+    const db = getPaymentDb();
     const [receivers, orders] = await Promise.all([db.paymentReceiver.findMany({orderBy: {lastAssigned: 'asc'}}), db.paymentOrder.findMany({take: 100, orderBy: {createdAt: 'desc'}, include: {events: true}})]);
     return reply({receivers, orders, role, staging: true});
   } catch {return reply({error: 'Database unavailable. Generate client and apply reviewed migration.'}, 503);}
@@ -37,6 +38,7 @@ export async function POST(request: Request) {
   const command = parsed.data;
   if (command.action === 'receiver' && !canManageReceivers(role)) return reply({error: 'Admin role required'}, 403);
   try {
+    const db = getPaymentDb();
     // One transaction-wide lock serializes allocation, edits and confirmations across processes.
     const result = await db.$transaction(async tx => {
       await tx.$queryRaw`SELECT 1 AS locked FROM pg_advisory_xact_lock(2072601)`;

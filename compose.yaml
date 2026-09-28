@@ -1,0 +1,11 @@
+services:
+  app:
+    build:
+      context: .
+      target: runner
+    ports:
+      - "127.0.0.1:${APP_PORT:-3000}:3000"
+    environment:
+      AUTH_SECRET: ${AUTH_SECRET:?Set AUTH_SECRET in .env (at least 32 random characters)}
+      PAYMENT_ADMIN_KEY: ""
+    restart: unless-stopped

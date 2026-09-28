@@ -1,4 +1,5 @@
 node_modules/
+.local-cache/
 .next/
 .next-verify/
 .next-verify*/
@@ -8,5 +9,11 @@ playwright-report/
 test-results/
 *.tsbuildinfo
 build-output.txt
+build-output-admin*.txt
+build-exit-code.txt
+build-exit-code-admin*.txt
+test-output.txt
+test-output-final*.txt
 typecheck-output.txt
+typecheck-final*.txt
 git-inspect.tmp

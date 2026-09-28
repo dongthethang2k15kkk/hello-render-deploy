@@ -1,0 +1,17 @@
+.git
+.github
+node_modules
+.next*
+.local-cache
+.env*
+!.env.example
+test-results
+playwright-report
+*.tsbuildinfo
+*-output*.txt
+*-exit-code*.txt
+typecheck-*.txt
+Dockerfile*
+compose*.yaml
+render.yaml
+tests
