@@ -5,34 +5,50 @@ if (!process.env.AUTH_SECRET || process.env.AUTH_SECRET.length < 32) {
   process.exit(1);
 }
 
-// Ensure PORT is set (Render.com provides this dynamically)
-const PORT = process.env.PORT || 3000;
+// Ensure PORT and HOSTNAME are set BEFORE any operations (Render.com provides PORT dynamically)
+const PORT = process.env.PORT || '3000';
 const HOSTNAME = process.env.HOSTNAME || '0.0.0.0';
 
-console.log(`Server will bind to ${HOSTNAME}:${PORT}`);
+// Set them in process.env immediately so child processes inherit them
+process.env.PORT = PORT;
+process.env.HOSTNAME = HOSTNAME;
+
+console.log(`[start-container] PORT=${PORT}, HOSTNAME=${HOSTNAME}`);
 
 // Run Prisma migrations before starting the app
-console.log('Running database migrations...');
+console.log('[start-container] Running database migrations...');
 const migrate = spawn('npx', ['prisma', 'migrate', 'deploy'], {
   stdio: 'inherit',
-  shell: true
+  shell: true,
+  env: process.env
 });
 
 migrate.on('close', (code) => {
   if (code !== 0) {
-    console.error(`Migration failed with exit code ${code}`);
+    console.error(`[start-container] Migration failed with exit code ${code}`);
     process.exit(code);
   }
-  console.log('Migrations completed successfully. Starting server...');
+  console.log('[start-container] Migrations completed successfully.');
+  console.log(`[start-container] Starting Next.js server on ${HOSTNAME}:${PORT}...`);
   
-  // Set env vars for Next.js standalone server
-  process.env.PORT = PORT;
-  process.env.HOSTNAME = HOSTNAME;
+  // Spawn server.js as a new process to ensure it reads PORT correctly
+  const server = spawn('node', ['server.js'], {
+    stdio: 'inherit',
+    env: process.env
+  });
   
-  import('../server.js');
+  server.on('error', (err) => {
+    console.error('[start-container] Failed to start server:', err);
+    process.exit(1);
+  });
+  
+  server.on('close', (code) => {
+    console.log(`[start-container] Server exited with code ${code}`);
+    process.exit(code);
+  });
 });
 
 migrate.on('error', (err) => {
-  console.error('Failed to run migrations:', err);
+  console.error('[start-container] Failed to run migrations:', err);
   process.exit(1);
 });
