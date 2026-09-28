@@ -5,6 +5,12 @@ if (!process.env.AUTH_SECRET || process.env.AUTH_SECRET.length < 32) {
   process.exit(1);
 }
 
+// Ensure PORT is set (Render.com provides this dynamically)
+const PORT = process.env.PORT || 3000;
+const HOSTNAME = process.env.HOSTNAME || '0.0.0.0';
+
+console.log(`Server will bind to ${HOSTNAME}:${PORT}`);
+
 // Run Prisma migrations before starting the app
 console.log('Running database migrations...');
 const migrate = spawn('npx', ['prisma', 'migrate', 'deploy'], {
@@ -18,6 +24,11 @@ migrate.on('close', (code) => {
     process.exit(code);
   }
   console.log('Migrations completed successfully. Starting server...');
+  
+  // Set env vars for Next.js standalone server
+  process.env.PORT = PORT;
+  process.env.HOSTNAME = HOSTNAME;
+  
   import('../server.js');
 });
 
