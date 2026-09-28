@@ -25,6 +25,11 @@ ENV NODE_ENV=production HOSTNAME=0.0.0.0
 COPY --from=builder --chown=node:node /app/.next/standalone ./
 COPY --from=builder --chown=node:node /app/.next/static ./.next/static
 COPY --from=builder --chown=node:node /app/public ./public
+# Copy Prisma files for migration
+COPY --from=dependencies --chown=node:node /app/node_modules/.prisma ./node_modules/.prisma
+COPY --from=dependencies --chown=node:node /app/node_modules/@prisma ./node_modules/@prisma
+COPY --from=dependencies --chown=node:node /app/node_modules/prisma ./node_modules/prisma
+COPY --from=builder --chown=node:node /app/prisma ./prisma
 COPY --chown=node:node scripts/start-container.mjs ./scripts/start-container.mjs
 USER node
 EXPOSE ${PORT:-3000}

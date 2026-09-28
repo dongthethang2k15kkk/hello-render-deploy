@@ -17,9 +17,8 @@ console.log(`[start-container] PORT=${PORT}, HOSTNAME=${HOSTNAME}`);
 
 // Run Prisma migrations before starting the app
 console.log('[start-container] Running database migrations...');
-const migrate = spawn('npx', ['prisma', 'migrate', 'deploy'], {
+const migrate = spawn('node', ['node_modules/prisma/build/index.js', 'migrate', 'deploy'], {
   stdio: 'inherit',
-  shell: true,
   env: process.env
 });
 
