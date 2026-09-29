@@ -65,6 +65,16 @@ model Product {
   packages     Package[]
 }
 
+model ProductImage {
+  id           String   @id @default(cuid())
+  sha256       String   @unique
+  mimeType     String
+  originalName String
+  sizeBytes    Int
+  data         Bytes
+  createdAt    DateTime @default(now())
+}
+
 model ProductTranslation {
   productId   String
   locale      String

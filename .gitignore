@@ -3,6 +3,7 @@ node_modules/
 .neon
 .next/
 .next-e2e/
+.next-upload-verify/
 .next-verify/
 .next-verify*/
 .env*

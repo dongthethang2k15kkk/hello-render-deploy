@@ -12,6 +12,7 @@
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate dev",
     "db:status": "node --env-file=.env scripts/database-status.mjs",
+    "db:inspect": "node --env-file=.env scripts/database-inspect.mjs",
     "db:seed-demo": "node --env-file=.env scripts/seed-demo-catalog.mjs --confirm-demo"
   },
   "dependencies": {

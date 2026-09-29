@@ -10,16 +10,22 @@ const db = new PrismaClient();
 try {
   const [
     products,
+    productTranslations,
     packages,
+    packageTranslations,
     deliveryForms,
+    productImages,
     paymentReceivers,
     paymentOrders,
     paymentEvents,
     databaseTime
   ] = await Promise.all([
     db.product.count(),
+    db.productTranslation.count(),
     db.package.count(),
+    db.packageTranslation.count(),
     db.deliveryForm.count(),
+    db.productImage.count(),
     db.paymentReceiver.count(),
     db.paymentOrder.count(),
     db.paymentEvent.count(),
@@ -31,7 +37,7 @@ try {
     ok: true,
     host,
     databaseTime: databaseTime[0]?.now,
-    rows: {products, packages, deliveryForms, paymentReceivers, paymentOrders, paymentEvents}
+    rows: {products, productTranslations, packages, packageTranslations, deliveryForms, productImages, paymentReceivers, paymentOrders, paymentEvents}
   }, null, 2));
 } catch (error) {
   console.error(`Database check failed: ${error instanceof Error ? error.message.split('\n')[0] : 'unknown error'}`);

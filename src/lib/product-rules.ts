@@ -1,11 +1,12 @@
 import {z} from 'zod';
+import {legacyProductImagePathPattern, productImagePathPattern} from './product-image';
 
 const translation = z.object({title: z.string().trim().min(1).max(120), description: z.string().trim().max(5000)}).strict();
 export const productInput = z.object({
   slug: z.string().trim().min(2).max(100).regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/),
   category: z.string().trim().min(1).max(80),
   sortOrder: z.number().int().min(0).max(100000),
-  imagePath: z.string().regex(/^\/product-images\/[a-zA-Z0-9_-]+\.(png|jpg|webp)$/).or(z.literal('')),
+  imagePath: z.string().refine(value => value === '' || legacyProductImagePathPattern.test(value) || productImagePathPattern.test(value), 'Invalid product image path'),
   active: z.boolean(),
   en: translation,
   packages: z.array(z.object({

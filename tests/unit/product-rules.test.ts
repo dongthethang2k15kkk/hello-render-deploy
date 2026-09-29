@@ -9,4 +9,5 @@ describe('product input', () => {
   it('rejects sale price above base price', () => expect(productInput.safeParse({...valid, packages: [{...valid.packages[0], saleUsdCents: 1001}]}).success).toBe(false));
   it('rejects duplicate SKUs', () => expect(productInput.safeParse({...valid, packages: [valid.packages[0], valid.packages[0]]}).success).toBe(false));
   it('rejects remote image URLs', () => expect(productInput.safeParse({...valid, imagePath: 'https://example.com/p.png'}).success).toBe(false));
+  it('accepts a database-backed product image', () => expect(productInput.safeParse({...valid, imagePath: '/api/product-images/cmh123abc'}).success).toBe(true));
 });

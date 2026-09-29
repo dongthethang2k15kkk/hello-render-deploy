@@ -82,6 +82,20 @@ Kiểm tra khả năng restore trên một database tạm trước khi coi backu
    một lần redeploy.
 6. Chỉ xóa database cũ sau khi database mới đã hoạt động và có backup đã kiểm tra.
 
+## Ảnh sản phẩm
+
+Ảnh Admin tải lên được lưu trong bảng `ProductImage` (cột `BYTEA`) của cùng database, không
+ghi vào filesystem của container, nên không mất khi Render Free sleep/restart/redeploy. Trình
+duyệt tự thu nhỏ ảnh lớn (tối đa 1800 px, WebP) trước khi gửi; server chỉ nhận PNG, JPEG hoặc
+WebP tối đa 2 MB và kiểm tra magic bytes. Ảnh trùng nội dung (SHA-256) được dùng lại.
+
+- Storefront đọc ảnh qua `GET /api/product-images/<id>` với cache `immutable`.
+- Ảnh đã tải nhưng không được lưu vào sản phẩm nào sẽ bị dọn sau 24 giờ, ở lần upload kế tiếp.
+- Server từ chối xóa ảnh còn được sản phẩm tham chiếu.
+- Ảnh chiếm dung lượng database. Neon Free có giới hạn lưu trữ theo project (xem
+  https://neon.com/pricing); kiểm tra số dòng `productImages` bằng `npm run db:status` hoặc
+  `npm run db:inspect` trước khi tải nhiều ảnh.
+
 ## Demo catalog
 
 Để tạo hoặc cập nhật hai sản phẩm mẫu đã gắn nhãn demo trên database trong `.env`, chạy:

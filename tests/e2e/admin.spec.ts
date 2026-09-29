@@ -1,4 +1,6 @@
 import {expect, test} from '@playwright/test';
+import {readFile} from 'node:fs/promises';
+import path from 'node:path';
 
 test('guest cannot open admin', async ({page}) => {
   await page.goto('/en/admin');
@@ -53,4 +55,22 @@ test('admin presence heartbeat tracks the open customer chat and settings page',
   await expect.poll(async () => (await (await admin.request.get('/api/admin/presence')).json()).admins[0]?.resource, {timeout: 10000}).toBe('settings');
   expect((await request.get('/api/admin/presence')).status()).toBe(403);
   await customer.close(); await admin.close();
+});
+
+test('admin can choose a product image without entering a path', async ({page}) => {
+  expect((await page.request.post('/api/auth/dev-admin')).ok()).toBe(true);
+  await page.route('**/api/admin/products', async route => {
+    if (route.request().method() === 'GET') await route.fulfill({json: {products: []}});
+    else await route.fulfill({status: 500, json: {error: 'Save is outside this focused upload test'}});
+  });
+  await page.route('**/api/admin/product-images', route => route.fulfill({status: 201, json: {path: '/api/product-images/cmh123abc', sizeBytes: 171734, mimeType: 'image/jpeg', reused: false}}));
+  await page.route('**/api/product-images/cmh123abc', async route => route.fulfill({contentType: 'image/jpeg', body: await readFile(path.resolve('public/horse1.jpg'))}));
+
+  await page.goto('/en/admin/settings/products');
+  await expect(page.getByText('No image yet')).toBeVisible();
+  await page.locator('.admin-image-dropzone input').setInputFiles('public/horse1.jpg');
+  await expect(page.getByText(/Image uploaded/)).toBeVisible();
+  await expect(page.getByRole('img', {name: 'Preview of product image'})).toBeVisible();
+  await expect(page.getByRole('button', {name: 'Save product'}).first()).toBeEnabled();
+  await expect(page.getByText('Image path')).toHaveCount(0);
 });
