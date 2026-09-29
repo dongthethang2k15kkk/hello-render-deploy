@@ -93,3 +93,14 @@ test('admin sees why a visible product is missing from the store', async ({page}
   await page.getByLabel('Stock available').fill('5');
   await expect(page.locator('.admin-store-note')).toHaveCount(0);
 });
+
+test('stock input drops typed leading zeros after leaving the field', async ({page}) => {
+  expect((await page.request.post('/api/auth/dev-admin')).ok()).toBe(true);
+  await page.route('**/api/admin/products', route => route.fulfill({json: {products: []}}));
+  await page.goto('/en/admin/settings/products');
+  const stock = page.getByLabel('Stock available');
+  await stock.fill('0019');
+  await stock.blur();
+  await expect(stock).toHaveValue('19');
+  await expect(page.getByText('Unique ID for this product')).toBeVisible();
+});

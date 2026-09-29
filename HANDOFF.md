@@ -322,7 +322,7 @@ Quyết định đã chốt trong hội thoại và trạng thái:
 - **Accepted by owner:** `Khánh Vy` now saves as "live in the store"; public catalog returned source `database` with `kh-nh-vy` and `sample-plus` on three consecutive checks (~1.3 s each).
 - **Bug found:** the first catalog request after an idle period returned source `fallback` with the two demo packages. `getPublicCatalog` gave the database 3 s; a suspended Neon Free compute plus a fresh Prisma connection can exceed that, so customers briefly saw demo products instead of the real catalog.
 - **Fix:** default catalog timeout raised to 10 s. The fallback behavior itself is unchanged (still used when the database is really unreachable).
-- **Cosmetic, not fixed:** a number input can keep showing typed leading zeros (e.g. stock `0019`); the saved value is correct (19).
+- **Cosmetic (fixed later the same day):** stock and display-order inputs kept showing typed leading zeros (e.g. `0019`); they now show the saved number when leaving the field. The Slug hint no longer claims the slug is used in the product URL (product pages use the package id).
 
 ### Admin management area — direction agreed 2026-09-29
 

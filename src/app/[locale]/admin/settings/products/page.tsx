@@ -12,6 +12,8 @@ const emptyField = (): DeliveryField => ({key: '', labelEn: '', required: false,
 const emptyPackage = (): ProductPackage => ({sku: '', baseUsdCents: 100, saleUsdCents: null, stockOnHand: 0, active: true, translations: {en: {title: '', description: ''}}, fields: [{key: 'recipient', labelEn: 'Recipient', required: true, maxLength: 80}]});
 const emptyProduct = (): Product => ({id: '', slug: '', active: false, category: 'general', sortOrder: 0, imagePath: '', translations: {en: {title: '', description: ''}}, packages: [emptyPackage()]});
 const englishFields = (fields: DeliveryField[] = []) => fields.map(({key, labelEn, required, maxLength}) => ({key, labelEn, required, maxLength}));
+// Number inputs keep typed leading zeros ("0019") because React skips equal numeric values; show the saved number on blur.
+const tidyNumber = (event: React.FocusEvent<HTMLInputElement>) => { if (event.target.value !== '') event.target.value = String(Number(event.target.value)); };
 const imageMegabytes = (bytes: number) => `${(bytes / 1024 / 1024).toFixed(bytes >= 1024 * 1024 ? 1 : 2)} MB`;
 
 async function prepareProductImage(file: File) {
@@ -179,7 +181,7 @@ export default function ProductsAdmin() {
           <div className="admin-section-heading"><span>1</span><div><h3>Product information</h3><p>What customers see in the catalog.</p></div></div>
           <div className="admin-field-grid">
             <label className="wide">Product name<input required value={title} onChange={event => {const value = event.target.value; const oldSlug = productSlug(title); update('translations.en.title', value); if (!current.id && (!current.slug || current.slug === oldSlug)) update('slug', productSlug(value));}}/></label>
-            <label>Slug<input required pattern="[a-z0-9]+(?:-[a-z0-9]+)*" value={current.slug} onChange={event => update('slug', event.target.value)}/><small>Used in the product URL.</small></label>
+            <label>Slug<input required pattern="[a-z0-9]+(?:-[a-z0-9]+)*" value={current.slug} onChange={event => update('slug', event.target.value)}/><small>Unique ID for this product: lowercase letters, numbers and hyphens.</small></label>
             <label>Category<input required value={current.category} onChange={event => update('category', event.target.value)}/></label>
             <label className="wide">Description<textarea rows={5} value={current.translations.en?.description ?? ''} onChange={event => update('translations.en.description', event.target.value)}/></label>
             <div className="admin-image-manager wide">
@@ -195,7 +197,7 @@ export default function ProductsAdmin() {
                 {imageMessage && <p className="admin-image-status" role="status">{imageMessage}</p>}
               </div>
             </div>
-            <label>Display order<input type="number" min="0" value={current.sortOrder} onChange={event => update('sortOrder', Number(event.target.value))}/></label>
+            <label>Display order<input type="number" min="0" value={current.sortOrder} onBlur={tidyNumber} onChange={event => update('sortOrder', Number(event.target.value))}/></label>
           </div>
           <label className="admin-switch"><input type="checkbox" checked={current.active} onChange={event => update('active', event.target.checked)}/><span><strong>Visible in store</strong><small>Customers can find this product after you save.</small></span></label>
           {draftStatus.tone !== 'live' && <p className={`admin-store-note ${draftStatus.tone}`} role="status"><strong>{draftStatus.label}.</strong> {draftStatus.detail}</p>}
@@ -211,7 +213,7 @@ export default function ProductsAdmin() {
               <label className="wide">Package description<textarea rows={3} value={item.translations.en?.description ?? ''} onChange={event => update(`packages.${packageIndex}.translations.en.description`, event.target.value)}/></label>
               <label>Base price (USD)<span className="money-input"><span>$</span><input type="number" step="0.01" min="0.01" value={item.baseUsdCents / 100} onChange={event => update(`packages.${packageIndex}.baseUsdCents`, Math.round(Number(event.target.value) * 100))}/></span></label>
               <label>Sale price (USD)<span className="money-input"><span>$</span><input type="number" step="0.01" min="0.01" placeholder="No sale" value={item.saleUsdCents === null ? '' : item.saleUsdCents / 100} onChange={event => update(`packages.${packageIndex}.saleUsdCents`, event.target.value ? Math.round(Number(event.target.value) * 100) : null)}/></span></label>
-              <label>Stock available<input type="number" min="0" value={item.stockOnHand} onChange={event => update(`packages.${packageIndex}.stockOnHand`, Number(event.target.value))}/>{item.active && item.stockOnHand <= 0 && <small className="admin-stock-warning">Out of stock: customers see this package but cannot buy it.</small>}</label>
+              <label>Stock available<input type="number" min="0" value={item.stockOnHand} onBlur={tidyNumber} onChange={event => update(`packages.${packageIndex}.stockOnHand`, Number(event.target.value))}/>{item.active && item.stockOnHand <= 0 && <small className="admin-stock-warning">Out of stock: customers see this package but cannot buy it.</small>}</label>
             </div>
             <label className="admin-switch"><input type="checkbox" checked={item.active} onChange={event => update(`packages.${packageIndex}.active`, event.target.checked)}/><span><strong>Package available</strong><small>Customers can select this package when the product is visible.</small></span></label>
             <div className="admin-delivery-fields"><div className="admin-subheading"><div><h5>Delivery information</h5><p>Fields customers must complete for this package.</p></div><button className="secondary" type="button" onClick={() => {setCurrent(previous => {const next = structuredClone(previous); next.packages[packageIndex].fields.push(emptyField()); return next;}); setDirty(true);}}>+ Add field</button></div>
