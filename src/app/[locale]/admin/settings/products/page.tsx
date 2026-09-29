@@ -1,6 +1,7 @@
 'use client';
 
 import {useEffect, useMemo, useRef, useState} from 'react';
+import {productSlug, storefrontStatus} from '@/lib/admin-product-status';
 import {MAX_PRODUCT_IMAGE_BYTES, MAX_PRODUCT_IMAGE_SOURCE_BYTES, productImageId, productImageTypes} from '@/lib/product-image';
 
 type DeliveryField = {key: string; labelEn: string; required: boolean; maxLength: number};
@@ -8,9 +9,8 @@ type ProductPackage = {sku: string; baseUsdCents: number; saleUsdCents: number |
 type Product = {id: string; slug: string; active: boolean; category: string; sortOrder: number; imagePath: string; translations: Record<string, {title: string; description: string}>; packages: ProductPackage[]};
 
 const emptyField = (): DeliveryField => ({key: '', labelEn: '', required: false, maxLength: 80});
-const emptyPackage = (): ProductPackage => ({sku: '', baseUsdCents: 100, saleUsdCents: null, stockOnHand: 0, active: false, translations: {en: {title: '', description: ''}}, fields: [{key: 'recipient', labelEn: 'Recipient', required: true, maxLength: 80}]});
+const emptyPackage = (): ProductPackage => ({sku: '', baseUsdCents: 100, saleUsdCents: null, stockOnHand: 0, active: true, translations: {en: {title: '', description: ''}}, fields: [{key: 'recipient', labelEn: 'Recipient', required: true, maxLength: 80}]});
 const emptyProduct = (): Product => ({id: '', slug: '', active: false, category: 'general', sortOrder: 0, imagePath: '', translations: {en: {title: '', description: ''}}, packages: [emptyPackage()]});
-const slugify = (value: string) => value.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 100);
 const englishFields = (fields: DeliveryField[] = []) => fields.map(({key, labelEn, required, maxLength}) => ({key, labelEn, required, maxLength}));
 const imageMegabytes = (bytes: number) => `${(bytes / 1024 / 1024).toFixed(bytes >= 1024 * 1024 ? 1 : 2)} MB`;
 
@@ -138,7 +138,7 @@ export default function ProductsAdmin() {
       const data = await response.json();
       if (!response.ok) throw new Error(data.error);
       const previousImagePath = persistedImagePath;
-      setCurrent(data.product); setPersistedImagePath(data.product.imagePath); setPendingImagePath(''); setImageMessage(''); setDirty(false); setMessage('Product saved. Storefront visibility follows the product and package switches.');
+      setCurrent(data.product); setPersistedImagePath(data.product.imagePath); setPendingImagePath(''); setImageMessage(''); setDirty(false); const saved = storefrontStatus(data.product); setMessage(saved.tone === 'live' ? 'Product saved and live in the store.' : `Product saved, but customers cannot buy it yet: ${saved.detail}`);
       if (previousImagePath && previousImagePath !== data.product.imagePath) void deleteUploadedImage(previousImagePath);
       await load();
     } catch (cause) {setError(cause instanceof Error ? cause.message : 'Product could not be saved.');}
@@ -156,6 +156,7 @@ export default function ProductsAdmin() {
 
   const shown = useMemo(() => products.filter(product => `${product.slug} ${product.translations.en?.title}`.toLowerCase().includes(query.trim().toLowerCase())), [products, query]);
   const title = current.translations.en?.title ?? '';
+  const draftStatus = storefrontStatus(current);
 
   return <div className="admin-products-page">
     <div className="page-heading admin-page-heading"><div><p className="eyebrow">ADMIN / SETTINGS / PRODUCTS</p><h1>Products</h1><p className="admin-lede">Create products, set prices and stock, and define the information required for delivery.</p></div><button type="button" onClick={startNew} disabled={databaseReady !== true || uploadingImage || busy}>+ New product</button></div>
@@ -167,7 +168,7 @@ export default function ProductsAdmin() {
       <aside className="admin-product-list card" aria-label="Product list">
         <div className="admin-list-heading"><div><h2>Catalog</h2><p>{products.length} product{products.length === 1 ? '' : 's'}</p></div><button type="button" className="secondary" onClick={startNew} disabled={uploadingImage || busy}>New</button></div>
         <label className="admin-search"><span>Search</span><input type="search" placeholder="Name or slug" value={query} onChange={event => setQuery(event.target.value)}/></label>
-        <div className="admin-product-items">{shown.length === 0 && <p className="admin-empty">No matching products.</p>}{shown.map(product => <article className={`admin-product-row ${current.id === product.id ? 'selected' : ''}`} key={product.id}><button type="button" className="admin-product-open" disabled={uploadingImage} onClick={() => selectProduct(product)}><strong>{product.translations.en?.title || 'Untitled product'}</strong><span>{product.slug}</span><small>{product.active ? 'Visible in store' : 'Hidden from store'} · {product.packages.length} package{product.packages.length === 1 ? '' : 's'}</small></button><button type="button" className="admin-delete" disabled={uploadingImage || busy} aria-label={`Delete ${product.translations.en?.title || product.slug}`} onClick={() => void remove(product)}>Delete</button></article>)}</div>
+        <div className="admin-product-items">{shown.length === 0 && <p className="admin-empty">No matching products.</p>}{shown.map(product => <article className={`admin-product-row ${current.id === product.id ? 'selected' : ''}`} key={product.id}><button type="button" className="admin-product-open" disabled={uploadingImage} onClick={() => selectProduct(product)}><strong>{product.translations.en?.title || 'Untitled product'}</strong><span>{product.slug}</span><small className={`admin-store-status ${storefrontStatus(product).tone}`}>{storefrontStatus(product).label} · {product.packages.length} package{product.packages.length === 1 ? '' : 's'}</small></button><button type="button" className="admin-delete" disabled={uploadingImage || busy} aria-label={`Delete ${product.translations.en?.title || product.slug}`} onClick={() => void remove(product)}>Delete</button></article>)}</div>
       </aside>
 
       <form className="admin-product-form" onSubmit={save}>
@@ -177,7 +178,7 @@ export default function ProductsAdmin() {
         <section className="admin-form-section card">
           <div className="admin-section-heading"><span>1</span><div><h3>Product information</h3><p>What customers see in the catalog.</p></div></div>
           <div className="admin-field-grid">
-            <label className="wide">Product name<input required value={title} onChange={event => {const value = event.target.value; const oldSlug = slugify(title); update('translations.en.title', value); if (!current.id && (!current.slug || current.slug === oldSlug)) update('slug', slugify(value));}}/></label>
+            <label className="wide">Product name<input required value={title} onChange={event => {const value = event.target.value; const oldSlug = productSlug(title); update('translations.en.title', value); if (!current.id && (!current.slug || current.slug === oldSlug)) update('slug', productSlug(value));}}/></label>
             <label>Slug<input required pattern="[a-z0-9]+(?:-[a-z0-9]+)*" value={current.slug} onChange={event => update('slug', event.target.value)}/><small>Used in the product URL.</small></label>
             <label>Category<input required value={current.category} onChange={event => update('category', event.target.value)}/></label>
             <label className="wide">Description<textarea rows={5} value={current.translations.en?.description ?? ''} onChange={event => update('translations.en.description', event.target.value)}/></label>
@@ -197,6 +198,7 @@ export default function ProductsAdmin() {
             <label>Display order<input type="number" min="0" value={current.sortOrder} onChange={event => update('sortOrder', Number(event.target.value))}/></label>
           </div>
           <label className="admin-switch"><input type="checkbox" checked={current.active} onChange={event => update('active', event.target.checked)}/><span><strong>Visible in store</strong><small>Customers can find this product after you save.</small></span></label>
+          {draftStatus.tone !== 'live' && <p className={`admin-store-note ${draftStatus.tone}`} role="status"><strong>{draftStatus.label}.</strong> {draftStatus.detail}</p>}
         </section>
 
         <section className="admin-form-section card">
@@ -209,7 +211,7 @@ export default function ProductsAdmin() {
               <label className="wide">Package description<textarea rows={3} value={item.translations.en?.description ?? ''} onChange={event => update(`packages.${packageIndex}.translations.en.description`, event.target.value)}/></label>
               <label>Base price (USD)<span className="money-input"><span>$</span><input type="number" step="0.01" min="0.01" value={item.baseUsdCents / 100} onChange={event => update(`packages.${packageIndex}.baseUsdCents`, Math.round(Number(event.target.value) * 100))}/></span></label>
               <label>Sale price (USD)<span className="money-input"><span>$</span><input type="number" step="0.01" min="0.01" placeholder="No sale" value={item.saleUsdCents === null ? '' : item.saleUsdCents / 100} onChange={event => update(`packages.${packageIndex}.saleUsdCents`, event.target.value ? Math.round(Number(event.target.value) * 100) : null)}/></span></label>
-              <label>Stock available<input type="number" min="0" value={item.stockOnHand} onChange={event => update(`packages.${packageIndex}.stockOnHand`, Number(event.target.value))}/></label>
+              <label>Stock available<input type="number" min="0" value={item.stockOnHand} onChange={event => update(`packages.${packageIndex}.stockOnHand`, Number(event.target.value))}/>{item.active && item.stockOnHand <= 0 && <small className="admin-stock-warning">Out of stock: customers see this package but cannot buy it.</small>}</label>
             </div>
             <label className="admin-switch"><input type="checkbox" checked={item.active} onChange={event => update(`packages.${packageIndex}.active`, event.target.checked)}/><span><strong>Package available</strong><small>Customers can select this package when the product is visible.</small></span></label>
             <div className="admin-delivery-fields"><div className="admin-subheading"><div><h5>Delivery information</h5><p>Fields customers must complete for this package.</p></div><button className="secondary" type="button" onClick={() => {setCurrent(previous => {const next = structuredClone(previous); next.packages[packageIndex].fields.push(emptyField()); return next;}); setDirty(true);}}>+ Add field</button></div>

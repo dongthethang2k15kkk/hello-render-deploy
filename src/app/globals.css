@@ -997,6 +997,13 @@ html,body {max-width:100%; overflow-x:clip;}
 .admin-product-open strong,.admin-product-open span,.admin-product-open small {display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
 .admin-product-open span {font-size:12px; color:#657169; margin-top:2px;}
 .admin-product-open small {font-size:11px; color:#4f6255; margin-top:5px; font-weight:500;}
+.admin-product-open small.admin-store-status.live {color:#276236;}
+.admin-product-open small.admin-store-status.warning {color:#8a4b0b; font-weight:700;}
+.admin-product-open small.admin-store-status.hidden {color:#66746a;}
+.admin-store-note {margin:10px 0 0; padding:11px 13px; border-radius:9px; font-size:13px; line-height:1.5;}
+.admin-store-note.warning {background:#fff5e6; color:#6b3a06; border:1px solid #efc98f;}
+.admin-store-note.hidden {background:#f1f4f0; color:#43534a; border:1px solid #d7e1d3;}
+.admin-field-grid label>small.admin-stock-warning {color:#8a4b0b; font-weight:600;}
 .admin-delete,.admin-remove-link {background:transparent; color:#9b332b; padding:7px; box-shadow:none; font-size:12px;}
 .admin-delete:hover:not(:disabled),.admin-remove-link:hover:not(:disabled) {background:#fff0ed; color:#81231d; transform:none; box-shadow:none;}
 .admin-empty {padding:16px; margin:0; border:1px dashed #c8d3c5; border-radius:9px; text-align:center; font-size:13px;}

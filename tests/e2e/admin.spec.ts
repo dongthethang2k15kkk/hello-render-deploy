@@ -74,3 +74,18 @@ test('admin can choose a product image without entering a path', async ({page}) 
   await expect(page.getByRole('button', {name: 'Save product'}).first()).toBeEnabled();
   await expect(page.getByText('Image path')).toHaveCount(0);
 });
+
+test('admin sees why a visible product is missing from the store', async ({page}) => {
+  expect((await page.request.post('/api/auth/dev-admin')).ok()).toBe(true);
+  const product = {id: 'p1', slug: 'khanh-vy', active: true, category: 'general', sortOrder: 0, imagePath: '', translations: {en: {title: 'Khánh Vy', description: ''}}, packages: [{sku: 'KV1', baseUsdCents: 100, saleUsdCents: null, stockOnHand: 0, active: false, translations: {en: {title: 'Standard', description: ''}}, fields: []}]};
+  await page.route('**/api/admin/products', route => route.fulfill({json: {products: [product]}}));
+
+  await page.goto('/en/admin/settings/products');
+  await expect(page.locator('.admin-store-status')).toHaveText(/Not in store/);
+  await page.locator('.admin-product-open', {hasText: 'Khánh Vy'}).click();
+  await expect(page.locator('.admin-store-note')).toContainText('Turn on “Package available”');
+  await page.getByRole('checkbox', {name: /Package available/}).check();
+  await expect(page.locator('.admin-store-note')).toContainText('out of stock');
+  await page.getByLabel('Stock available').fill('5');
+  await expect(page.locator('.admin-store-note')).toHaveCount(0);
+});
