@@ -42,7 +42,8 @@ async function readDatabaseCatalog(): Promise<CatalogProduct[]> {
   });
 }
 
-export async function getPublicCatalog(timeoutMs = 3000): Promise<PublicCatalog> {
+// Neon Free suspends idle compute; the first query after a pause can take several seconds.
+export async function getPublicCatalog(timeoutMs = 10000): Promise<PublicCatalog> {
   if (!process.env.DATABASE_URL) return fallback('demo');
   let timer: ReturnType<typeof setTimeout> | undefined;
   try {

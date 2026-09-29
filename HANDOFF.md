@@ -316,3 +316,10 @@ Quyết định đã chốt trong hội thoại và trạng thái:
 - **Fix:** new packages now default to available. `src/lib/admin-product-status.ts` mirrors the storefront rule; the Admin list shows `Live in store`, `Not in store`, `In store · out of stock` or `Hidden from store`, the editor explains what to switch on, stock 0 on an available package shows a warning, and the save message says whether the product is actually live. Slugs now strip Vietnamese diacritics (`Khánh Vy` → `khanh-vy`) instead of dropping the letters.
 - **Existing data:** the saved `Khánh Vy` package is still unavailable in Neon; the owner must open it, turn on "Package available", set stock above 0 and save. Changing the slug to `khanh-vy` is optional.
 - **Verification:** TypeScript passed; Vitest 49/49; production build created `BUILD_ID`; Playwright 15/15 in one run (an earlier Admin run had three 30 s `page.goto` timeouts while the dev server recompiled, passing on rerun). New E2E covers the "visible product with no available package" case.
+
+### Catalog fallback after idle — 2026-09-29
+
+- **Accepted by owner:** `Khánh Vy` now saves as "live in the store"; public catalog returned source `database` with `kh-nh-vy` and `sample-plus` on three consecutive checks (~1.3 s each).
+- **Bug found:** the first catalog request after an idle period returned source `fallback` with the two demo packages. `getPublicCatalog` gave the database 3 s; a suspended Neon Free compute plus a fresh Prisma connection can exceed that, so customers briefly saw demo products instead of the real catalog.
+- **Fix:** default catalog timeout raised to 10 s. The fallback behavior itself is unchanged (still used when the database is really unreachable).
+- **Cosmetic, not fixed:** a number input can keep showing typed leading zeros (e.g. stock `0019`); the saved value is correct (19).
