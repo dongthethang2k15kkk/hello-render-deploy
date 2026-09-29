@@ -323,3 +323,10 @@ Quyết định đã chốt trong hội thoại và trạng thái:
 - **Bug found:** the first catalog request after an idle period returned source `fallback` with the two demo packages. `getPublicCatalog` gave the database 3 s; a suspended Neon Free compute plus a fresh Prisma connection can exceed that, so customers briefly saw demo products instead of the real catalog.
 - **Fix:** default catalog timeout raised to 10 s. The fallback behavior itself is unchanged (still used when the database is really unreachable).
 - **Cosmetic, not fixed:** a number input can keep showing typed leading zeros (e.g. stock `0019`); the saved value is correct (19).
+
+### Admin management area — direction agreed 2026-09-29
+
+- **Business direction (owner choice "1a"):** the shop will sell for real soon. Customers pay by bank transfer; the owner confirms payments manually. This supersedes the open "demo or real" question above; demo labels must be revisited before launch.
+- **Data viewing:** customer, order, payment and activity data is viewed inside Admin through curated pages with filters (time, status, search). No raw database browser in Admin; sensitive fields (password hashes, session secrets, keys) are never shown. Raw access, if ever needed, stays in the Neon Console.
+- **Passwords:** never viewable by anyone. Admin gets account info, last sign-in, lock/unlock and reset actions instead.
+- **Phases (each: design → owner approval → build):** 1 accounts and sign-in history in PostgreSQL; 2 real orders with stock deduction; 3 manual payment recording; 4 Admin audit log; 5 overview dashboard. Status: design in progress, nothing implemented.
