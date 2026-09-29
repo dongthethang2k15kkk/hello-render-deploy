@@ -81,3 +81,15 @@ Kiểm tra khả năng restore trên một database tạm trước khi coi backu
 5. Tạo thử một sản phẩm, reload storefront, sửa lại sản phẩm và xác nhận dữ liệu còn sau
    một lần redeploy.
 6. Chỉ xóa database cũ sau khi database mới đã hoạt động và có backup đã kiểm tra.
+
+## Demo catalog
+
+Để tạo hoặc cập nhật hai sản phẩm mẫu đã gắn nhãn demo trên database trong `.env`, chạy:
+
+```powershell
+npm run db:seed-demo
+npm run db:status
+```
+
+Seed dùng slug/SKU cố định nên có thể chạy lại mà không tạo bản sao. Nó không xóa hoặc sửa các
+sản phẩm khác. Không dùng dữ liệu mẫu này làm nội dung bán hàng thật.
