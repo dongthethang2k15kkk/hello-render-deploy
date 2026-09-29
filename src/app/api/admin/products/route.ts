@@ -52,10 +52,11 @@ export async function POST(request: Request) {
       }
       await tx.package.updateMany({where: {productId: saved.id, sku: {notIn: input.packages.map((p: {sku: string}) => p.sku)}}, data: {active: false}});
       return tx.product.findUniqueOrThrow({where: {id: saved.id}, include: {translations: true, packages: {include: {translations: true, deliveryForms: true}}}});
-    });
+    }, {maxWait: 10000, timeout: 20000}); // Remote DB round trips can exceed Prisma's 5s default.
     return json({product: serialize(product)}, 201);
   } catch (error) {
     if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') return json({error: 'Slug or SKU already exists'}, 409);
+    console.error('Admin product save failed', error instanceof Error ? error.message : error);
     return json({error: 'Product operation unavailable'}, 503);
   }
 }

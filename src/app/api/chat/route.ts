@@ -26,7 +26,7 @@ export async function GET(request: Request) {
       rooms: availableRooms.map(id => {
         const history = listMessages(id, 'user');
         const lastMessage = history.at(-1);
-        return {id, name: customers.find(a => id === `user:${a.id}`)!.name, lastMessage: lastMessage ? {body: lastMessage.image ? '[Image]' : lastMessage.body, createdAt: lastMessage.createdAt} : null};
+        return {id, name: customers.find(a => id === `user:${a.id}`)!.name, lastMessage: lastMessage ? {body: lastMessage.image ? '[Image]' : lastMessage.body, createdAt: lastMessage.createdAt, role: lastMessage.role} : null};
       }),
       messages: selectedRoom ? listMessages(selectedRoom, 'user') : [],
       room: selectedRoom

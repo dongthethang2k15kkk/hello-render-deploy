@@ -1,4 +1,5 @@
-# Optional local staging database. Not needed for the public Render demo.
+# Persistent PostgreSQL for Docker on a local machine or VPS.
+# Do not use this as an in-container database on Render Free: that filesystem is ephemeral.
 services:
   app:
     environment:

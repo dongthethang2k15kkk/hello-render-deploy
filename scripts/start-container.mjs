@@ -16,7 +16,7 @@ process.env.HOSTNAME = HOSTNAME;
 console.log(`[start-container] PORT=${PORT}, HOSTNAME=${HOSTNAME}`);
 
 if (!process.env.DATABASE_URL) {
-  console.error('[start-container] DATABASE_URL is not set. Link the Render PostgreSQL database to this service.');
+  console.error('[start-container] DATABASE_URL is not set. Configure a persistent external PostgreSQL database, or use compose.db.yaml on a self-hosted Docker machine.');
   process.exit(1);
 }
 

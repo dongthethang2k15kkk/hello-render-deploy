@@ -7,7 +7,7 @@ test('English catalog, delivery form, persisted cart and disabled payment', asyn
   await page.getByRole('link', {name: 'Package details'}).first().click();
   await page.getByLabel('Recipient name (test data)').fill('Demo recipient');
   await page.getByRole('button', {name: 'Add to cart'}).click();
-  await expect(page.getByRole('status')).toHaveText('Added to cart.');
+  await expect(page.getByRole('status')).toContainText('Added to cart.');
   await page.getByRole('link', {name: 'Cart', exact: true}).click();
   await expect(page).toHaveURL(/\/en\/cart$/);
   await expect(page.getByRole('heading', {name: 'Basic sample package'})).toBeVisible();
@@ -74,4 +74,38 @@ test('demo quote validates inputs and never enables payment', async ({request}) 
     const invalid = await request.post('/api/demo/quote', {data});
     expect(invalid.status()).toBe(400);
   }
+});
+
+test('public catalog exposes the same demo packages used by the storefront', async ({request}) => {
+  const response = await request.get('/api/catalog');
+  expect(response.status()).toBe(200);
+  expect(response.headers()['cache-control']).toContain('no-store');
+  const body = await response.json();
+  expect(body.source).toBe('demo');
+  expect(body.products.map((product: {id: string}) => product.id)).toEqual(['sample-basic', 'sample-plus']);
+  expect(body.products[0]).toMatchObject({usdCents: 1000, stock: 5, fields: [{key: 'recipient', labelEn: 'Recipient name (test data)'}]});
+});
+
+test('guest keeps a configured item and can edit it before signing in', async ({page}) => {
+  await page.goto('/en/products/sample-basic');
+  await page.getByLabel('Recipient name (test data)').fill('First recipient');
+  await page.getByRole('button', {name: 'Add to cart'}).click();
+  await expect(page.getByRole('status')).toContainText('Added to cart.');
+  await page.getByRole('status').getByRole('link', {name: 'View cart'}).click();
+  await expect(page.getByText('Recipient name (test data): First recipient')).toBeVisible();
+  await page.getByRole('link', {name: 'Edit details'}).click();
+  await expect(page.getByLabel('Recipient name (test data)')).toHaveValue('First recipient');
+  await page.getByLabel('Recipient name (test data)').fill('Updated recipient');
+  await page.getByRole('button', {name: 'Update cart'}).click();
+  await page.getByRole('status').getByRole('link', {name: 'View cart'}).click();
+  await expect(page.getByText('Recipient name (test data): Updated recipient')).toBeVisible();
+});
+
+test('support dialog closes with Escape', async ({page}) => {
+  await page.goto('/en');
+  await page.getByRole('button', {name: 'Open support chat'}).click();
+  await expect(page.getByRole('dialog', {name: 'Live support'})).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(page.getByRole('dialog', {name: 'Live support'})).toHaveCount(0);
+  await expect(page.getByRole('button', {name: 'Open support chat'})).toBeFocused();
 });

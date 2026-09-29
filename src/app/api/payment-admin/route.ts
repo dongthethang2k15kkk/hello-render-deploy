@@ -5,13 +5,14 @@ import {z} from 'zod';
 import {canManageReceivers, canProcessOrders, paymentRole} from '@/lib/payment-auth';
 import {getPaymentDb} from '@/lib/payment-db';
 import {receiverSchema, quoteMinor, nextPaymentStatus} from '@/lib/payment-rules';
-import {cartSchema, totalUsdCents} from '@/lib/cart';
+import {cartLineSchema, createCartSchema, totalUsdCents} from '@/lib/cart';
+import {getPublicCatalog} from '@/lib/catalog-server';
 
 export const runtime = 'nodejs';
 const reply = (data: unknown, status = 200) => new Response(JSON.stringify(data, (_, v) => typeof v === 'bigint' ? v.toString() : v), {status, headers: {'Content-Type': 'application/json', 'Cache-Control': 'no-store'}});
 const commandSchema = z.discriminatedUnion('action', [
   z.object({action: z.literal('receiver'), id: z.string().optional(), receiver: receiverSchema}).strict(),
-  z.object({action: z.literal('create'), requestKey: z.string().uuid(), method: z.enum(['bank', 'ltc']), lines: cartSchema.refine(v => v.length > 0)}).strict(),
+  z.object({action: z.literal('create'), requestKey: z.string().uuid(), method: z.enum(['bank', 'ltc']), lines: z.array(cartLineSchema).min(1).max(20)}).strict(),
   z.object({action: z.enum(['report', 'confirm', 'deliver']), id: z.string().min(1), evidence: z.string().trim().min(1).max(500)}).strict()
 ]);
 
@@ -38,6 +39,10 @@ export async function POST(request: Request) {
   const command = parsed.data;
   if (command.action === 'receiver' && !canManageReceivers(role)) return reply({error: 'Admin role required'}, 403);
   try {
+    const catalog = command.action === 'create' ? await getPublicCatalog() : null;
+    if (command.action === 'create' && (!catalog || catalog.source !== 'database' || !createCartSchema(catalog.products).safeParse(command.lines).success)) {
+      return reply({error: 'Cart no longer matches the active catalog'}, 409);
+    }
     const db = getPaymentDb();
     // One transaction-wide lock serializes allocation, edits and confirmations across processes.
     const result = await db.$transaction(async tx => {
@@ -54,7 +59,7 @@ export async function POST(request: Request) {
         const rate = process.env[command.method === 'bank' ? 'PAYMENT_VND_PER_USD' : 'PAYMENT_LITOSHI_PER_USD'] ?? '';
         const validUntil = Date.parse(process.env.PAYMENT_RATE_VALID_UNTIL ?? '');
         if (!Number.isFinite(validUntil) || validUntil <= Date.now()) throw new Error('Configure an unexpired, reviewed exchange rate');
-        const cents = totalUsdCents(command.lines);
+        const cents = totalUsdCents(command.lines, catalog!.products);
         const amount = quoteMinor(cents, rate);
         const receivers = await tx.paymentReceiver.findMany({where: {active: true, method: command.method}, orderBy: [{lastAssigned: 'asc'}, {id: 'asc'}]});
         for (const receiver of receivers) {

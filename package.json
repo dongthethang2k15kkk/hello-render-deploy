@@ -10,7 +10,8 @@
     "test": "vitest run",
     "test:e2e": "playwright test",
     "db:generate": "prisma generate",
-    "db:migrate": "prisma migrate dev"
+    "db:migrate": "prisma migrate dev",
+    "db:status": "node --env-file=.env scripts/database-status.mjs"
   },
   "dependencies": {
     "@prisma/client": "^6.0.0",

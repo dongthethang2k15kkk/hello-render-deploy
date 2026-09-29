@@ -1,4 +1,5 @@
-# Public demo only: no payment secrets or production database.
+# Render Free runs only the app container. DATABASE_URL must point to a
+# persistent external PostgreSQL provider; do not run PostgreSQL in this service.
 services:
   - type: web
     name: shop-concept-demo
@@ -13,3 +14,14 @@ services:
         generateValue: true
       - key: PAYMENT_ADMIN_KEY
         value: ""
+      # Set these in the Render dashboard (sync: false keeps them out of Git).
+      - key: DATABASE_URL
+        sync: false
+      - key: GOOGLE_CLIENT_ID
+        sync: false
+      - key: GOOGLE_CLIENT_SECRET
+        sync: false
+      - key: ADMIN_GOOGLE_EMAILS
+        sync: false
+      - key: APP_URL
+        sync: false

@@ -1,6 +1,7 @@
 'use client';
 import {createContext, useContext, useEffect, useState} from 'react';
-import {CartLine, cartSchema} from '@/lib/cart';
+import {CartLine, createCartSchema} from '@/lib/cart';
+import {useCatalog} from './catalog-provider';
 
 const KEY = 'shop-demo-cart-v1';
 const Context = createContext<{
@@ -9,17 +10,24 @@ const Context = createContext<{
 } | null>(null);
 
 export function CartProvider({children}: {children: React.ReactNode}) {
+  const catalog = useCatalog();
   const [lines, setLines] = useState<CartLine[]>([]);
   const [ready, setReady] = useState(false);
   useEffect(() => {
+    if (!catalog.ready) return;
     try {
-      const parsed = cartSchema.safeParse(JSON.parse(localStorage.getItem(KEY) ?? '[]'));
+      const raw = JSON.parse(localStorage.getItem(KEY) ?? '[]');
+      const parsed = createCartSchema(catalog.products).safeParse(raw);
       if (parsed.success) setLines(parsed.data);
-    } catch { /* Invalid or unavailable local storage must not break rendering. */ }
+      else {localStorage.removeItem(KEY); setLines([]);}
+    } catch {
+      localStorage.removeItem(KEY);
+      setLines([]);
+    }
     setReady(true);
-  }, []);
+  }, [catalog.ready, catalog.products]);
   function save(next: CartLine[]) {
-    const parsed = cartSchema.safeParse(next);
+    const parsed = createCartSchema(catalog.products).safeParse(next);
     if (!parsed.success) return false;
     try {localStorage.setItem(KEY, JSON.stringify(parsed.data));}
     catch {return false;}

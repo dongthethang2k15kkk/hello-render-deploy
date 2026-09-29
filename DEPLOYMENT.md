@@ -1,15 +1,19 @@
 # Triển khai bằng Docker
 
+> Chiến lược database miễn phí, Neon và Docker tự host được tách rõ trong
+> [DATABASE.md](./DATABASE.md). Render Free chỉ chạy app container; PostgreSQL phải nằm
+> ở dịch vụ ngoài hoặc trên một VPS/máy riêng có volume bền vững.
+
 ## Phạm vi hiện tại
 
-Bản deploy này là **demo công khai**. Login có tài khoản mẫu, chat và tài khoản
-đăng ký nằm trong bộ nhớ, mất sau restart/sleep/redeploy. Chỉ chạy một instance.
-Checkout là mô phỏng. Catalog storefront vẫn đọc dữ liệu mẫu; CRUD Admin dùng
-PostgreSQL riêng và chưa làm thay đổi catalog storefront. Không nhập dữ liệu thật.
+Bản deploy này là **demo công khai**. Khách hàng có tài khoản mẫu; Admin chỉ đăng
+nhập bằng Google theo allowlist. Chat và tài khoản khách đăng ký nằm trong bộ nhớ,
+mất sau restart/sleep/redeploy. Chỉ chạy một instance. Checkout là mô phỏng.
+Khi có `DATABASE_URL`, catalog storefront đọc sản phẩm do Admin tạo trong PostgreSQL.
 
-Render Blueprint không cấu hình database hoặc khóa payment. Không đưa database
-thật vào bản demo có mật khẩu Admin công khai. Payment staging cần triển khai
-nội bộ và đánh giá riêng trước khi mở ra Internet.
+Render Blueprint không cấu hình khóa payment. `DATABASE_URL` và các biến Google
+nhập trong dashboard. Payment staging cần triển khai nội bộ và đánh giá riêng
+trước khi mở ra Internet.
 
 ## Đề xuất: Render Free (Docker)
 
@@ -17,19 +21,22 @@ Render hỗ trợ Docker và cấp URL HTTPS dạng `https://<ten-service>.onren
 Gói Free ngủ sau 15 phút không có truy cập; lần mở lại có thể mất khoảng một phút.
 Có 750 giờ chạy miễn phí/workspace/tháng, giới hạn build và bandwidth.
 Filesystem không bền vững. PostgreSQL miễn phí của Render hết hạn sau 30 ngày,
-vì vậy Blueprint này không tạo database.
+vì vậy Blueprint này không tạo database và `DATABASE_URL` phải trỏ tới PostgreSQL
+bền vững bên ngoài. Xem quy trình Neon trong `DATABASE.md`.
 
 1. Đưa các thay đổi đã kiểm tra trong thư mục này lên GitHub
    `https://github.com/dongthethang2k15kkk/hello-render-deploy` (repo cần chứa Dockerfile và render.yaml).
 2. Đăng nhập https://dashboard.render.com bằng GitHub và cấp quyền đọc repo.
 3. Chọn **New → Blueprint**, kết nối repo, chọn branch có cấu hình triển khai.
 4. Kiểm tra service dùng **Docker**, plan **Free**, region **Singapore**.
-   Blueprint tự sinh `AUTH_SECRET`; `PAYMENT_ADMIN_KEY` để trống.
+   Blueprint tự sinh `AUTH_SECRET`; `PAYMENT_ADMIN_KEY` để trống. Điền `DATABASE_URL`
+   từ Neon cùng các biến Google OAuth trong Render Environment.
 5. Deploy; đợi build và health check thành công. Mở URL Render cấp, thêm `/vi`
    hoặc `/en`. URL chỉ tồn tại sau khi Render tạo service.
 6. Kiểm tra `/api/health` trả `{"status":"ok"}`, mở trang sản phẩm, đăng nhập,
    thử chat bằng hai phiên trình duyệt, kiểm tra Admin → Chat/Settings.
-   CRUD sản phẩm sẽ báo chưa cấu hình database trên bản demo này.
+   Tạo một sản phẩm trong Admin, bật product/package, rồi reload storefront để xác nhận
+   catalog đang dùng database ngoài.
 
 Có thể dùng **New → Web Service** nếu không dùng Blueprint: chọn Docker,
 Free, Dockerfile `./Dockerfile`, health check `/api/health`; tự tạo AUTH_SECRET.
@@ -39,6 +46,29 @@ Không nhập secret vào Dockerfile, GitHub hoặc build arguments.
 Repo triển khai riêng tư thuộc tài khoản dongthethang2k15kkk; remote Git là `render`.
 Repo nguồn elliotthewizerd/hello vẫn giữ ở remote `origin`. Sau khi commit thay đổi,
 dùng `git push render main` để cập nhật bản triển khai.
+
+## Đăng nhập Admin bằng Google (miễn phí)
+
+Admin chỉ đăng nhập bằng Google; mật khẩu chỉ dùng cho khách hàng. Tạo OAuth client
+không cần bật billing/thẻ:
+
+1. https://console.cloud.google.com → tạo project → **APIs & Services → OAuth consent screen**:
+   User type **External**, điền tên app + email; ở **Test users** thêm 3 Gmail admin
+   (chế độ Testing đủ dùng, không cần xác minh app với scope `openid email`).
+2. **Credentials → Create credentials → OAuth client ID → Web application**.
+   Authorized redirect URIs:
+   - `http://localhost:3000/api/auth/google/callback`
+   - `https://<ten-service>.onrender.com/api/auth/google/callback`
+3. Điền vào `.env` (local) và Render → Environment: `GOOGLE_CLIENT_ID`,
+   `GOOGLE_CLIENT_SECRET`, `ADMIN_GOOGLE_EMAILS=a@gmail.com,b@gmail.com,c@gmail.com`,
+   `APP_URL=https://<ten-service>.onrender.com` (chỉ cần trên Render).
+
+Allowlist được kiểm tra mỗi request: xóa email khỏi `ADMIN_GOOGLE_EMAILS` rồi
+redeploy là thu hồi quyền. Đổi `AUTH_SECRET` sẽ đăng xuất mọi phiên.
+`ALLOW_DEV_ADMIN_LOGIN=1` bật nút "Dev admin" chỉ khi không phải production (dùng cho E2E/local).
+
+Trạng thái "ai đang xem chat/settings nào" lưu trong bộ nhớ, poll 3 giây, hết hạn
+sau 20 giây; chỉ đúng khi chạy **một instance** (đúng với Render Free).
 
 ## Chạy Docker trên máy
 

@@ -1,9 +1,18 @@
 'use client';
-import {useState, type FormEvent} from 'react';
+import {useEffect, useState, type FormEvent} from 'react';
 import {useLocale} from 'next-intl';
 import {useRouter} from 'next/navigation';
 import Link from 'next/link';
 import {demoCredentials} from '@/lib/demo-credentials';
+
+const oauthErrors: Record<string, string> = {
+  google_not_configured: 'Google sign-in is not configured yet.',
+  google_cancelled: 'Google sign-in was cancelled.',
+  google_invalid_state: 'Google sign-in expired. Please try again.',
+  google_failed: 'Could not complete Google sign-in. Please try again.',
+  google_unverified: 'This Google email is not verified.',
+  not_admin: 'This Google account is not allowed to access admin.'
+};
 
 export default function LoginPage() {
   const locale = useLocale();
@@ -16,6 +25,20 @@ export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
+  const [providers, setProviders] = useState<{google: boolean; devAdmin: boolean} | null>(null);
+
+  useEffect(() => {
+    const code = new URLSearchParams(window.location.search).get('error');
+    if (code) setError(oauthErrors[code] ?? 'Sign-in failed.');
+    fetch('/api/auth/providers', {cache: 'no-store'}).then(r => r.json()).then(setProviders).catch(() => setProviders({google: false, devAdmin: false}));
+  }, []);
+
+  async function devAdmin() {
+    setBusy(true);
+    const response = await fetch('/api/auth/dev-admin', {method: 'POST'}).catch(() => null);
+    setBusy(false);
+    if (response?.ok) {router.push(`/${locale}/admin/chat`); router.refresh();} else setError('Dev admin login is disabled.');
+  }
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -45,7 +68,12 @@ export default function LoginPage() {
         {error && <p className="error-text" role="alert">{error}</p>}
         <button type="submit" className="full-width" disabled={busy}>{busy ? 'Please wait…' : register ? 'Create account' : 'Sign in'}</button>
       </form>
-      {!register && <details className="auth-demo"><summary>{'Use a demo account'}</summary>{demoCredentials.map(account => <button type="button" className="account-choice" key={account.username} onClick={() => {setUsername(account.username); setPassword(account.password); setError('');}}><strong>{account.name}</strong><span>{account.username} / {account.password}</span></button>)}</details>}
+      {!register && <details className="auth-demo"><summary>{'Use a demo customer account'}</summary>{demoCredentials.map(account => <button type="button" className="account-choice" key={account.username} onClick={() => {setUsername(account.username); setPassword(account.password); setError('');}}><strong>{account.name}</strong><span>{account.username} / {account.password}</span></button>)}</details>}
+      {!register && <div className="auth-admin"><p className="field-caption">{'Store staff'}</p>
+        {/* Plain link: OAuth needs a full-page navigation, not client routing. */}
+        {providers?.google ? <a className="button secondary full-width google-signin" href="/api/auth/google/start">{'Admin sign in with Google'}</a> : <p className="field-caption">{providers ? 'Admin Google sign-in is not configured.' : 'Checking admin sign-in…'}</p>}
+        {providers?.devAdmin && <button type="button" className="secondary full-width" disabled={busy} onClick={() => void devAdmin()}>{'Dev admin (local only)'}</button>}
+      </div>}
     </section><Link className="auth-back" href={`/${locale}`}>← {'Back to store'}</Link>
   </div>;
 }
