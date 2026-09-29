@@ -290,3 +290,11 @@ Quyết định đã chốt trong hội thoại và trạng thái:
 - Ran the seed twice against Neon to confirm repeatability. Database status then reported 2 products, 2 packages and 2 delivery forms, with payment tables still empty.
 - Public `https://jewish-horse.onrender.com/api/catalog` immediately returned source `database` with both demo packages. No application redeploy was required for the database content change.
 - Render `APP_URL` was set to the public HTTPS origin. The three Google-specific values in local `.env` are empty strings, so they were not uploaded as fake credentials.
+
+### Production catalog and Google Admin OAuth — 2026-09-29
+
+- Commit `8503157` (`Seed Neon demo catalog`) was pushed to `origin/main`. Render deploy `dep-datnd7gu01pc73fg57ag` reached `live` from that commit at 2026-09-29T08:30:37Z.
+- Production smoke checks passed: `/en` and a database-backed product detail returned HTTP 200; `/api/health` returned `ok`; `/api/catalog` returned source `database` with 2 products; the demo quote endpoint validated a seeded item and returned USD 1000 cents with payment disabled; unauthenticated Admin products remained HTTP 403.
+- `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` and `ADMIN_GOOGLE_EMAILS` were configured directly as Render environment variables. No credential value was written to local `.env`, source files, Git or this document. The Admin allowlist currently contains the email of the authenticated Render account.
+- Render deploy `dep-datnm6m0tbcc73ejlnmg` reached `live` at 2026-09-29T08:48:06Z after the OAuth environment update. Public provider status reports `google: true` and `devAdmin: false`. The authorization redirect uses Google Accounts, the exact production callback `https://jewish-horse.onrender.com/api/auth/google/callback`, and PKCE S256; an anonymous configuration check found no `invalid_client` or `redirect_uri_mismatch` response.
+- Remaining manual acceptance: sign in through `/en/login` with the allowlisted Google account and confirm the redirect to `/en/admin/chat`. Because the first client secret was supplied through chat, rotate it in Google Cloud after acceptance and enter the replacement directly in Render without sending it through chat. Then revoke the old secret and run the provider/redirect smoke checks again.

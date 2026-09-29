@@ -67,6 +67,13 @@ Allowlist được kiểm tra mỗi request: xóa email khỏi `ADMIN_GOOGLE_EMA
 redeploy là thu hồi quyền. Đổi `AUTH_SECRET` sẽ đăng xuất mọi phiên.
 `ALLOW_DEV_ADMIN_LOGIN=1` bật nút "Dev admin" chỉ khi không phải production (dùng cho E2E/local).
 
+Trạng thái production ngày 2026-09-29: bốn biến OAuth đã được cấu hình trên Render và
+`/api/auth/providers` trả `google: true`, `devAdmin: false`. Callback production là
+`https://jewish-horse.onrender.com/api/auth/google/callback`. Không ghi Client ID/secret vào
+tài liệu, Git hoặc `.env` local. Còn cần đăng nhập thủ công bằng tài khoản trong allowlist để
+nghiệm thu; sau đó rotate secret đầu tiên đã từng được truyền qua chat và nhập secret thay thế
+trực tiếp trong Render.
+
 Trạng thái "ai đang xem chat/settings nào" lưu trong bộ nhớ, poll 3 giây, hết hạn
 sau 20 giây; chỉ đúng khi chạy **một instance** (đúng với Render Free).
 
