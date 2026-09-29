@@ -121,3 +121,97 @@ model DeliveryForm {
 
   @@unique([packageId, version])
 }
+
+// Phase 1: customer accounts, sign-in history and support chat (see docs/specs).
+model Customer {
+  id                 String            @id @default(cuid())
+  email              String            @unique
+  name               String
+  passwordHash       String?
+  googleSub          String?           @unique
+  emailVerified      Boolean           @default(false)
+  status             String            @default("active")
+  lockedReason       String?
+  mustChangePassword Boolean           @default(false)
+  createdAt          DateTime          @default(now())
+  lastLoginAt        DateTime?
+  sessions           CustomerSession[]
+  loginEvents        LoginEvent[]
+  chatMessages       ChatMessage[]
+  auditLogs          AuditLog[]
+
+  @@index([createdAt])
+  @@index([lastLoginAt])
+}
+
+model CustomerSession {
+  id         String    @id @default(cuid())
+  customerId String
+  customer   Customer  @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  tokenHash  String    @unique
+  ip         String?
+  userAgent  String?
+  createdAt  DateTime  @default(now())
+  lastSeenAt DateTime  @default(now())
+  expiresAt  DateTime
+  revokedAt  DateTime?
+
+  @@index([customerId])
+  @@index([expiresAt])
+}
+
+model LoginEvent {
+  id         String    @id @default(cuid())
+  customerId String?
+  customer   Customer? @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  email      String
+  method     String
+  outcome    String
+  ip         String?
+  userAgent  String?
+  createdAt  DateTime  @default(now())
+
+  @@index([createdAt])
+  @@index([email, createdAt])
+  @@index([ip, createdAt])
+  @@index([customerId, createdAt])
+}
+
+model ChatMessage {
+  id         String     @id @default(cuid())
+  customerId String
+  customer   Customer   @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  authorRole String
+  authorName String
+  body       String
+  imageId    String?    @unique
+  image      ChatImage? @relation(fields: [imageId], references: [id], onDelete: SetNull)
+  createdAt  DateTime   @default(now())
+
+  @@index([customerId, createdAt])
+}
+
+model ChatImage {
+  id        String       @id @default(cuid())
+  mimeType  String
+  name      String
+  sizeBytes Int
+  data      Bytes
+  createdAt DateTime     @default(now())
+  message   ChatMessage?
+
+  @@index([createdAt])
+}
+
+model AuditLog {
+  id         String    @id @default(cuid())
+  actorEmail String
+  action     String
+  customerId String?
+  customer   Customer? @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  summary    String
+  createdAt  DateTime  @default(now())
+
+  @@index([customerId, createdAt])
+  @@index([createdAt])
+}

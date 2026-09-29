@@ -1,6 +1,6 @@
 import {createHash} from 'node:crypto';
 import {Prisma} from '@prisma/client';
-import {getSession} from '@/lib/demo-auth';
+import {getSession} from '@/lib/auth';
 import {getPaymentDb} from '@/lib/payment-db';
 import {cleanImageFilename, MAX_PRODUCT_IMAGE_BYTES, productImageId, productImageTypes, validProductImageSignature} from '@/lib/product-image';
 

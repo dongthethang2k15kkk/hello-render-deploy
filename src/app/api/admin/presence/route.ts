@@ -1,4 +1,4 @@
-import {getSession} from '@/lib/demo-auth';
+import {getSession} from '@/lib/auth';
 import {isValidResource, presenceStore} from '@/lib/admin-presence';
 
 export const runtime = 'nodejs';
@@ -25,7 +25,7 @@ export async function POST(request: Request) {
   if (!account) return json({error: 'Admin role required'}, 403);
   const data = await request.json().catch(() => null) as {resource?: unknown; leave?: unknown} | null;
   if (data?.leave === true) presenceStore().leave(account.id);
-  else if (isValidResource(data?.resource)) presenceStore().beat(account.id, account.name, account.email ?? account.username, data.resource);
+  else if (isValidResource(data?.resource)) presenceStore().beat(account.id, account.name, account.email, data.resource);
   else return json({error: 'Invalid resource'}, 400);
   return json(snapshot(account.id));
 }

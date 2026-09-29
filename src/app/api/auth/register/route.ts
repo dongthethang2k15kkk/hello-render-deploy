@@ -1,17 +1,31 @@
 import {NextResponse} from 'next/server';
-import {encodeSession, sessionCookie} from '@/lib/demo-auth';
-import {findAccountByUsername, registerAccount} from '@/lib/demo-accounts';
+import {Prisma} from '@prisma/client';
+import {createCustomerSession, customerCookie, customerCookieOptions} from '@/lib/auth';
+import {hashPassword, registerSchema, sameOrigin} from '@/lib/customer-rules';
+import {recordLoginEvent, registrationBlocked} from '@/lib/customer-store';
+import {getPaymentDb} from '@/lib/payment-db';
+
+export const runtime = 'nodejs';
 
 export async function POST(request: Request) {
-  const data = await request.json().catch(() => ({}));
-  const username = typeof data.username === 'string' ? data.username.trim().toLowerCase() : '';
-  const name = typeof data.name === 'string' ? data.name.trim() : '';
-  const password = data.password;
-  if (!/^[a-z0-9._@-]{3,64}$/.test(username) || !name || name.length > 80 || typeof password !== 'string' || password.length < 8 || password.length > 128)
-    return NextResponse.json({error: 'Username (3–64 characters), name, and password (8–128 characters) are invalid.'}, {status: 400});
-  if (findAccountByUsername(username)) return NextResponse.json({error: 'Username already exists.'}, {status: 409});
-  const account = registerAccount(username, name, password);
-  const response = NextResponse.json({ok: true});
-  response.cookies.set(sessionCookie, encodeSession(account), {httpOnly: true, sameSite: 'lax', secure: process.env.NODE_ENV === 'production', path: '/', maxAge: 60 * 60 * 8});
-  return response;
+  if (!sameOrigin(request.headers)) return NextResponse.json({error: 'Invalid request origin.'}, {status: 403});
+  if (!process.env.DATABASE_URL) return NextResponse.json({error: 'Accounts are unavailable right now.'}, {status: 503});
+  const parsed = registerSchema.safeParse(await request.json().catch(() => ({})));
+  if (!parsed.success) return NextResponse.json({error: parsed.error.issues[0]?.message ?? 'Check your details.'}, {status: 400});
+  const {email, name, password} = parsed.data;
+  try {
+    if (await registrationBlocked(request.headers)) return NextResponse.json({error: 'Too many new accounts from this network. Try again later.'}, {status: 429});
+    const customer = await getPaymentDb().customer.create({data: {email, name, passwordHash: hashPassword(password), lastLoginAt: new Date()}});
+    const [token] = await Promise.all([
+      createCustomerSession(customer.id, request.headers),
+      recordLoginEvent({customerId: customer.id, email, method: 'register', outcome: 'success', headers: request.headers})
+    ]);
+    const response = NextResponse.json({ok: true, role: 'user'});
+    response.cookies.set(customerCookie, token, customerCookieOptions());
+    return response;
+  } catch (error) {
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') return NextResponse.json({error: 'An account with this email already exists. Sign in instead.'}, {status: 409});
+    console.error('Registration failed', error instanceof Error ? error.message.split('\n')[0] : error);
+    return NextResponse.json({error: 'Accounts are unavailable right now.'}, {status: 503});
+  }
 }

@@ -1,5 +1,5 @@
 import {redirect} from 'next/navigation';
-import {getSession} from '@/lib/demo-auth';
+import {getSession} from '@/lib/auth';
 import ChatPanel from '@/components/chat-panel';
 
 export default async function WorkspacePage({params}: {params: Promise<{locale: string}>}) {

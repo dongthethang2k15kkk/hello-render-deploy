@@ -96,6 +96,30 @@ WebP tối đa 2 MB và kiểm tra magic bytes. Ảnh trùng nội dung (SHA-256
   https://neon.com/pricing); kiểm tra số dòng `productImages` bằng `npm run db:status` hoặc
   `npm run db:inspect` trước khi tải nhiều ảnh.
 
+## Tài khoản khách, lịch sử đăng nhập và chat
+
+Từ giai đoạn 1, tài khoản khách, phiên đăng nhập, lịch sử đăng nhập, chat và nhật ký thao tác
+Admin nằm trong PostgreSQL (bảng `Customer`, `CustomerSession`, `LoginEvent`, `ChatMessage`,
+`ChatImage`, `AuditLog`). Không có database thì khách không đăng ký/đăng nhập được.
+
+- Mật khẩu chỉ lưu dạng băm scrypt; cookie phiên chỉ lưu dạng SHA-256. Admin không đọc được cả hai.
+- Lịch sử đăng nhập và ảnh chat tự xóa sau 90 ngày; phiên hết hạn hoặc bị thu hồi quá 7 ngày cũng bị
+  xóa. Việc dọn chạy trong ứng dụng, tối đa 6 giờ một lần, khi có sự kiện đăng nhập.
+- Xóa tài khoản trong Admin xóa luôn phiên, chat, ảnh chat và lịch sử đăng nhập của khách đó.
+- Thiết kế: `docs/specs/2026-09-29-phase1-accounts-chat-design.md`.
+
+## Database cho E2E
+
+Playwright cần `E2E_DATABASE_URL` trỏ tới database dùng một lần, **không bao giờ** là production.
+Global setup từ chối chạy nếu host trùng `DATABASE_URL`, và chỉ chạy `migrate deploy` + seed
+demo, không xóa dữ liệu. Test tự tạo khách với email riêng nên dữ liệu các lần chạy trước vô hại.
+
+- CI: service PostgreSQL mới mỗi lần chạy (`.github/workflows/docker.yml`, job `e2e`).
+- Máy local: branch Neon `e2e` tạo bằng `--schema-only` từ `main`, nên không có sản phẩm thật.
+  Branch schema-only không mang theo lịch sử migration: lần đầu phải đánh dấu các migration đã có
+  trong schema là applied bằng `prisma migrate resolve --applied <tên>` (chỉ trên branch e2e).
+- Prisma chặn `migrate reset` khi do AI agent chạy; không vượt qua chặn này.
+
 ## Demo catalog
 
 Để tạo hoặc cập nhật hai sản phẩm mẫu đã gắn nhãn demo trên database trong `.env`, chạy:

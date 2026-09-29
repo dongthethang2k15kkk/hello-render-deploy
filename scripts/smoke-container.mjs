@@ -24,19 +24,22 @@ for (const path of ['/vi', '/en', '/en/login']) {
 }
 assert.equal((await fetch(base + '/api/admin/products')).status, 403);
 assert.equal((await fetch(base + '/api/payment-admin')).status, 401);
-const login = await fetch(base + '/api/auth/login', {
+// Admin signs in with Google only; a registered customer proves database-backed accounts work.
+const register = await fetch(base + '/api/auth/register', {
   method: 'POST',
   headers: {'content-type': 'application/json'},
-  body: JSON.stringify({username: 'admin', password: 'admin123'})
+  body: JSON.stringify({email: `smoke-${Date.now()}@example.test`, name: 'Smoke Test', password: 'smoke-password-123'})
 });
-assert.equal(login.status, 200);
-const cookie = login.headers.get('set-cookie')?.split(';')[0];
-assert.ok(cookie, 'Missing session cookie');
-const products = await fetch(base + '/api/admin/products', {headers: {cookie}});
 if (process.env.SMOKE_WITHOUT_DB === '1') {
-  assert.equal(products.status, 503);
+  assert.equal(register.status, 503);
 } else {
-  assert.equal(products.status, 200);
-  assert.ok(Array.isArray((await products.json()).products));
+  assert.equal(register.status, 200, await register.text());
+  const cookie = register.headers.get('set-cookie')?.split(';')[0];
+  assert.ok(cookie?.startsWith('shop_session='), 'Missing customer session cookie');
+  const session = await (await fetch(base + '/api/auth/session', {headers: {cookie}})).json();
+  assert.equal(session.account?.role, 'user');
+  assert.equal((await fetch(base + '/api/admin/products', {headers: {cookie}})).status, 403);
+  assert.equal((await fetch(base + '/api/admin/customers', {headers: {cookie}})).status, 403);
+  assert.equal((await fetch(base + '/api/chat', {headers: {cookie}})).status, 200);
 }
 console.log('Container smoke checks passed.');

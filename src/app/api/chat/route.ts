@@ -1,61 +1,64 @@
 import {NextResponse} from 'next/server';
-import {getSession} from '@/lib/demo-auth';
-import {addMessage, listMessages, listRooms, roomFor} from '@/lib/demo-chat';
-import {customerAccounts} from '@/lib/demo-accounts';
+import {getSession} from '@/lib/auth';
+import {addMessage, customerIdFromRoom, listMessages, listRooms, MAX_CHAT_IMAGE_BYTES, MAX_CHAT_IMAGES_PER_ROOM, roomFor, roomImageCount} from '@/lib/chat-store';
+import {sameOrigin} from '@/lib/customer-rules';
+import {validProductImageSignature} from '@/lib/product-image';
 
-const MAX_IMAGE_SIZE = 1024 * 1024;
-const MAX_IMAGES_PER_ROOM = 10;
-
-function imageType(bytes: Buffer): string | null {
-  if (bytes.subarray(0, 8).equals(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]))) return 'image/png';
-  if (bytes.length >= 4 && bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff && bytes.at(-1) === 0xd9) return 'image/jpeg';
-  if (bytes.toString('ascii', 0, 4) === 'RIFF' && bytes.toString('ascii', 8, 12) === 'WEBP') return 'image/webp';
-  return null;
-}
+export const runtime = 'nodejs';
+const unavailable = () => NextResponse.json({error: 'Chat is unavailable right now.'}, {status: 503});
 
 export async function GET(request: Request) {
   const account = await getSession();
   if (!account) return NextResponse.json({error: 'Sign in required.'}, {status: 401});
-  if (account.role !== 'user') {
-    const rooms = listRooms();
-    const customers = customerAccounts();
-    const availableRooms = rooms.filter(room => customers.some(a => room === `user:${a.id}`));
-    const room = new URL(request.url).searchParams.get('room');
-    const selectedRoom = room && availableRooms.includes(room) ? room : availableRooms[0] ?? '';
-    return NextResponse.json({
-      rooms: availableRooms.map(id => {
-        const history = listMessages(id, 'user');
-        const lastMessage = history.at(-1);
-        return {id, name: customers.find(a => id === `user:${a.id}`)!.name, lastMessage: lastMessage ? {body: lastMessage.image ? '[Image]' : lastMessage.body, createdAt: lastMessage.createdAt, role: lastMessage.role} : null};
-      }),
-      messages: selectedRoom ? listMessages(selectedRoom, 'user') : [],
-      room: selectedRoom
-    });
+  if (!process.env.DATABASE_URL) return unavailable();
+  try {
+    if (account.role === 'admin') {
+      const rooms = await listRooms();
+      const requested = new URL(request.url).searchParams.get('room');
+      const room = requested && rooms.some(item => item.id === requested) ? requested : rooms[0]?.id ?? '';
+      const customerId = customerIdFromRoom(room);
+      return NextResponse.json({rooms, messages: customerId ? await listMessages(customerId) : [], room});
+    }
+    return NextResponse.json({rooms: [], messages: await listMessages(account.id), room: roomFor(account.id)});
+  } catch (error) {
+    console.error('Chat load failed', error instanceof Error ? error.message.split('\n')[0] : error);
+    return unavailable();
   }
-  return NextResponse.json({rooms: [], messages: listMessages(roomFor(account.id, account.role), account.role), room: roomFor(account.id, account.role)});
 }
 
 export async function POST(request: Request) {
+  if (!sameOrigin(request.headers)) return NextResponse.json({error: 'Invalid request origin.'}, {status: 403});
   const account = await getSession();
   if (!account) return NextResponse.json({error: 'Sign in required.'}, {status: 401});
+  if (!process.env.DATABASE_URL) return unavailable();
   const isImage = request.headers.get('content-type')?.toLowerCase().startsWith('multipart/form-data');
-  if (isImage && Number(request.headers.get('content-length')) > MAX_IMAGE_SIZE + 16384) return NextResponse.json({error: 'Image must be 1 MB or less.'}, {status: 413});
+  if (isImage && Number(request.headers.get('content-length')) > MAX_CHAT_IMAGE_BYTES + 16384) return NextResponse.json({error: 'Image must be 1 MB or less.'}, {status: 413});
   const data = isImage ? await request.formData().catch(() => null) : await request.json().catch(() => null);
   if (!data) return NextResponse.json({error: 'Invalid request data.'}, {status: 400});
-  const bodyValue = isImage ? (data as FormData).get('body') : (data as {body?: unknown}).body;
+  const read = (key: string) => isImage ? (data as FormData).get(key) : (data as Record<string, unknown>)[key];
+  const bodyValue = read('body');
   const body = typeof bodyValue === 'string' ? bodyValue.trim() : '';
   if (body.length > 1000 || (!body && !isImage)) return NextResponse.json({error: 'Message must be 1–1000 characters.'}, {status: 400});
-  const roomValue = isImage ? (data as FormData).get('room') : (data as {room?: unknown}).room;
-  const requestedRoom = typeof roomValue === 'string' ? roomValue : '';
-  const room = account.role === 'user' ? roomFor(account.id, account.role) : listRooms().includes(requestedRoom) && customerAccounts().some(a => requestedRoom === `user:${a.id}`) ? requestedRoom : '';
-  if (!room) return NextResponse.json({error: 'Please select a valid conversation.'}, {status: 400});
-  if (!isImage) return NextResponse.json({message: addMessage(room, account.name, account.role, body)});
-  const file = (data as FormData).get('image');
-  if (!(file instanceof File) || file.size === 0 || file.size > MAX_IMAGE_SIZE || !['image/png', 'image/jpeg', 'image/webp'].includes(file.type)) return NextResponse.json({error: 'Only PNG, JPEG, WebP images up to 1 MB.'}, {status: 400});
-  if (listMessages(room, 'user').filter(message => message.image).length >= MAX_IMAGES_PER_ROOM) return NextResponse.json({error: 'Room has reached the demo limit of 10 images.'}, {status: 400});
-  const bytes = Buffer.from(await file.arrayBuffer());
-  const mime = imageType(bytes);
-  if (mime !== file.type) return NextResponse.json({error: 'Invalid image content.'}, {status: 400});
-  const image = {url: `data:${mime};base64,${bytes.toString('base64')}`, name: file.name.slice(0, 100) || 'image'};
-  return NextResponse.json({message: addMessage(room, account.name, account.role, body, image)});
+
+  try {
+    let customerId: string | null = account.role === 'user' ? account.id : null;
+    if (account.role === 'admin') {
+      const requested = read('room');
+      const rooms = await listRooms();
+      customerId = typeof requested === 'string' && rooms.some(item => item.id === requested) ? customerIdFromRoom(requested) : null;
+    }
+    if (!customerId) return NextResponse.json({error: 'Please select a valid conversation.'}, {status: 400});
+    if (!isImage) return NextResponse.json({message: await addMessage({customerId, role: account.role, authorName: account.name, body})});
+
+    const file = read('image');
+    if (!(file instanceof File) || file.size === 0 || file.size > MAX_CHAT_IMAGE_BYTES || !['image/png', 'image/jpeg', 'image/webp'].includes(file.type)) return NextResponse.json({error: 'Only PNG, JPEG, WebP images up to 1 MB.'}, {status: 400});
+    if (await roomImageCount(customerId) >= MAX_CHAT_IMAGES_PER_ROOM) return NextResponse.json({error: `This conversation already has ${MAX_CHAT_IMAGES_PER_ROOM} images. Older images are removed after 90 days.`}, {status: 400});
+    const bytes = new Uint8Array(await file.arrayBuffer());
+    if (!validProductImageSignature(file.type, bytes)) return NextResponse.json({error: 'Invalid image content.'}, {status: 400});
+    const image = {bytes, mimeType: file.type, name: file.name.replace(/[\u0000-\u001f\u007f]/g, '').slice(0, 100) || 'image'};
+    return NextResponse.json({message: await addMessage({customerId, role: account.role, authorName: account.name, body, image})});
+  } catch (error) {
+    console.error('Chat send failed', error instanceof Error ? error.message.split('\n')[0] : error);
+    return unavailable();
+  }
 }

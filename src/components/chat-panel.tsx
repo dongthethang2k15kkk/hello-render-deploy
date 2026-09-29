@@ -1,17 +1,17 @@
 'use client';
 
 import {useCallback, useEffect, useRef, useState} from 'react';
-import type {ChatMessage} from '@/lib/demo-chat';
-import type {DemoRole} from '@/lib/demo-accounts';
+import type {ChatMessage} from '@/lib/chat-store';
+import type {Role} from '@/lib/admin-session';
 import {PresenceBadges, useAdminPresence} from './admin-presence';
 
-type Room = {id: string; name: string; lastMessage?: {body: string; createdAt: string; role: DemoRole} | null};
+type Room = {id: string; name: string; lastMessage?: {body: string; createdAt: string; role: Role} | null};
 
-export default function ChatPanel({role, compact = false}: {role: DemoRole; compact?: boolean}) {
+export default function ChatPanel({role, compact = false, initialRoom = ''}: {role: Role; compact?: boolean; initialRoom?: string}) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [rooms, setRooms] = useState<Room[]>([]);
-  const [room, setRoom] = useState('');
-  const [showRoomList, setShowRoomList] = useState(true);
+  const [room, setRoom] = useState(initialRoom);
+  const [showRoomList, setShowRoomList] = useState(!initialRoom);
   const [drafts, setDrafts] = useState<Record<string, string>>({});
   const [image, setImage] = useState<File | null>(null);
   const [roomQuery, setRoomQuery] = useState('');
@@ -21,7 +21,7 @@ export default function ChatPanel({role, compact = false}: {role: DemoRole; comp
   const [error, setError] = useState('');
   const bottom = useRef<HTMLDivElement>(null);
   const messageArea = useRef<HTMLDivElement>(null);
-  const roomRef = useRef('');
+  const roomRef = useRef(initialRoom);
   const imageInput = useRef<HTMLInputElement>(null);
 
   const load = useCallback(async (signal?: AbortSignal, requestedRoom?: string) => {
@@ -44,7 +44,7 @@ export default function ChatPanel({role, compact = false}: {role: DemoRole; comp
 
   useEffect(() => {
     const controller = new AbortController();
-    void load(controller.signal);
+    void load(controller.signal, roomRef.current || undefined);
     const timer = window.setInterval(() => void load(controller.signal, roomRef.current), 5000);
     return () => {controller.abort(); window.clearInterval(timer);};
   }, [load]);
@@ -114,7 +114,7 @@ export default function ChatPanel({role, compact = false}: {role: DemoRole; comp
       <div className="chat-messages" ref={messageArea} role="log" aria-label={'Message history'}>
         {loading && <p className="muted" role="status">{'Loading messages…'}</p>}
         {!loading && !visible.length && <div className="chat-empty"><span aria-hidden="true">✦</span><p>{role === 'admin' ? 'Select a customer to get started.' : 'Hello! Send a question and our team will reply here.'}</p></div>}
-        {visible.map(message => <article className={`chat-message ${message.role === role ? 'mine' : ''}`} key={message.id}><small>{message.author} · {new Date(message.createdAt).toLocaleTimeString('en-US', {hour: '2-digit', minute: '2-digit'})}</small>{message.body && <p>{message.body}</p>}{message.image && <img className="chat-image" src={message.image.url} alt={message.image.name}/>}</article>)}
+        {visible.map(message => <article className={`chat-message ${message.role === role ? 'mine' : ''}`} key={message.id}><small>{message.author} · {new Date(message.createdAt).toLocaleTimeString('en-US', {hour: '2-digit', minute: '2-digit'})}</small>{message.body && <p>{message.body}</p>}{message.image && <img className="chat-image" src={message.image.url} alt={message.image.name}/>}{message.imageExpired && <p className="chat-image-expired">Image removed after 90 days</p>}</article>)}
         <div ref={bottom}/>
       </div>
       <form className="chat-compose" onSubmit={event => {event.preventDefault(); void send();}}><div className="chat-compose-fields"><textarea aria-label={'Message'} value={body} onChange={event => setDrafts(current => ({...current, [draftKey]: event.target.value}))} placeholder={'Write a message…'} maxLength={1000} onKeyDown={event => {if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) {event.preventDefault(); void send();}}}/><label className="chat-image-picker">{'📷 Choose image (max 1 MB)'}<input ref={imageInput} type="file" accept="image/png,image/jpeg,image/webp" disabled={sending || (role === 'admin' && !room)} onChange={event => {const file = event.target.files?.[0] ?? null; if (file && (file.size > 1024 * 1024 || !['image/png', 'image/jpeg', 'image/webp'].includes(file.type))) {setError('Only PNG, JPEG, WebP images up to 1 MB.'); event.target.value = ''; setImage(null);} else {setImage(file); setError('');}}}/></label>{image && <div className="chat-image-selected"><span>{image.name}</span><button type="button" className="secondary" onClick={() => {setImage(null); if (imageInput.current) imageInput.current.value = '';}}>{'Remove image'}</button></div>}</div><button type="submit" disabled={(!body.trim() && !image) || sending || (role === 'admin' && !room)}>{sending ? 'Sending…' : 'Send'}</button></form>

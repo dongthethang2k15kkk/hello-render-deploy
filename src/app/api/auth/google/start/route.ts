@@ -1,4 +1,5 @@
 import {NextResponse} from 'next/server';
+import {safeNext} from '@/lib/customer-rules';
 import {appOrigin, createOAuthState, googleConfig, oauthCookie, oauthCookiePath, pkceChallenge, redirectUri} from '@/lib/oauth-helpers';
 
 export const runtime = 'nodejs';
@@ -11,7 +12,7 @@ export async function GET(request: Request) {
     client_id: config.clientId,
     redirect_uri: redirectUri(request.url),
     response_type: 'code',
-    scope: 'openid email',
+    scope: 'openid email profile',
     state,
     code_challenge: pkceChallenge(verifier),
     code_challenge_method: 'S256',
@@ -22,5 +23,7 @@ export async function GET(request: Request) {
   const options = {httpOnly: true, sameSite: 'lax' as const, secure: process.env.NODE_ENV === 'production', path: oauthCookiePath, maxAge: 600};
   response.cookies.set(oauthCookie.state, state, options);
   response.cookies.set(oauthCookie.verifier, verifier, options);
+  const next = safeNext(new URL(request.url).searchParams.get('next'));
+  if (next) response.cookies.set(oauthCookie.next, next, options);
   return response;
 }

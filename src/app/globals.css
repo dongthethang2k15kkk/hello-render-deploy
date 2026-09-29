@@ -1113,3 +1113,67 @@ html,body {max-width:100%; overflow-x:clip;}
 .auth-admin {margin-top:18px; padding-top:14px; border-top:1px solid #e3e8dc; display:grid; gap:8px;}
 .google-signin {display:block; text-align:center; text-decoration:none;}
 @media(max-width: 640px) {.presence-summary,.admin-identity {display:none;}}
+
+/* Phase 1: accounts, forgot password, privacy */
+.auth-divider {display:flex; align-items:center; gap:10px; margin:16px 0 4px; color:#5c6e61; font-size:12px;}
+.auth-divider::before,.auth-divider::after {content:""; flex:1; border-top:1px solid #dfe6dc;}
+.auth-forgot {margin:14px 0 0; font-size:13px; text-align:center;}
+.forgot-card h2 {font-size:18px; margin:18px 0 6px;}
+.forgot-card h2:first-child {margin-top:0;}
+.contact-qr {margin:14px auto; max-width:260px; text-align:center;}
+.contact-qr img {display:block; width:100%; height:auto; border-radius:10px; background:#fff; padding:8px; box-sizing:border-box;}
+.contact-qr figcaption {font-size:12px; margin-top:6px;}
+.legal-page .card {text-align:left; line-height:1.7;}
+.legal-page h2 {font-size:18px; margin:22px 0 6px;}
+.legal-page h2:first-child {margin-top:0;}
+.account-page .card {text-align:left; max-width:640px; margin:0 auto 18px;}
+.account-card form label {display:block; margin:12px 0;}
+.account-card form input:not([type=checkbox]) {width:100%; box-sizing:border-box;}
+.account-show {display:flex!important; align-items:center; gap:8px; font-weight:400;}
+.account-details {display:grid; grid-template-columns:max-content 1fr; gap:6px 18px; margin:10px 0;}
+.account-details dt {font-weight:700;}
+.account-details dd {margin:0; overflow-wrap:anywhere;}
+.account-feedback {max-width:640px; margin:0 auto 14px; padding:10px 14px; border-radius:9px; background:#edf7ea; color:#285735;}
+.badge {display:inline-block; padding:1px 8px; border-radius:999px; background:#eef1ec; color:#4f5e55; font-size:11px; font-weight:700; vertical-align:middle;}
+.badge.ok {background:#e3f3df; color:#276236;}
+.badge.warn {background:#fff1dc; color:#8a4b0b;}
+.badge.danger {background:#fde8e5; color:#8a2a21;}
+.chat-image-expired {font-size:12px; font-style:italic; opacity:.75;}
+
+/* Phase 1: Admin customers */
+.admin-tabs {display:flex; gap:6px; margin:0 0 14px; border-bottom:1px solid #d7e1d3;}
+.admin-tabs button {background:none; color:#40574a; border:0; border-bottom:3px solid transparent; border-radius:0; padding:10px 14px; font-weight:700; box-shadow:none;}
+.admin-tabs button.active {color:#1f4d2e; border-bottom-color:#3f714c;}
+.admin-panel {text-align:left; margin-bottom:18px;}
+.admin-panel h2 {font-size:18px; margin:0 0 10px;}
+.admin-filters {display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:10px 12px; align-items:end; margin-bottom:12px;}
+.admin-filters label {display:grid; gap:4px; font-size:12px; font-weight:700; margin:0;}
+.admin-filters input,.admin-filters select {width:100%; box-sizing:border-box;}
+.admin-filter-actions {display:flex; gap:8px;}
+.admin-result-count {font-size:12px; color:#5c6e61; margin:4px 0 8px;}
+.admin-table-wrap {overflow-x:auto; border:1px solid #e1e8de; border-radius:10px;}
+.admin-table {width:100%; border-collapse:collapse; font-size:13px;}
+.admin-table th {text-align:left; background:#f4f7f2; color:#43534a; font-size:11px; letter-spacing:.04em; text-transform:uppercase; padding:9px 12px; white-space:nowrap;}
+.admin-table td {padding:9px 12px; border-top:1px solid #edf1eb; vertical-align:top;}
+.admin-table .badge {margin:0 4px 2px 0;}
+.admin-customer-link strong,.admin-customer-link span {display:block;}
+.admin-customer-link span {font-size:12px; color:#5c6e61;}
+.admin-mono {font-family:ui-monospace,SFMono-Regular,Consolas,monospace; font-size:12px;}
+.admin-pager {display:flex; align-items:center; justify-content:center; gap:12px; margin-top:12px; font-size:13px;}
+.admin-detail-grid {display:grid; grid-template-columns:repeat(auto-fit,minmax(280px,1fr)); gap:18px; margin-bottom:18px;}
+.admin-detail-grid .admin-panel {margin:0;}
+.admin-panel form label {display:block; margin:10px 0;}
+.admin-panel form input:not([type=checkbox]) {width:100%; box-sizing:border-box;}
+.admin-panel hr {border:0; border-top:1px solid #e3e8dc; margin:16px 0;}
+.danger-button {background:#9b2f25!important; color:#fff!important; border-color:#9b2f25!important;}
+.admin-danger-zone {border-color:#e6bbb6!important;}
+.admin-audit {list-style:none; margin:0; padding:0; display:grid; gap:8px;}
+.admin-audit li {display:grid; grid-template-columns:150px 1fr auto; gap:10px; font-size:13px; padding:8px 0; border-top:1px solid #edf1eb;}
+.admin-audit li span,.admin-audit li small {color:#5c6e61;}
+@media (max-width:700px) {.admin-audit li {grid-template-columns:1fr;} .admin-filter-actions {grid-column:1/-1;}}
+/* Form-heavy account pages: readable body font for card headings (pixel font stays on page titles). */
+.forgot-card h2,.account-card h2,.legal-page h2 {font-family:var(--body-font); font-size:19px; letter-spacing:0; text-shadow:none; line-height:1.35;}
+.account-show input {width:auto!important; flex:none; margin:0;}
+.admin-panel .admin-compact-check {white-space:normal; align-items:flex-start; min-height:0;}
+.admin-panel .admin-compact-check input {margin-top:3px;}
+.admin-filters input,.admin-filters select {height:44px;}

@@ -1,6 +1,7 @@
 import {expect, test} from '@playwright/test';
 import {readFile} from 'node:fs/promises';
 import path from 'node:path';
+import {registerCustomer} from './helpers';
 
 test('guest cannot open admin', async ({page}) => {
   await page.goto('/en/admin');
@@ -8,17 +9,19 @@ test('guest cannot open admin', async ({page}) => {
 });
 
 test('customer cannot open admin settings', async ({page}) => {
-  const login = await page.request.post('/api/auth/login', {data: {username: 'customer', password: 'customer123'}});
-  expect(login.ok()).toBe(true);
+  await registerCustomer(page.request);
   await page.goto('/en/admin/settings');
   await expect(page).toHaveURL(/\/en\/login$/);
 });
 
-test('admin password login is rejected; admin must use Google', async ({page}) => {
-  const login = await page.request.post('/api/auth/login', {data: {username: 'admin', password: 'admin123'}});
+test('password sign-in never grants admin; admin must use Google', async ({page}) => {
+  const login = await page.request.post('/api/auth/login', {data: {email: 'admin@example.test', password: 'admin123'}});
   expect(login.status()).toBe(401);
+  const customer = await registerCustomer(page.request);
+  expect((await (await page.request.get('/api/auth/session')).json()).account).toMatchObject({role: 'user', name: customer.name});
+  expect((await page.request.get('/api/admin/customers')).status()).toBe(403);
   await page.goto('/en/login');
-  await expect(page.getByText('admin / admin123')).toHaveCount(0);
+  await expect(page.getByText('customer123')).toHaveCount(0);
 });
 
 test('admin inbox is isolated from storefront and links to settings', async ({page}) => {
@@ -36,20 +39,21 @@ test('admin inbox is isolated from storefront and links to settings', async ({pa
 test('admin presence heartbeat tracks the open customer chat and settings page', async ({browser, request}) => {
   // A customer message creates the room admins can open.
   const customer = await browser.newContext();
-  expect((await customer.request.post('/api/auth/login', {data: {username: 'customer', password: 'customer123'}})).ok()).toBe(true);
+  await registerCustomer(customer.request, 'Presence Customer');
+  const customerId = (await (await customer.request.get('/api/auth/session')).json()).account.id as string;
   expect((await customer.request.post('/api/chat', {data: {body: 'Presence test'}})).ok()).toBe(true);
 
   const admin = await browser.newContext();
   expect((await admin.request.post('/api/auth/dev-admin')).ok()).toBe(true);
   const page = await admin.newPage();
   await page.goto('/en/admin/chat');
-  await page.getByRole('button', {name: /Demo Customer/}).first().click();
+  await page.getByRole('button', {name: /Presence Customer/}).first().click();
 
   // Only one admin identity exists locally (dev admin); multi-admin listing is covered by unit tests.
   await expect.poll(async () => {
     const data = await (await admin.request.get('/api/admin/presence')).json();
     return data.admins.map((a: {resource: string}) => a.resource);
-  }, {timeout: 10000}).toContain('chat:user:demo-user');
+  }, {timeout: 10000}).toContain(`chat:user:${customerId}`);
 
   await page.getByRole('navigation', {name: 'Admin navigation'}).getByRole('link', {name: 'Settings'}).click();
   await expect.poll(async () => (await (await admin.request.get('/api/admin/presence')).json()).admins[0]?.resource, {timeout: 10000}).toBe('settings');

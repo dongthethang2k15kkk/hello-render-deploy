@@ -1,7 +1,7 @@
 import {expect, test} from '@playwright/test';
+import {catalogId, registerCustomer} from './helpers';
 test('English catalog, delivery form, persisted cart and disabled payment', async ({page}) => {
-  const session = await page.request.post('/api/auth/login', {data: {username: 'customer', password: 'customer123'}});
-  expect(session.ok()).toBe(true);
+  const customer = await registerCustomer(page.request);
   await page.goto('/en');
   await expect(page.locator('html')).toHaveAttribute('lang', 'en');
   await page.getByRole('link', {name: 'Package details'}).first().click();
@@ -29,8 +29,7 @@ test('legacy /vi URLs redirect to English and unknown products 404', async ({pag
 
 test('mobile catalog, quantity controls and simulated checkout', async ({page}) => {
   await page.setViewportSize({width: 390,height: 844});
-  const session = await page.request.post('/api/auth/login', {data: {username: 'customer', password: 'customer123'}});
-  expect(session.ok()).toBe(true);
+  const customer = await registerCustomer(page.request);
   await page.goto('/en');
   await expect(page.getByRole('link', {name: 'Package details'})).toHaveCount(2);
   await page.getByRole('link', {name: 'Package details'}).first().click();
@@ -44,8 +43,8 @@ test('mobile catalog, quantity controls and simulated checkout', async ({page}) 
   await expect(page.getByRole('heading', {name: 'Sign in to purchase'})).toBeVisible();
   await page.getByRole('main').getByRole('link', {name: 'Sign in / Register'}).click();
   await expect(page).toHaveURL(/\/en\/login\?next=checkout$/);
-  await page.getByLabel('Username', {exact: true}).fill('customer');
-  await page.locator('input[autocomplete="current-password"]').fill('customer123');
+  await page.getByLabel('Email', {exact: true}).fill(customer.email);
+  await page.locator('input[autocomplete="current-password"]').fill(customer.password);
   await page.locator('form').getByRole('button', {name: 'Sign in', exact: true}).click();
   await expect(page).toHaveURL(/\/en\/checkout$/);
   await page.getByRole('radio', {name: /Visa/}).check();
@@ -66,7 +65,7 @@ test('desktop storefront layout and screenshot', async ({page}) => {
 });
 
 test('demo quote validates inputs and never enables payment', async ({request}) => {
-  const line = {productId: 'sample-basic', quantity: 2, delivery: {recipient: 'Demo'}};
+  const line = {productId: await catalogId(request, 'SAMPLE_BASIC'), quantity: 2, delivery: {recipient: 'Demo'}};
   const valid = await request.post('/api/demo/quote', {data: [line]});
   expect(valid.status()).toBe(200);
   expect(await valid.json()).toEqual({demo: true, currency: 'USD', totalMinor: 2000, paymentEnabled: false});
@@ -76,18 +75,18 @@ test('demo quote validates inputs and never enables payment', async ({request}) 
   }
 });
 
-test('public catalog exposes the same demo packages used by the storefront', async ({request}) => {
+test('public catalog serves the seeded database packages', async ({request}) => {
   const response = await request.get('/api/catalog');
   expect(response.status()).toBe(200);
   expect(response.headers()['cache-control']).toContain('no-store');
   const body = await response.json();
-  expect(body.source).toBe('demo');
-  expect(body.products.map((product: {id: string}) => product.id)).toEqual(['sample-basic', 'sample-plus']);
+  expect(body.source).toBe('database');
+  expect(body.products.map((product: {sku: string}) => product.sku)).toEqual(['SAMPLE_BASIC', 'SAMPLE_PLUS']);
   expect(body.products[0]).toMatchObject({usdCents: 1000, stock: 5, fields: [{key: 'recipient', labelEn: 'Recipient name (test data)'}]});
 });
 
 test('guest keeps a configured item and can edit it before signing in', async ({page}) => {
-  await page.goto('/en/products/sample-basic');
+  await page.goto(`/en/products/${await catalogId(page.request, 'SAMPLE_BASIC')}`);
   await page.getByLabel('Recipient name (test data)').fill('First recipient');
   await page.getByRole('button', {name: 'Add to cart'}).click();
   await expect(page.getByRole('status')).toContainText('Added to cart.');

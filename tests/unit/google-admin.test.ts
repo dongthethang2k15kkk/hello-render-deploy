@@ -1,8 +1,7 @@
 import {afterEach, describe, expect, it, vi} from 'vitest';
 import {createHash} from 'node:crypto';
 import {createOAuthState, devAdminLoginEnabled, isAllowedAdmin, parseAllowlist, pkceChallenge, redirectUri, statesMatch} from '../../src/lib/oauth-helpers';
-import {googleAdminAccount} from '../../src/lib/demo-accounts';
-import {decodeSession, encodeSession} from '../../src/lib/demo-auth';
+import {decodeAdminSession as decodeSession, encodeAdminSession as encodeSession, googleAdminAccount} from '../../src/lib/admin-session';
 
 afterEach(() => vi.unstubAllEnvs());
 

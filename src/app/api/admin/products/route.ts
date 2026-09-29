@@ -1,5 +1,5 @@
 import {Prisma} from '@prisma/client';
-import {getSession} from '@/lib/demo-auth';
+import {getSession} from '@/lib/auth';
 import {getPaymentDb} from '@/lib/payment-db';
 import {productInput} from '@/lib/product-rules';
 import {z} from 'zod';

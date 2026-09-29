@@ -45,7 +45,7 @@ export default function ChatWidget() {
     return () => {window.removeEventListener('keydown', onKeyDown); if (lockScroll) document.body.style.overflow = '';};
   }, [open]);
 
-  if (/\/(workspace|login|admin|checkout)(\/|$)/.test(path)) return null;
+  if (/\/(workspace|login|forgot-password|admin|checkout)(\/|$)/.test(path)) return null;
   return <div className="support-widget">
     {open && <div ref={dialog} className="support-window" role="dialog" aria-modal="true" aria-label={'Live support'}>
       <div className="support-top"><strong>{'Chat with support'}</strong><button ref={closeButton} type="button" className="support-close" aria-label={'Close chat'} onClick={() => {setOpen(false); launcher.current?.focus();}}>×</button></div>

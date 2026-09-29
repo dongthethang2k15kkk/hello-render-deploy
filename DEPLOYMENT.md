@@ -74,6 +74,14 @@ tài liệu, Git hoặc `.env` local. Còn cần đăng nhập thủ công bằn
 nghiệm thu; sau đó rotate secret đầu tiên đã từng được truyền qua chat và nhập secret thay thế
 trực tiếp trong Render.
 
+**Khách hàng đăng nhập bằng Google (giai đoạn 1):** cùng OAuth client, cùng callback. Email
+trong `ADMIN_GOOGLE_EMAILS` vào Admin; mọi email Google khác trở thành tài khoản khách. Khi mở bán,
+trong Google Auth Platform chuyển app từ **Testing** sang **In production** (Audience → Publish app)
+và điền trang chủ `https://jewish-horse.onrender.com/en` cùng Privacy Policy
+`https://jewish-horse.onrender.com/en/privacy`. Khi còn ở Testing, chỉ Test users đăng nhập được.
+Scope dùng là `openid email profile` (không nhạy cảm). Cookie Admin đổi tên thành
+`shop_admin_session` trong bản này, nên Admin phải đăng nhập lại một lần sau khi deploy.
+
 Trạng thái "ai đang xem chat/settings nào" lưu trong bộ nhớ, poll 3 giây, hết hạn
 sau 20 giây; chỉ đúng khi chạy **một instance** (đúng với Render Free).
 
