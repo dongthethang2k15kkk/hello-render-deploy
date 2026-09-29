@@ -21,7 +21,11 @@ export default async function globalSetup() {
 // The dev server compiles each route on first request; compile them once so tests measure behaviour, not compilation.
 async function warmUp(base = 'http://127.0.0.1:3001') {
   const routes = ['/en', '/en/login', '/en/workspace', '/en/account', '/en/cart', '/en/checkout', '/en/forgot-password', '/en/privacy', '/en/admin/customers', '/en/admin/chat', '/en/admin/settings/products',
-    '/api/auth/session', '/api/auth/providers', '/api/catalog', '/api/chat', '/api/account', '/api/admin/customers', '/api/admin/login-events', '/api/auth/register', '/api/auth/login'];
-  try { await fetch(`${base}/api/health`); } catch { return; } // Server not started yet: nothing to warm.
+    '/en/orders', '/en/inbox', '/en/admin/overview', '/en/admin/orders', '/en/admin/activity', '/en/admin/settings/payments', '/en/admin/settings/email',
+    '/api/auth/session', '/api/auth/providers', '/api/catalog', '/api/chat', '/api/account', '/api/admin/customers', '/api/admin/login-events', '/api/auth/register', '/api/auth/login',
+    '/api/orders', '/api/notifications', '/api/admin/orders', '/api/admin/overview', '/api/admin/activity', '/api/admin/settings/payments', '/api/admin/email'];
+  try { await fetch(`${base}/api/health`); } catch { console.log('[e2e] dev server not running yet; skipping route warm-up'); return; }
+  const started = Date.now();
   for (const route of routes) await fetch(base + route, {redirect: 'manual'}).catch(() => undefined);
+  console.log(`[e2e] warmed ${routes.length} routes in ${Math.round((Date.now() - started) / 1000)} s`);
 }

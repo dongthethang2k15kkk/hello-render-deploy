@@ -85,6 +85,22 @@ Scope dùng là `openid email profile` (không nhạy cảm). Cookie Admin đổ
 Trạng thái "ai đang xem chat/settings nào" lưu trong bộ nhớ, poll 3 giây, hết hạn
 sau 20 giây; chỉ đúng khi chạy **một instance** (đúng với Render Free).
 
+## Checklist mở bán (giai đoạn 2–5)
+
+1. **Admin**: `ADMIN_GOOGLE_EMAILS` trên Render liệt kê cả 3 Gmail admin (phân cách bằng dấu phẩy). Mọi email trong
+   danh sách nhận thư báo đơn mới. Nếu OAuth app còn ở Testing, thêm cả 3 vào Test users.
+2. **Tài khoản ngân hàng**: Admin → Settings → Payments → Add an account. Bấm **Test QR**, quét bằng app ngân hàng:
+   phải thấy đúng ngân hàng, chủ tài khoản, 10.000 ₫ và nội dung "JH TEST". Không có tài khoản active thì khách không đặt được.
+3. **Tỷ giá hiển thị**: Settings → Payments → VND per 1 USD (mặc định 26.000). Chỉ dùng để hiện USD; khách trả VND.
+4. **Giá thật**: Settings → Products, nhập giá VND. Giá cũ đã được quy đổi tạm 26.000 ₫/USD.
+5. **Gmail**: Google Cloud Console → APIs & Services → Library → bật **Gmail API** trong project đang dùng cho đăng nhập.
+   Sau đó Admin → Settings → Email → **Connect Gmail** bằng Gmail gửi thư của shop, cho phép "Send email on your behalf",
+   rồi **Send test email**. Không cần thêm Redirect URI (dùng lại callback đăng nhập). Google sẽ báo app chưa xác minh với
+   tài khoản này; chọn Advanced → tiếp tục. Khi OAuth app còn ở Testing, quyền gửi mail hết hạn sau 7 ngày; publish app
+   để kết nối bền.
+6. **Publish OAuth app** (Testing → In production) với homepage và privacy URL ở trên để mọi khách dùng được Google.
+7. Thử một đơn thật số tiền nhỏ từ đầu đến cuối trước khi quảng bá.
+
 ## Chạy Docker trên máy
 
 Cài Docker Desktop tương thích kiến trúc máy và bật Linux containers. Máy đã

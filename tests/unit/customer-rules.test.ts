@@ -104,3 +104,25 @@ describe('IP rate limits', () => {
     expect(limitableIp(null)).toBeNull();
   });
 });
+
+describe('admin deep links', () => {
+  it('accepts only same-site Admin paths', async () => {
+    const {safeAdminPath} = await import('../../src/lib/customer-rules');
+    expect(safeAdminPath('/en/admin/orders/cmabc123def')).toBe('/en/admin/orders/cmabc123def');
+    expect(safeAdminPath('/en/admin')).toBe('/en/admin');
+    expect(safeAdminPath('//evil.example/en/admin')).toBeNull();
+    expect(safeAdminPath('/en/admin/../../x')).toBeNull();
+    expect(safeAdminPath('https://evil.example')).toBeNull();
+  });
+});
+
+describe('admin deep links', () => {
+  it('accepts only same-site Admin paths', async () => {
+    const {safeAdminPath} = await import('../../src/lib/customer-rules');
+    expect(safeAdminPath('/en/admin/orders/cmabc123def')).toBe('/en/admin/orders/cmabc123def');
+    expect(safeAdminPath('/en/admin')).toBe('/en/admin');
+    expect(safeAdminPath('//evil.example/en/admin')).toBeNull();
+    expect(safeAdminPath('/en/admin/../../x')).toBeNull();
+    expect(safeAdminPath('https://evil.example')).toBeNull();
+  });
+});

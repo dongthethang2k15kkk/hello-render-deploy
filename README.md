@@ -1,156 +1,56 @@
-Docker / Render deployment: see [DEPLOYMENT.md](./DEPLOYMENT.md).
+Docker / Render deployment: see [DEPLOYMENT.md](./DEPLOYMENT.md). Database: [DATABASE.md](./DATABASE.md). Decision log: [HANDOFF.md](./HANDOFF.md).
 
-# Shop foundation / Nền tảng cửa hàng
+# Jewish Horse — cửa hàng gói số
 
-## Payment staging (bổ sung)
+Web bán gói số: khách đặt hàng, chuyển khoản VND bằng mã VietQR, chọn khung giờ rảnh; Admin xác
+nhận tiền, chốt lịch hẹn và giao hàng qua chat trên web. Live: https://jewish-horse.onrender.com
 
-Trang nội bộ: http://localhost:3001/en/admin/payments (`/vi/*` tự chuyển sang `/en/*`). Checkout công khai vẫn mô phỏng;
-**không chuyển tiền thật**. Các ghi chú phạm vi demo bên dưới mô tả storefront,
-không bao gồm backend staging mới.
+## Chức năng hiện có
 
-- Prisma đã bổ sung tài khoản nhận, hóa đơn có snapshot bất biến và nhật ký.
-- Admin cấu hình nhiều ngân hàng/địa chỉ LTC, bật/tắt và ngưỡng đơn chờ.
-- Phân bổ luân phiên bằng thời điểm lần cấp gần nhất, có PostgreSQL advisory
-  transaction lock để tuần tự hóa thao tác đồng thời. Hết tài khoản thì từ chối.
-- Idempotency key chống tạo trùng hóa đơn khi thử lại; đổi payload phải đổi key.
-- Đơn hết báo giá vẫn chiếm ngưỡng chờ để không bỏ sót tiền chuyển muộn.
-  Chưa có luồng hủy/giải phóng ngưỡng: đây là giới hạn staging cần hoàn thiện.
-- Admin là CSKH: xem đơn, báo chuyển, xác nhận và ghi nhận giao hàng; không được sửa
-  tài khoản nhận hoặc tải QR. Operator có toàn quyền vận hành, bao gồm các quyền này.
-  Báo chuyển chỉ sang REVIEW, không tự thành PAID. TXID LTC duy nhất toàn hệ thống;
-  mã giao dịch ngân hàng duy nhất theo ngân hàng/tài khoản nhận.
-- Xác nhận là thủ công: không có node/block explorer kiểm tra tự động.
-  Operator chịu trách nhiệm kiểm tra địa chỉ, tiền thực nhận và confirmations.
-- Khóa admin/operator riêng trong `.env`, tối thiểu 32 ký tự ngẫu nhiên;
-  gửi Bearer token, chỉ giữ trong bộ nhớ trang, không lưu localStorage.
-  Đây chưa phải đăng nhập cá nhân/2FA: audit chỉ nhận diện vai trò, chưa nhận diện
-  từng nhân viên. Chỉ dùng localhost hoặc mạng nội bộ HTTPS, không public endpoint
-  trước khi bổ sung đăng nhập, rate limiting, giới hạn body ở proxy và giám sát.
-- Cấu hình tỷ giá thủ công: PAYMENT_VND_PER_USD là VND/USD;
-  PAYMENT_LITOSHI_PER_USD là số đơn vị 1e-8 LTC/USD. Không điền tỷ giá phỏng đoán.
-  PAYMENT_RATE_VALID_UNTIL là ISO timestamp có timezone. Hóa đơn hết hạn sau tối đa
-  15 phút hoặc khi tỷ giá hết hạn. Tính số nguyên và làm tròn lên đơn vị nhỏ nhất.
-- QR hiện là **ảnh tĩnh operator tải trực tiếp trong trang quản trị**,
-  tùy chọn, được lưu dưới thư mục `D:\H'Nam207\public\payment-qr` khi chạy local.
-  API giới hạn 5 MB, chỉ nhận PNG/JPEG/WebP và kiểm tra magic bytes; tên file
-  được sinh ngẫu nhiên. Ảnh không tự chứa giá hoặc mã đơn.
-  Chưa có QR động theo số tiền/mã đơn, chưa có ví sinh địa chỉ LTC riêng từng đơn.
-  Địa chỉ LTC chỉ kiểm tra hình thức, chưa xác minh checksum/quyền sở hữu.
-- Giao hàng chỉ lưu ghi chú và trạng thái, chưa gửi email hay sản phẩm tự động.
+**Khách hàng**
+- Đăng ký / đăng nhập bằng email + mật khẩu hoặc Google; trang Account, Forgot password (QR Zalo), Privacy.
+- Catalog từ PostgreSQL: giá nhập bằng VND, hiển thị USD (to) và VND (nhỏ) theo tỷ giá Admin đặt.
+- Giỏ hàng lưu trên thiết bị; Checkout tạo đơn thật, giữ hàng 30 phút.
+- Trang đơn: mã VietQR điền sẵn số tiền + nội dung (mã đơn), đồng hồ đếm ngược, nút "I've transferred"
+  kèm chọn 1–5 khung giờ rảnh; lịch hẹn kèm Google Calendar / file .ics; nội dung giao chỉ khách đó xem.
+- My orders, Inbox (thông báo có số chưa đọc), chat hỗ trợ lưu vĩnh viễn (ảnh chat riêng tư, xóa sau 90 ngày).
 
-### Khởi tạo database staging
+**Admin** (đăng nhập Google theo `ADMIN_GOOGLE_EMAILS`)
+- Overview: việc cần làm, lịch hẹn sắp tới, doanh thu hôm nay/7/30 ngày, khách, hàng sắp hết, dung lượng DB, Gmail.
+- Orders: lọc, "Needs action"; trang đơn: xác nhận tiền + chốt lịch trong một bước, đổi lịch, hoàn tất, hủy (trả tồn),
+  ghi chú nội bộ, gửi lại email, dòng thời gian, nhật ký email.
+- Customers: danh sách/lọc, lịch sử đăng nhập, khóa/mở, đặt mật khẩu mới, đăng xuất mọi nơi, xóa/ẩn danh.
+- Activity: nhật ký mọi thao tác Admin. Settings: Products, Payments (tài khoản ngân hàng, QR thử, tỷ giá), Email (Gmail).
 
-Sao chép `.env.example` thành `.env`, cấu hình PostgreSQL staging riêng và khóa
-truy cập; không dùng dữ liệu hoặc seed phrase ví thật. Sau khi xác minh DB đích:
+**Email**: gửi qua Gmail API từ Gmail của shop (Render Free chặn SMTP). Admin nhận thư khi khách báo đã chuyển;
+khách nhận thư lịch hẹn (kèm .ics), xác nhận tiền, hoàn tất, hủy. Mọi sự kiện đồng thời vào Inbox trên web.
 
-```bat
-cd /d "D:\H'Nam207"
-npm run db:generate
-npm run db:migrate -- --name payment_staging
-npm run typecheck
-npm test
-```
-
-Migration chưa được tạo/chạy trong phiên triển khai này. Công cụ terminal không
-trả kết quả xác minh nên chưa xác nhận client generate/typecheck/test/build.
-Sau khi DB hoạt động, thử: hai tài khoản ngưỡng 1 → hai đơn vào hai tài khoản;
-đơn thứ ba bị từ chối; retry cùng key không tạo thêm đơn; sửa tài khoản không đổi
-  snapshot cũ; admin sửa/tải tài khoản bị 403; operator sửa được; một TXID không xác nhận hai đơn;
-REVIEW không được giao hàng trước PAID. Chưa có kiểm thử tích hợp database tự động.
-
-Trước khi mở bán còn cần: catalog thật và tồn kho giao dịch, phiên đăng nhập
-cá nhân/2FA, đơn khách có quyền truy cập an toàn, QR động được kiểm chứng,
-nguồn tỷ giá/chính sách quote, hủy/hoàn và thanh toán thiếu/thừa, fulfillment,
-kiểm thử đồng thời với PostgreSQL, kiểm tra pháp lý và nghiệm thu end-to-end.
-
-Đợt 1: Next.js + TypeScript, next-intl, Tailwind CSS, Zod, Prisma/PostgreSQL,
-Vitest và Playwright. Giao diện chỉ tiếng Anh (bỏ tiếng Việt ngày 2026-09-28 vì font
-pixel Minecraft vỡ dấu), danh mục mẫu, chi tiết gói, giỏ hàng
-nhiều mục và trường giao hàng riêng từng gói.
-
-## Phạm vi thực tế
-
-- Thương hiệu tạm "Jewish Horse". Font Minecraft cho logo/tiêu đề lớn, Inter cho
-  nội dung, menu, giá, nút, FAQ, form.
-- UI: hero, hình minh họa CSS, catalog 2 gói có ô ảnh preview (placeholder),
-  so sánh Basic/Extended, khối "What you get after purchase", hướng dẫn,
-  FAQ, trang chi tiết, điều chỉnh số lượng giỏ và checkout mô phỏng.
-  Đã bỏ tìm kiếm/lọc/sắp xếp vì chỉ có 2 gói.
-- Checkout không gửi email, không tạo đơn và không kết nối thanh toán.
-- Màu xanh đậm/lime và hình khối là phương án thiết kế thử để duyệt, không phải
-  bộ nhận diện thương hiệu chính thức hoặc hình ảnh sản phẩm thật.
-- Server preview phiên làm việc dùng http://127.0.0.1:3001/en.
-  Playwright dùng cổng 3001; local có thể dùng lại server đang chạy.
-
-- Đây là bản demo, không phải cửa hàng sẵn sàng production.
-- Sản phẩm minh họa không đại diện cho danh mục kinh doanh đã được duyệt.
-- Giỏ lưu localStorage; không nhập dữ liệu cá nhân thật hoặc bí mật.
-- Giá demo chỉ dùng USD. Chưa có nguồn tỷ giá VND/EUR, không tự tạo tỷ giá.
-- API `POST /api/demo/quote` nhận mảng dòng giỏ, kiểm tra dữ liệu bằng Zod,
-  tính giá từ catalog phía server, không tạo đơn hoặc giữ tồn thực tế.
-- Prisma mới định nghĩa catalog, gói, bản dịch và phiên bản biểu mẫu.
-  UI/API demo chưa kết nối database; chưa có migration được chạy.
-- Chưa có đăng nhập, 2FA, quản trị, thanh toán, email, hoàn tiền hoặc tác vụ nền.
-- Tồn demo chỉ được kiểm tra trong một giỏ, không phải tồn dùng chung giữa khách.
-- Không kích hoạt Hypixel SkyBlock Coins; cần xác minh quy định nhà phát hành
-  và điều kiện nhà cung cấp thanh toán trước khi xem xét mở bán.
-- Thị trường mục tiêu: Việt Nam, Mỹ, châu Âu và Úc; không đồng nghĩa mọi
-  quốc gia đã được xác minh đủ điều kiện thanh toán.
+Thiết kế: `docs/specs/2026-09-29-phase1-accounts-chat-design.md`, `docs/specs/2026-09-29-phases-2-5-orders-design.md`.
 
 ## Chạy local (Windows)
 
-Yêu cầu Node.js LTS tương thích (khuyến nghị Node 22), npm.
+Yêu cầu Node.js 22+, npm và một PostgreSQL (khuyên dùng một branch Neon riêng, không dùng production).
 
 ```bat
-cd /d "D:\H'Nam207"
+cd /d "E:\Tai_lieu_E\DONGTHETHANG\04_Cá_nhân\hello"
 npm install
+npm run db:generate
 npm run dev
 ```
 
-Truy cập http://localhost:3000/vi hoặc http://localhost:3000/en.
-Không cần PostgreSQL để xem demo.
+Truy cập http://localhost:3000/en. Không có `DATABASE_URL` thì chỉ xem được catalog mẫu; tài khoản, đơn và chat cần database.
+`ALLOW_DEV_ADMIN_LOGIN=1` bật nút "Dev admin" (chỉ khi không phải production).
 
 ## Kiểm tra
 
 ```bat
 npm run typecheck
 npm test
-npm run build
+set NEXT_BUILD_DIR=.next-verify && npm run build
 npx playwright install chromium
 npm run test:e2e
 ```
 
-Chưa được coi là kiểm tra thành công nếu lệnh không có kết quả xác nhận.
-Nếu Chromium chưa tải xong nhưng Microsoft Edge đã có trên máy, có thể đặt
-`PLAYWRIGHT_CHANNEL=msedge` trước khi chạy E2E. Để build không ghi đè output
-của preview đang chạy, đặt `NEXT_BUILD_DIR=.next-verify` trước `npm run build`.
-Sau khi cài thành công, giữ package-lock.json trong quản lý phiên bản để cố
-định dependency. Kiểm tra cảnh báo bảo mật trước mọi lần triển khai công khai.
-
-## Database (bước triển khai tiếp theo)
-
-Sao chép `.env.example` thành `.env`, dùng tài khoản PostgreSQL local riêng.
-Thông tin trong file mẫu chỉ dành cho local, không dùng cho production.
-
-```bat
-npm run db:generate
-npm run db:migrate -- --name initial_catalog
-```
-
-Chỉ chạy migration sau khi đã kiểm tra đúng database đích. Schema còn cần bổ
-sung ràng buộc nghiệp vụ, đơn hàng, transaction giữ tồn, thanh toán và audit
-trước khi kết nối luồng mua thật.
-
-## Các bước tiếp theo cần nghiệm thu
-
-1. Duyệt giao diện, thương hiệu và bộ trường giao hàng.
-2. Chọn thư viện xác thực; xây email/mật khẩu và 2FA TOTP cho nội bộ.
-3. Xây quản trị, catalog database và kiểm tra quyền ở backend.
-4. Xây đơn, giữ tồn 30 phút, giá/tỷ giá snapshot và xử lý đồng thời.
-5. Xác minh nhà cung cấp ngân hàng/QR, thẻ, PayPal và quốc gia được hỗ trợ.
-6. Tích hợp sandbox, đối soát và ngoại lệ; không dựa vào redirect trình duyệt.
-7. Giao từng mục, yêu cầu hủy/hoàn, email, nhật ký và kiểm thử bảo mật.
-8. Staging, sao lưu/khôi phục, giám sát và duyệt điều kiện mở bán.
-
-Tên SHOP / DEMO và màu giao diện chỉ nhận diện bản thử, không phải thương hiệu
-đã chốt. Hosting, nhà cung cấp email, nguồn tỷ giá và phí vận hành chưa chọn.
+E2E cần `E2E_DATABASE_URL` trỏ tới database dùng một lần (xem DATABASE.md); global setup chỉ chạy `migrate deploy`
++ seed, không xóa dữ liệu, và từ chối chạy nếu trùng host với `DATABASE_URL`. Trên Windows có Edge, Playwright dùng
+`msedge`. Chưa coi là đạt nếu lệnh không có kết quả xác nhận.

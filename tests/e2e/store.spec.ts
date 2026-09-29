@@ -1,7 +1,7 @@
 import {expect, test} from '@playwright/test';
 import {catalogId, registerCustomer} from './helpers';
-test('English catalog, delivery form, persisted cart and disabled payment', async ({page}) => {
-  const customer = await registerCustomer(page.request);
+test('English catalog, delivery form, persisted cart and checkout link', async ({page}) => {
+  await registerCustomer(page.request);
   await page.goto('/en');
   await expect(page.locator('html')).toHaveAttribute('lang', 'en');
   await page.getByRole('link', {name: 'Package details'}).first().click();
@@ -13,7 +13,8 @@ test('English catalog, delivery form, persisted cart and disabled payment', asyn
   await expect(page.getByRole('heading', {name: 'Basic sample package'})).toBeVisible();
   await page.reload();
   await expect(page.getByText('Recipient name (test data): Demo recipient')).toBeVisible();
-  await expect(page.getByRole('button', {name: 'Payments not enabled'})).toBeDisabled();
+  await expect(page.getByText('260.000 ₫').first()).toBeVisible();
+  await expect(page.getByRole('link', {name: 'Continue to checkout →'})).toBeVisible();
   await page.getByRole('button', {name: 'Remove', exact: true}).click();
   await expect(page.getByText('Your cart is empty.')).toBeVisible();
 });
@@ -27,7 +28,7 @@ test('legacy /vi URLs redirect to English and unknown products 404', async ({pag
   expect(response?.status()).toBe(404);
 });
 
-test('mobile catalog, quantity controls and simulated checkout', async ({page}) => {
+test('mobile catalog, quantity controls and checkout review', async ({page}) => {
   await page.setViewportSize({width: 390,height: 844});
   const customer = await registerCustomer(page.request);
   await page.goto('/en');
@@ -39,7 +40,7 @@ test('mobile catalog, quantity controls and simulated checkout', async ({page}) 
   await page.getByRole('button', {name: 'Increase item 1'}).click();
   await expect(page.locator('output')).toHaveText('2');
   await page.request.post('/api/auth/logout');
-  await page.getByRole('link', {name: 'Preview checkout'}).click();
+  await page.getByRole('link', {name: 'Continue to checkout →'}).click();
   await expect(page.getByRole('heading', {name: 'Sign in to purchase'})).toBeVisible();
   await page.getByRole('main').getByRole('link', {name: 'Sign in / Register'}).click();
   await expect(page).toHaveURL(/\/en\/login\?next=checkout$/);
@@ -47,13 +48,11 @@ test('mobile catalog, quantity controls and simulated checkout', async ({page}) 
   await page.locator('input[autocomplete="current-password"]').fill(customer.password);
   await page.locator('form').getByRole('button', {name: 'Sign in', exact: true}).click();
   await expect(page).toHaveURL(/\/en\/checkout$/);
-  await page.getByRole('radio', {name: /Visa/}).check();
-  await expect(page.getByRole('radio', {name: /Visa/})).toBeChecked();
+  await expect(page.getByText('520.000 ₫').first()).toBeVisible();
+  await expect(page.getByRole('button', {name: 'Place order →'})).toBeEnabled();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
   await page.evaluate(() => {document.documentElement.style.scrollBehavior = 'auto'; window.scrollTo(0,0);});
   await page.screenshot({path: 'test-results/mobile-checkout.png', fullPage: true});
-  await page.getByRole('button', {name: 'Complete simulation'}).click();
-  await expect(page.getByRole('heading', {name: 'Preview complete'})).toBeVisible();
 });
 
 test('desktop storefront layout and screenshot', async ({page}) => {
@@ -64,17 +63,6 @@ test('desktop storefront layout and screenshot', async ({page}) => {
   await page.screenshot({path:'test-results/desktop-storefront.png',fullPage:true});
 });
 
-test('demo quote validates inputs and never enables payment', async ({request}) => {
-  const line = {productId: await catalogId(request, 'SAMPLE_BASIC'), quantity: 2, delivery: {recipient: 'Demo'}};
-  const valid = await request.post('/api/demo/quote', {data: [line]});
-  expect(valid.status()).toBe(200);
-  expect(await valid.json()).toEqual({demo: true, currency: 'USD', totalMinor: 2000, paymentEnabled: false});
-  for (const data of [[], [{...line, usdCents: 1}], [{...line, quantity: 6}]]) {
-    const invalid = await request.post('/api/demo/quote', {data});
-    expect(invalid.status()).toBe(400);
-  }
-});
-
 test('public catalog serves the seeded database packages', async ({request}) => {
   const response = await request.get('/api/catalog');
   expect(response.status()).toBe(200);
@@ -82,7 +70,8 @@ test('public catalog serves the seeded database packages', async ({request}) => 
   const body = await response.json();
   expect(body.source).toBe('database');
   expect(body.products.map((product: {sku: string}) => product.sku)).toEqual(['SAMPLE_BASIC', 'SAMPLE_PLUS']);
-  expect(body.products[0]).toMatchObject({usdCents: 1000, stock: 5, fields: [{key: 'recipient', labelEn: 'Recipient name (test data)'}]});
+  expect(body.products[0]).toMatchObject({priceVnd: 260000, fields: [{key: 'recipient', labelEn: 'Recipient name (test data)'}]});
+  expect(body.vndPerUsd).toBeGreaterThan(0);
 });
 
 test('guest keeps a configured item and can edit it before signing in', async ({page}) => {

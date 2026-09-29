@@ -37,9 +37,9 @@ export function createCartSchema(catalog: CatalogProduct[]) {
 
 export const cartSchema = createCartSchema(fallbackProducts);
 
-export function totalUsdCents(lines: CartLine[], catalog: CatalogProduct[] = fallbackProducts) {
+export function totalVnd(lines: CartLine[], catalog: CatalogProduct[] = fallbackProducts) {
   return createCartSchema(catalog).parse(lines).reduce((sum, line) => {
     const product = catalog.find(item => item.id === line.productId)!;
-    return sum + product.usdCents * line.quantity;
+    return sum + product.priceVnd * line.quantity;
   }, 0);
 }

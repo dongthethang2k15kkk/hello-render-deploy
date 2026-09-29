@@ -7,8 +7,9 @@ import {useCart} from '@/components/cart-provider';
 import {useCatalog} from '@/components/catalog-provider';
 import {ProductPreview} from '@/components/store-ui';
 import type {CartLine} from '@/lib/cart';
-import {totalUsdCents} from '@/lib/cart';
-import {Locale, usd} from '@/lib/catalog';
+import {totalVnd} from '@/lib/cart';
+import {Locale} from '@/lib/catalog';
+import Price from '@/components/price';
 
 export default function Cart() {
   const {lines, ready, save} = useCart();
@@ -23,7 +24,7 @@ export default function Cart() {
     <div className="page-heading">
       <p className="eyebrow">YOUR SELECTION</p>
       <h1>{t('cart')}</h1>
-      <div className="checkout-steps"><span className="current">01 / {t('cart')}</span><span>02 / Checkout</span><span>03 / Demo confirmation</span></div>
+      <div className="checkout-steps"><span className="current">01 / {t('cart')}</span><span>02 / Checkout</span><span>03 / Pay &amp; book a time</span></div>
     </div>
     {!ready || !catalog.ready ? <p aria-busy="true">Loading cart…</p> : <>
       {lines.length === 0 && <div className="empty-state">
@@ -39,7 +40,7 @@ export default function Cart() {
             <ProductPreview product={product} variant={index % 2}/>
             <div>
               <h2>{product.title[locale]}</h2>
-              <p>{t('quantity')}: {line.quantity} · {usd(product.usdCents * line.quantity, locale)}</p>
+              <p>{t('quantity')}: {line.quantity} · <Price vnd={product.priceVnd * line.quantity} vndPerUsd={catalog.vndPerUsd} className="inline-price"/></p>
               {Object.entries(line.delivery).map(([key, value]) => {
                 const label = product.fields.find(field => field.key === key)?.labelEn ?? key;
                 return <p key={key}>{label}: {value}</p>;
@@ -72,10 +73,9 @@ export default function Cart() {
       </div><aside className="card order-summary">
         <h2>Order summary</h2>
         <div className="summary-line"><span>Items</span><strong>{lines.reduce((sum, line) => sum + line.quantity, 0)}</strong></div>
-        <div className="summary-total"><small>{t('total')}</small><p className="price">{usd(totalUsdCents(lines, products), locale)}</p></div>
-        <p className="notice">Illustrative prices, excluding undetermined taxes/fees. No money is collected.</p>
-        <Link className="button full-width" href={`/${locale}/checkout`}>Preview checkout →</Link>
-        <button className="full-width" disabled style={{marginTop: 12}}>{t('checkout')}</button>
+        <div className="summary-total"><small>{t('total')}</small><Price vnd={totalVnd(lines, products)} vndPerUsd={catalog.vndPerUsd}/></div>
+        <p className="notice">You pay the VND amount by bank transfer. USD is shown for reference.</p>
+        <Link className="button full-width" href={`/${locale}/checkout`}>Continue to checkout →</Link>
       </aside></div>}
     </>}
     <p role="alert">{error}</p>

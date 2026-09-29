@@ -21,8 +21,8 @@ const demoProducts = [
     description: 'Test data for the shopping flow. This is not an offered service.',
     package: {
       sku: 'SAMPLE_BASIC',
-      baseUsdCents: 1000,
-      saleUsdCents: null,
+      priceVnd: 260000,
+      salePriceVnd: null,
       stockOnHand: 5,
       active: true,
       title: 'Basic sample package',
@@ -42,8 +42,8 @@ const demoProducts = [
     description: 'Demonstrates a different delivery form. Payment is unavailable.',
     package: {
       sku: 'SAMPLE_PLUS',
-      baseUsdCents: 2500,
-      saleUsdCents: null,
+      priceVnd: 650000,
+      salePriceVnd: null,
       stockOnHand: 5,
       active: true,
       title: 'Extended sample package',
@@ -93,16 +93,16 @@ try {
         where: {sku: item.package.sku},
         update: {
           productId: product.id,
-          baseUsdCents: item.package.baseUsdCents,
-          saleUsdCents: item.package.saleUsdCents,
+          priceVnd: item.package.priceVnd,
+          salePriceVnd: item.package.salePriceVnd,
           stockOnHand: item.package.stockOnHand,
           active: item.package.active
         },
         create: {
           productId: product.id,
           sku: item.package.sku,
-          baseUsdCents: item.package.baseUsdCents,
-          saleUsdCents: item.package.saleUsdCents,
+          priceVnd: item.package.priceVnd,
+          salePriceVnd: item.package.salePriceVnd,
           stockOnHand: item.package.stockOnHand,
           active: item.package.active
         }

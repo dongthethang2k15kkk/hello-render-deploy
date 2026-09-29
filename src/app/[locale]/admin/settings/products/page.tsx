@@ -2,14 +2,15 @@
 
 import {useEffect, useMemo, useRef, useState} from 'react';
 import {productSlug, storefrontStatus} from '@/lib/admin-product-status';
+import {formatVnd} from '@/lib/money';
 import {MAX_PRODUCT_IMAGE_BYTES, MAX_PRODUCT_IMAGE_SOURCE_BYTES, productImageId, productImageTypes} from '@/lib/product-image';
 
 type DeliveryField = {key: string; labelEn: string; required: boolean; maxLength: number};
-type ProductPackage = {sku: string; baseUsdCents: number; saleUsdCents: number | null; stockOnHand: number; active: boolean; translations: Record<string, {title: string; description: string}>; fields: DeliveryField[]};
+type ProductPackage = {sku: string; priceVnd: number; salePriceVnd: number | null; stockOnHand: number; active: boolean; translations: Record<string, {title: string; description: string}>; fields: DeliveryField[]};
 type Product = {id: string; slug: string; active: boolean; category: string; sortOrder: number; imagePath: string; translations: Record<string, {title: string; description: string}>; packages: ProductPackage[]};
 
 const emptyField = (): DeliveryField => ({key: '', labelEn: '', required: false, maxLength: 80});
-const emptyPackage = (): ProductPackage => ({sku: '', baseUsdCents: 100, saleUsdCents: null, stockOnHand: 0, active: true, translations: {en: {title: '', description: ''}}, fields: [{key: 'recipient', labelEn: 'Recipient', required: true, maxLength: 80}]});
+const emptyPackage = (): ProductPackage => ({sku: '', priceVnd: 50000, salePriceVnd: null, stockOnHand: 0, active: true, translations: {en: {title: '', description: ''}}, fields: [{key: 'recipient', labelEn: 'Recipient', required: true, maxLength: 80}]});
 const emptyProduct = (): Product => ({id: '', slug: '', active: false, category: 'general', sortOrder: 0, imagePath: '', translations: {en: {title: '', description: ''}}, packages: [emptyPackage()]});
 const englishFields = (fields: DeliveryField[] = []) => fields.map(({key, labelEn, required, maxLength}) => ({key, labelEn, required, maxLength}));
 // Number inputs keep typed leading zeros ("0019") because React skips equal numeric values; show the saved number on blur.
@@ -135,7 +136,7 @@ export default function ProductsAdmin() {
     if (uploadingImage) return;
     setBusy(true); setError(''); setMessage('');
     try {
-      const payload = {id: current.id || undefined, slug: current.slug, category: current.category, sortOrder: current.sortOrder, imagePath: current.imagePath, active: current.active, en: current.translations.en, packages: current.packages.map(item => ({sku: item.sku, baseUsdCents: item.baseUsdCents, saleUsdCents: item.saleUsdCents, stockOnHand: item.stockOnHand, active: item.active, en: item.translations.en, fields: englishFields(item.fields)}))};
+      const payload = {id: current.id || undefined, slug: current.slug, category: current.category, sortOrder: current.sortOrder, imagePath: current.imagePath, active: current.active, en: current.translations.en, packages: current.packages.map(item => ({sku: item.sku, priceVnd: item.priceVnd, salePriceVnd: item.salePriceVnd, stockOnHand: item.stockOnHand, active: item.active, en: item.translations.en, fields: englishFields(item.fields)}))};
       const response = await fetch('/api/admin/products', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(payload)});
       const data = await response.json();
       if (!response.ok) throw new Error(data.error);
@@ -204,15 +205,15 @@ export default function ProductsAdmin() {
         </section>
 
         <section className="admin-form-section card">
-          <div className="admin-section-heading"><span>2</span><div><h3>Packages, pricing and stock</h3><p>Prices are entered in US dollars and stored safely as cents.</p></div></div>
+          <div className="admin-section-heading"><span>2</span><div><h3>Packages, pricing and stock</h3><p>Enter prices in VND. Customers pay this amount; the store also shows USD using the rate in Settings → Payments.</p></div></div>
           <div className="admin-package-list">{current.packages.map((item, packageIndex) => <article className="admin-package" key={packageIndex}>
             <div className="admin-package-heading"><h4>Package {packageIndex + 1}{item.translations.en?.title ? ` · ${item.translations.en.title}` : ''}</h4>{current.packages.length > 1 && <button className="admin-remove-link" type="button" onClick={() => {setCurrent(previous => ({...previous, packages: previous.packages.filter((_, index) => index !== packageIndex)})); setDirty(true);}}>Remove package</button>}</div>
             <div className="admin-field-grid">
               <label>Package name<input required value={item.translations.en?.title ?? ''} onChange={event => update(`packages.${packageIndex}.translations.en.title`, event.target.value)}/></label>
               <label>SKU<input required pattern="[a-zA-Z0-9_-]+" value={item.sku} onChange={event => update(`packages.${packageIndex}.sku`, event.target.value)}/></label>
               <label className="wide">Package description<textarea rows={3} value={item.translations.en?.description ?? ''} onChange={event => update(`packages.${packageIndex}.translations.en.description`, event.target.value)}/></label>
-              <label>Base price (USD)<span className="money-input"><span>$</span><input type="number" step="0.01" min="0.01" value={item.baseUsdCents / 100} onChange={event => update(`packages.${packageIndex}.baseUsdCents`, Math.round(Number(event.target.value) * 100))}/></span></label>
-              <label>Sale price (USD)<span className="money-input"><span>$</span><input type="number" step="0.01" min="0.01" placeholder="No sale" value={item.saleUsdCents === null ? '' : item.saleUsdCents / 100} onChange={event => update(`packages.${packageIndex}.saleUsdCents`, event.target.value ? Math.round(Number(event.target.value) * 100) : null)}/></span></label>
+              <label>Price (VND)<span className="money-input"><span>₫</span><input type="number" step="1000" min="1000" value={item.priceVnd} onBlur={tidyNumber} onChange={event => update(`packages.${packageIndex}.priceVnd`, Math.round(Number(event.target.value)))}/></span><small>{formatVnd(item.priceVnd)}</small></label>
+              <label>Sale price (VND)<span className="money-input"><span>₫</span><input type="number" step="1000" min="1000" placeholder="No sale" value={item.salePriceVnd === null ? '' : item.salePriceVnd} onBlur={tidyNumber} onChange={event => update(`packages.${packageIndex}.salePriceVnd`, event.target.value ? Math.round(Number(event.target.value)) : null)}/></span>{item.salePriceVnd !== null && <small>{formatVnd(item.salePriceVnd)}</small>}</label>
               <label>Stock available<input type="number" min="0" value={item.stockOnHand} onBlur={tidyNumber} onChange={event => update(`packages.${packageIndex}.stockOnHand`, Number(event.target.value))}/>{item.active && item.stockOnHand <= 0 && <small className="admin-stock-warning">Out of stock: customers see this package but cannot buy it.</small>}</label>
             </div>
             <label className="admin-switch"><input type="checkbox" checked={item.active} onChange={event => update(`packages.${packageIndex}.active`, event.target.checked)}/><span><strong>Package available</strong><small>Customers can select this package when the product is visible.</small></span></label>

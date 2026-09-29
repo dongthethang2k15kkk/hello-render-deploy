@@ -45,8 +45,8 @@ export async function POST(request: Request, {params}: {params: Promise<{id: str
     else if (input.action === 'sign-out-everywhere') await signOutCustomerEverywhere(admin.email, id);
     else {
       if (input.confirmEmail !== detail.customer.email) return json({error: 'Type the customer’s email exactly to confirm deletion.'}, 400);
-      await deleteCustomer(admin.email, id);
-      return json({ok: true, deleted: true});
+      const outcome = await deleteCustomer(admin.email, id);
+      return outcome === 'deleted' ? json({ok: true, deleted: true}) : json({ok: true, anonymized: true, ...(await customerDetail(id))});
     }
     return json({ok: true, ...(await customerDetail(id))});
   } catch (error) {

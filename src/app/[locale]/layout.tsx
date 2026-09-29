@@ -19,11 +19,10 @@ export default async function LocaleLayout({children, params}: {
   }
   return <NextIntlClientProvider locale={locale} messages={t}>
       <CatalogProvider><CartProvider>
-        <div className="demo">{t.demo}</div>
         <StoreHeader/>
         <main className="shell">{children}</main>
         <ChatWidget/>
-        <footer className="site-footer"><div className="shell footer-grid"><div><Link className="brand" href={`/${locale}`}>Jewish Horse</Link><p>A digital storefront preview.</p></div><div><strong>Explore</strong><Link href={`/${locale}#catalog`}>{t.catalog}</Link><Link href={`/${locale}#faq`}>FAQ</Link><Link href={`/${locale}/privacy`}>Privacy Policy</Link></div><div><strong>PREVIEW ONLY</strong><p>{t.privacy}</p><p>{t.storage}</p></div></div><div className="shell footer-bottom">JEWISH HORSE <span>UI / UX PROTOTYPE</span></div></footer>
+        <footer className="site-footer"><div className="shell footer-grid"><div><Link className="brand" href={`/${locale}`}>Jewish Horse</Link><p>Digital packages, delivered by appointment.</p></div><div><strong>Explore</strong><Link href={`/${locale}#catalog`}>{t.catalog}</Link><Link href={`/${locale}#faq`}>FAQ</Link><Link href={`/${locale}/privacy`}>Privacy Policy</Link><Link href={`/${locale}/forgot-password`}>Contact on Zalo</Link></div><div><strong>GOOD TO KNOW</strong><p>{t.privacy}</p><p>{t.storage}</p></div></div><div className="shell footer-bottom">JEWISH HORSE <span>PAY BY BANK TRANSFER · VIETQR</span></div></footer>
       </CartProvider></CatalogProvider>
     </NextIntlClientProvider>;
 }

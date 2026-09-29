@@ -1,5 +1,6 @@
 import 'server-only';
 import type {Prisma} from '@prisma/client';
+import {recordAudit} from './audit';
 import {forgetCustomer, revokeCustomerSessions} from './auth';
 import {
   clientIp, dateRange, FAILED_OUTCOMES, limitableIp, hashPassword, isRateLimited, MAX_REGISTRATIONS_PER_IP_HOUR,
@@ -86,12 +87,13 @@ export async function customerDetail(id: string) {
     createdAt: true, lastLoginAt: true, googleSub: true, passwordHash: true, _count: {select: {chatMessages: true}}
   }});
   if (!customer) return null;
-  const [sessions, audit] = await Promise.all([
+  const [sessions, audit, orders] = await Promise.all([
     db.customerSession.findMany({where: {customerId: id, revokedAt: null, expiresAt: {gt: new Date()}}, orderBy: {lastSeenAt: 'desc'}, select: {id: true, ip: true, userAgent: true, createdAt: true, lastSeenAt: true, expiresAt: true}}),
-    db.auditLog.findMany({where: {customerId: id}, orderBy: {createdAt: 'desc'}, take: 50, select: {id: true, actorEmail: true, action: true, summary: true, createdAt: true}})
+    db.auditLog.findMany({where: {customerId: id}, orderBy: {createdAt: 'desc'}, take: 50, select: {id: true, actorEmail: true, action: true, summary: true, createdAt: true}}),
+    db.order.findMany({where: {customerId: id}, orderBy: {createdAt: 'desc'}, take: 50, select: {id: true, code: true, status: true, totalVnd: true, createdAt: true}})
   ]);
   const {googleSub, passwordHash, _count, ...profile} = customer;
-  return {customer: {...profile, methods: [googleSub ? 'google' : null, passwordHash ? 'password' : null].filter(Boolean) as string[], chatMessages: _count.chatMessages}, sessions, audit};
+  return {customer: {...profile, methods: [googleSub ? 'google' : null, passwordHash ? 'password' : null].filter(Boolean) as string[], chatMessages: _count.chatMessages}, sessions, audit, orders};
 }
 
 export async function listLoginEvents(filters: z.infer<typeof loginEventFilterSchema>, pageSize = 100) {
@@ -114,7 +116,7 @@ export async function listLoginEvents(filters: z.infer<typeof loginEventFilterSc
 // ---- Admin actions (each one is written to the audit log) ----
 
 async function audit(actorEmail: string, customerId: string | null, action: string, summary: string) {
-  await getPaymentDb().auditLog.create({data: {actorEmail, customerId, action, summary}});
+  await recordAudit({actorEmail, action: `customer.${action}`, summary, entityType: 'customer', entityId: customerId, customerId});
 }
 
 export async function lockCustomer(actorEmail: string, id: string, reason: string) {
@@ -140,9 +142,26 @@ export async function signOutCustomerEverywhere(actorEmail: string, id: string) 
   await audit(actorEmail, id, 'sign-out-all', 'Signed out of all devices');
 }
 
-/** Removes the account with its sessions, chat (including images) and sign-in history. */
+/**
+ * Removes the account with its sessions, chat (including images) and sign-in history.
+ * Customers with orders are anonymised instead, because order and payment records must be kept.
+ */
 export async function deleteCustomer(actorEmail: string, id: string) {
   const db = getPaymentDb();
+  if (await db.order.count({where: {customerId: id}})) {
+    await db.$transaction(async tx => {
+      const images = await tx.chatMessage.findMany({where: {customerId: id, imageId: {not: null}}, select: {imageId: true}});
+      await tx.chatMessage.deleteMany({where: {customerId: id}});
+      await tx.chatImage.deleteMany({where: {id: {in: images.map(image => image.imageId!)}}});
+      await tx.loginEvent.deleteMany({where: {customerId: id}});
+      await tx.notification.deleteMany({where: {customerId: id}});
+      await tx.customerSession.deleteMany({where: {customerId: id}});
+      await tx.customer.update({where: {id}, data: {email: `deleted-${id}@deleted.invalid`, name: 'Deleted customer', passwordHash: null, googleSub: null, emailVerified: false, status: 'locked', lockedReason: 'Account deleted on request', mustChangePassword: false}});
+    }, {maxWait: 10000, timeout: 20000});
+    forgetCustomer(id);
+    await audit(actorEmail, id, 'anonymize', 'Deleted personal data; orders kept for records');
+    return 'anonymized' as const;
+  }
   await db.$transaction(async tx => {
     const images = await tx.chatMessage.findMany({where: {customerId: id, imageId: {not: null}}, select: {imageId: true}});
     await tx.chatMessage.deleteMany({where: {customerId: id}});
@@ -152,4 +171,5 @@ export async function deleteCustomer(actorEmail: string, id: string) {
   }, {maxWait: 10000, timeout: 20000});
   forgetCustomer(id);
   await audit(actorEmail, null, 'delete', 'Deleted a customer account and its data');
+  return 'deleted' as const;
 }

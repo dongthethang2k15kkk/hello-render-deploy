@@ -1,5 +1,8 @@
 import {Prisma} from '@prisma/client';
+import {recordAudit} from '@/lib/audit';
 import {getSession} from '@/lib/auth';
+import {sameOrigin} from '@/lib/customer-rules';
+import {formatVnd} from '@/lib/money';
 import {getPaymentDb} from '@/lib/payment-db';
 import {productInput} from '@/lib/product-rules';
 import {z} from 'zod';
@@ -27,7 +30,9 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
-  if (!await admin()) return json({error: 'Admin role required'}, 403);
+  if (!sameOrigin(request.headers)) return json({error: 'Invalid request origin.'}, 403);
+  const account = await admin();
+  if (!account) return json({error: 'Admin role required'}, 403);
   if (!process.env.DATABASE_URL) return json({error: 'Database is not configured'}, 503);
   let input;
   try {
@@ -46,13 +51,15 @@ export async function POST(request: Request) {
       for (const item of input.packages) {
         const previous = existing.find(p => p.sku === item.sku);
         if (previous) {
-          await tx.package.update({where: {id: previous.id}, data: {baseUsdCents: item.baseUsdCents, saleUsdCents: item.saleUsdCents, stockOnHand: item.stockOnHand, active: item.active, translations: {deleteMany: {}, create: [{locale: 'en', ...item.en}]}}});
+          await tx.package.update({where: {id: previous.id}, data: {priceVnd: item.priceVnd, salePriceVnd: item.salePriceVnd, stockOnHand: item.stockOnHand, active: item.active, translations: {deleteMany: {}, create: [{locale: 'en', ...item.en}]}}});
           if (JSON.stringify(previous.deliveryForms[0]?.fields ?? []) !== JSON.stringify(item.fields)) await tx.deliveryForm.create({data: {packageId: previous.id, version: (previous.deliveryForms[0]?.version ?? 0) + 1, fields: item.fields}});
-        } else await tx.package.create({data: {productId: saved.id, sku: item.sku, baseUsdCents: item.baseUsdCents, saleUsdCents: item.saleUsdCents, stockOnHand: item.stockOnHand, active: item.active, translations: {create: [{locale: 'en', ...item.en}]}, deliveryForms: {create: {version: 1, fields: item.fields}}}});
+        } else await tx.package.create({data: {productId: saved.id, sku: item.sku, priceVnd: item.priceVnd, salePriceVnd: item.salePriceVnd, stockOnHand: item.stockOnHand, active: item.active, translations: {create: [{locale: 'en', ...item.en}]}, deliveryForms: {create: {version: 1, fields: item.fields}}}});
       }
       await tx.package.updateMany({where: {productId: saved.id, sku: {notIn: input.packages.map((p: {sku: string}) => p.sku)}}, data: {active: false}});
       return tx.product.findUniqueOrThrow({where: {id: saved.id}, include: {translations: true, packages: {include: {translations: true, deliveryForms: true}}}});
     }, {maxWait: 10000, timeout: 20000}); // Remote DB round trips can exceed Prisma's 5s default.
+    const prices = input.packages.map(item => `${item.sku} ${formatVnd(item.salePriceVnd ?? item.priceVnd)} · stock ${item.stockOnHand}${item.active ? '' : ' (off)'}`).join('; ');
+    await recordAudit({actorEmail: account.email, action: input.id ? 'product.updated' : 'product.created', summary: `${input.id ? 'Updated' : 'Created'} “${input.en.title}” (${input.active ? 'visible' : 'hidden'}): ${prices}`, entityType: 'product', entityId: product.id});
     return json({product: serialize(product)}, 201);
   } catch (error) {
     if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') return json({error: 'Slug or SKU already exists'}, 409);
@@ -62,10 +69,16 @@ export async function POST(request: Request) {
 }
 
 export async function DELETE(request: Request) {
-  if (!await admin()) return json({error: 'Admin role required'}, 403);
+  if (!sameOrigin(request.headers)) return json({error: 'Invalid request origin.'}, 403);
+  const account = await admin();
+  if (!account) return json({error: 'Admin role required'}, 403);
   if (!process.env.DATABASE_URL) return json({error: 'Database is not configured'}, 503);
   const id = new URL(request.url).searchParams.get('id');
   if (!id) return json({error: 'Product id is required'}, 400);
-  try { await getPaymentDb().product.delete({where: {id}}); return json({ok: true}); }
+  try {
+    const removed = await getPaymentDb().product.delete({where: {id}, include: {translations: {where: {locale: 'en'}}}});
+    await recordAudit({actorEmail: account.email, action: 'product.deleted', summary: `Deleted “${removed.translations[0]?.title ?? removed.slug}”`, entityType: 'product', entityId: id});
+    return json({ok: true});
+  }
   catch { return json({error: 'Product not found or could not be deleted'}, 404); }
 }

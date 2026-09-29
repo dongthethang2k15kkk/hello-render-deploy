@@ -1,5 +1,5 @@
 import {NextResponse} from 'next/server';
-import {safeNext} from '@/lib/customer-rules';
+import {safeAdminPath, safeNext} from '@/lib/customer-rules';
 import {appOrigin, createOAuthState, googleConfig, oauthCookie, oauthCookiePath, pkceChallenge, redirectUri} from '@/lib/oauth-helpers';
 
 export const runtime = 'nodejs';
@@ -23,7 +23,10 @@ export async function GET(request: Request) {
   const options = {httpOnly: true, sameSite: 'lax' as const, secure: process.env.NODE_ENV === 'production', path: oauthCookiePath, maxAge: 600};
   response.cookies.set(oauthCookie.state, state, options);
   response.cookies.set(oauthCookie.verifier, verifier, options);
-  const next = safeNext(new URL(request.url).searchParams.get('next'));
+  // A normal sign-in must never inherit an abandoned "connect Gmail" attempt.
+  response.cookies.set(oauthCookie.purpose, '', {...options, maxAge: 0});
+  const requested = new URL(request.url).searchParams.get('next');
+  const next = safeNext(requested) ?? safeAdminPath(requested);
   if (next) response.cookies.set(oauthCookie.next, next, options);
   return response;
 }

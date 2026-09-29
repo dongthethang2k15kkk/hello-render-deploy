@@ -1,8 +1,10 @@
 import {NextResponse, type NextRequest} from 'next/server';
 import {adminCookie, adminCookieOptions, encodeAdminSession, googleAdminAccount} from '@/lib/admin-session';
-import {createCustomerSession, customerCookie, customerCookieOptions, revokeCustomerSessions} from '@/lib/auth';
-import {decideGoogleLink, safeNext} from '@/lib/customer-rules';
+import {recordAudit} from '@/lib/audit';
+import {createCustomerSession, customerCookie, customerCookieOptions, getSession, revokeCustomerSessions} from '@/lib/auth';
+import {decideGoogleLink, safeAdminPath, safeNext} from '@/lib/customer-rules';
 import {recordLoginEvent} from '@/lib/customer-store';
+import {GMAIL_SEND_SCOPE, saveMailConnection} from '@/lib/mailer';
 import {appOrigin, googleConfig, isAllowedAdmin, oauthCookie, oauthCookiePath, redirectUri, statesMatch} from '@/lib/oauth-helpers';
 import {getPaymentDb} from '@/lib/payment-db';
 
@@ -25,7 +27,10 @@ export async function GET(request: NextRequest) {
   const verifier = request.cookies.get(oauthCookie.verifier)?.value;
   if (!code || !verifier || !statesMatch(url.searchParams.get('state'), request.cookies.get(oauthCookie.state)?.value)) return fail('google_invalid_state');
 
+  const mailFlow = request.cookies.get(oauthCookie.purpose)?.value === 'mail';
   let user: UserInfo;
+  let refreshToken: string | undefined;
+  let grantedScope = '';
   try {
     const token = await fetch('https://oauth2.googleapis.com/token', {
       method: 'POST',
@@ -34,7 +39,8 @@ export async function GET(request: NextRequest) {
       cache: 'no-store'
     });
     if (!token.ok) throw new Error(`token ${token.status}`);
-    const {access_token: accessToken} = await token.json() as {access_token?: string};
+    const {access_token: accessToken, refresh_token: refresh, scope} = await token.json() as {access_token?: string; refresh_token?: string; scope?: string};
+    refreshToken = refresh; grantedScope = scope ?? '';
     if (!accessToken) throw new Error('missing access token');
     // Userinfo is fetched directly from Google over TLS, so its claims are trusted without local JWT verification.
     const info = await fetch('https://openidconnect.googleapis.com/v1/userinfo', {headers: {Authorization: `Bearer ${accessToken}`}, cache: 'no-store'});
@@ -48,8 +54,20 @@ export async function GET(request: NextRequest) {
   if (!user.email || !user.sub || user.email_verified !== true) return fail('google_unverified');
   const email = user.email.trim().toLowerCase();
 
+  if (mailFlow) {
+    // Connecting the shop's Gmail sender: only a signed-in Admin may do this.
+    const mailDone = (query: string) => clearOAuth(NextResponse.redirect(`${origin}/en/admin/settings/email?${query}`));
+    const admin = await getSession();
+    if (admin?.role !== 'admin') return fail('not_admin');
+    if (!grantedScope.split(' ').includes(GMAIL_SEND_SCOPE)) return mailDone('error=scope_missing');
+    if (!refreshToken) return mailDone('error=no_refresh_token');
+    await saveMailConnection(email, refreshToken, admin.email);
+    await recordAudit({actorEmail: admin.email, action: 'email.connected', summary: `Connected Gmail sender ${email}`, entityType: 'email'});
+    return mailDone('connected=1');
+  }
+
   if (isAllowedAdmin(email)) {
-    const response = clearOAuth(NextResponse.redirect(`${origin}/en/admin/chat`));
+    const response = clearOAuth(NextResponse.redirect(`${origin}${safeAdminPath(request.cookies.get(oauthCookie.next)?.value) ?? '/en/admin'}`));
     response.cookies.set(adminCookie, encodeAdminSession(googleAdminAccount(email)), adminCookieOptions);
     response.cookies.set(customerCookie, '', {path: '/', maxAge: 0});
     return response;

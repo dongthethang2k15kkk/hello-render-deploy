@@ -5,13 +5,13 @@ import {registerCustomer} from './helpers';
 
 test('guest cannot open admin', async ({page}) => {
   await page.goto('/en/admin');
-  await expect(page).toHaveURL(/\/en\/login$/);
+  await expect(page).toHaveURL(/\/en\/login\?next=%2Fen%2Fadmin/);
 });
 
 test('customer cannot open admin settings', async ({page}) => {
   await registerCustomer(page.request);
   await page.goto('/en/admin/settings');
-  await expect(page).toHaveURL(/\/en\/login$/);
+  await expect(page).toHaveURL(/\/en\/login\?next=%2Fen%2Fadmin/);
 });
 
 test('password sign-in never grants admin; admin must use Google', async ({page}) => {
@@ -24,12 +24,14 @@ test('password sign-in never grants admin; admin must use Google', async ({page}
   await expect(page.getByText('customer123')).toHaveCount(0);
 });
 
-test('admin inbox is isolated from storefront and links to settings', async ({page}) => {
+test('admin area is isolated from storefront and navigates between sections', async ({page}) => {
   // Dev admin session (ALLOW_DEV_ADMIN_LOGIN=1, non-production) stands in for Google sign-in.
   const login = await page.request.post('/api/auth/dev-admin');
   expect(login.ok()).toBe(true);
   await page.goto('/en/admin');
-  await expect(page).toHaveURL(/\/en\/admin\/chat$/);
+  await expect(page).toHaveURL(/\/en\/admin\/overview$/);
+  await expect(page.getByRole('heading', {name: 'Overview'})).toBeVisible();
+  await page.getByRole('navigation', {name: 'Admin navigation'}).getByRole('link', {name: 'Chat'}).click();
   await expect(page.getByRole('heading', {name: 'Customer inbox'})).toBeVisible();
   await expect(page.getByRole('link', {name: 'Cart'})).toHaveCount(0);
   await page.getByRole('navigation', {name: 'Admin navigation'}).getByRole('link', {name: 'Settings'}).click();

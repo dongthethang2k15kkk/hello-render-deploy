@@ -65,6 +65,11 @@ export function safeNext(value: string | null | undefined): NextTarget | null {
   return nextTargets.find(target => target === value) ?? null;
 }
 
+/** Admin deep links (e.g. an order from an email) survive sign-in; only same-site Admin paths are accepted. */
+export function safeAdminPath(value: string | null | undefined) {
+  return value && /^\/en\/admin(\/[A-Za-z0-9_-]+){0,3}$/.test(value) ? value : null;
+}
+
 type ExistingCustomer = {id: string; googleSub: string | null; passwordHash: string | null; emailVerified: boolean; status: string};
 export type GoogleLinkDecision =
   | {action: 'create'}

@@ -41,7 +41,7 @@ export default function LoginPage() {
     setBusy(true);
     const response = await fetch('/api/auth/dev-admin', {method: 'POST'}).catch(() => null);
     setBusy(false);
-    if (response?.ok) {router.push(`/${locale}/admin/chat`); router.refresh();} else setError('Dev admin login is disabled.');
+    if (response?.ok) {router.push(next.startsWith('/en/admin') ? next : `/${locale}/admin`); router.refresh();} else setError('Dev admin login is disabled.');
   }
 
   async function submit(event: FormEvent<HTMLFormElement>) {
@@ -61,7 +61,7 @@ export default function LoginPage() {
     finally {setBusy(false);}
   }
 
-  const googleHref = `/api/auth/google/start${next === 'checkout' ? '?next=checkout' : ''}`;
+  const googleHref = `/api/auth/google/start${next === 'checkout' || next.startsWith('/en/admin') ? `?next=${encodeURIComponent(next)}` : ''}`;
   return <div className="auth-page page-heading"><p className="eyebrow">ACCOUNT ACCESS</p><h1>{register ? 'Create an account' : 'Welcome back'}</h1><p className="muted">Sign in to chat with support and continue shopping.</p>
     <section className="auth-card card"><div className="auth-tabs" aria-label="Choose account action"><button type="button" className={!register ? 'active' : ''} aria-pressed={!register} onClick={() => {setRegister(false); setError('');}}>Sign in</button><button type="button" className={register ? 'active' : ''} aria-pressed={register} onClick={() => {setRegister(true); setError('');}}>Register</button></div>
       {/* Plain link: OAuth needs a full-page navigation, not client routing. */}

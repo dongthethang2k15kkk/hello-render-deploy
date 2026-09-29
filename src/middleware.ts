@@ -10,6 +10,7 @@ export function middleware(request: NextRequest) {
   const headers = new Headers(request.headers);
   headers.set('x-shop-locale', 'en');
   headers.set('x-shop-admin', /^\/en\/admin(\/|$)/.test(pathname) ? '1' : '0');
+  headers.set('x-shop-path', pathname);
   return NextResponse.next({request: {headers}});
 }
 export const config = {matcher: ['/((?!api|_next|favicon.ico).*)']};

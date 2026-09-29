@@ -89,8 +89,11 @@ model Package {
   id                    String             @id @default(cuid())
   productId             String
   sku                   String             @unique
-  baseUsdCents          Int
+  // Prices are entered and charged in VND; the USD columns are legacy (phase 2) and unused.
+  baseUsdCents          Int                @default(0)
   saleUsdCents          Int?
+  priceVnd              Int                @default(0)
+  salePriceVnd          Int?
   stockOnHand           Int                @default(0)
   active                Boolean            @default(false)
   createdAt             DateTime           @default(now())
@@ -139,6 +142,8 @@ model Customer {
   loginEvents        LoginEvent[]
   chatMessages       ChatMessage[]
   auditLogs          AuditLog[]
+  orders             Order[]
+  notifications      Notification[]
 
   @@index([createdAt])
   @@index([lastLoginAt])
@@ -209,9 +214,146 @@ model AuditLog {
   action     String
   customerId String?
   customer   Customer? @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  entityType String?
+  entityId   String?
   summary    String
   createdAt  DateTime  @default(now())
 
   @@index([customerId, createdAt])
   @@index([createdAt])
+  @@index([entityType, createdAt])
+  @@index([actorEmail, createdAt])
+}
+
+// Phases 2-5: orders paid by bank transfer, appointments, notifications and email (see docs/specs).
+model StoreSetting {
+  key       String   @id
+  value     Json
+  updatedAt DateTime @updatedAt
+  updatedBy String?
+}
+
+model BankAccount {
+  id            String   @id @default(cuid())
+  bankBin       String
+  bankName      String
+  accountNumber String
+  accountHolder String
+  active        Boolean  @default(true)
+  lastAssigned  DateTime @default(now())
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+}
+
+model Order {
+  id                 String         @id @default(cuid())
+  code               String         @unique
+  customerId         String
+  customer           Customer       @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  status             String
+  totalVnd           Int
+  vndPerUsd          Int
+  bankSnapshot       Json
+  holdExpiresAt      DateTime
+  reportedAt         DateTime?
+  customerTimeZone   String?
+  paidAt             DateTime?
+  paidAmountVnd      Int?
+  paymentReference   String?
+  paymentConfirmedBy String?
+  assignedAdmin      String?
+  appointmentStart   DateTime?
+  appointmentEnd     DateTime?
+  deliveryNote       String?
+  completedAt        DateTime?
+  cancelledAt        DateTime?
+  cancelReason       String?
+  internalNote       String?
+  createdAt          DateTime       @default(now())
+  updatedAt          DateTime       @updatedAt
+  items              OrderItem[]
+  slots              OrderSlot[]
+  events             OrderEvent[]
+  notifications      Notification[]
+
+  @@index([status, createdAt])
+  @@index([customerId, createdAt])
+  @@index([status, holdExpiresAt])
+  @@index([appointmentStart])
+  @@index([paidAt])
+}
+
+model OrderItem {
+  id           String @id @default(cuid())
+  orderId      String
+  order        Order  @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  packageId    String
+  productSlug  String
+  sku          String
+  title        String
+  unitPriceVnd Int
+  quantity     Int
+  delivery     Json
+
+  @@index([orderId])
+}
+
+model OrderSlot {
+  id       String   @id @default(cuid())
+  orderId  String
+  order    Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  startsAt DateTime
+  endsAt   DateTime
+
+  @@index([orderId])
+}
+
+model OrderEvent {
+  id        String   @id @default(cuid())
+  orderId   String
+  order     Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  actor     String
+  action    String
+  note      String?
+  createdAt DateTime @default(now())
+
+  @@index([orderId, createdAt])
+}
+
+model Notification {
+  id         String    @id @default(cuid())
+  customerId String
+  customer   Customer  @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  orderId    String?
+  order      Order?    @relation(fields: [orderId], references: [id], onDelete: SetNull)
+  title      String
+  body       String
+  link       String
+  readAt     DateTime?
+  createdAt  DateTime  @default(now())
+
+  @@index([customerId, createdAt])
+  @@index([customerId, readAt])
+}
+
+model EmailLog {
+  id        String   @id @default(cuid())
+  recipient String
+  subject   String
+  kind      String
+  orderId   String?
+  status    String
+  error     String?
+  createdAt DateTime @default(now())
+
+  @@index([createdAt])
+  @@index([orderId])
+}
+
+model MailConnection {
+  id              String   @id
+  email           String
+  refreshTokenEnc String
+  connectedBy     String
+  connectedAt     DateTime @default(now())
 }

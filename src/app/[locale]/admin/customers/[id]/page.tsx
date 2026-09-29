@@ -4,11 +4,14 @@ import Link from 'next/link';
 import {useRouter} from 'next/navigation';
 import SignInActivity from '@/components/admin-sign-in-activity';
 import {describeUserAgent, formatDateTime, generatePassword} from '@/lib/customer-labels';
+import {formatVnd} from '@/lib/money';
+import {statusLabels, statusTone, type OrderStatus} from '@/lib/order-rules';
 
 type Detail = {
   customer: {id: string; email: string; name: string; emailVerified: boolean; status: string; lockedReason: string | null; mustChangePassword: boolean; createdAt: string; lastLoginAt: string | null; methods: string[]; chatMessages: number};
   sessions: {id: string; ip: string | null; userAgent: string | null; createdAt: string; lastSeenAt: string; expiresAt: string}[];
   audit: {id: string; actorEmail: string; action: string; summary: string; createdAt: string}[];
+  orders: {id: string; code: string; status: OrderStatus; totalVnd: number; createdAt: string}[];
 };
 
 export default function AdminCustomerDetail({params}: {params: Promise<{locale: string; id: string}>}) {
@@ -41,14 +44,14 @@ export default function AdminCustomerDetail({params}: {params: Promise<{locale: 
       const data = await response.json();
       if (!response.ok) throw new Error(data.error);
       if (data.deleted) {router.push(`/${locale}/admin/customers`); return true;}
-      setDetail({customer: data.customer, sessions: data.sessions, audit: data.audit}); setMessage(success); setReloadKey(key => key + 1);
+      setDetail({customer: data.customer, sessions: data.sessions, audit: data.audit, orders: data.orders}); setMessage(data.anonymized ? 'This customer has orders, so the account was anonymised: personal data, chat and sign-in history were deleted; orders are kept.' : success); setReloadKey(key => key + 1);
       return true;
     } catch (cause) { setError(cause instanceof Error ? cause.message : 'The action could not be completed.'); return false; }
     finally { setBusy(false); }
   }
 
   if (!detail) return <div className="page-heading"><Link href={`/${locale}/admin/customers`}>← Customers</Link>{error ? <p className="admin-feedback error" role="alert">{error}</p> : <p className="muted" role="status">Loading customer…</p>}</div>;
-  const {customer, sessions, audit} = detail;
+  const {customer, sessions, audit, orders} = detail;
   const locked = customer.status === 'locked';
   return <div className="admin-customer-detail">
     <div className="page-heading admin-page-heading"><div><p className="eyebrow"><Link href={`/${locale}/admin/customers`}>ADMIN / CUSTOMERS</Link></p><h1>{customer.name}</h1><p className="admin-lede">{customer.email} {customer.emailVerified ? <span className="badge ok">verified by Google</span> : <span className="badge warn">email not verified</span>} <span className={`badge ${locked ? 'danger' : 'ok'}`}>{locked ? 'Locked' : 'Active'}</span></p></div><Link className="button secondary" href={`/${locale}/admin/chat?room=user:${customer.id}`}>Open chat ({customer.chatMessages})</Link></div>
@@ -78,6 +81,10 @@ export default function AdminCustomerDetail({params}: {params: Promise<{locale: 
       </section>
     </div>
 
+    <section className="card admin-panel"><h2>Orders ({orders.length})</h2>
+      {orders.length === 0 ? <p className="admin-empty">No orders yet.</p> : <div className="admin-table-wrap"><table className="admin-table"><thead><tr><th>Order</th><th>Status</th><th>Total</th><th>Placed</th></tr></thead><tbody>{orders.map(order => <tr key={order.id}><td><Link href={`/${locale}/admin/orders/${order.id}`}>{order.code}</Link></td><td><span className={`badge ${statusTone[order.status]}`}>{statusLabels[order.status]}</span></td><td>{formatVnd(order.totalVnd)}</td><td>{formatDateTime(order.createdAt)}</td></tr>)}</tbody></table></div>}
+    </section>
+
     <section className="card admin-panel"><h2>Signed-in devices ({sessions.length})</h2>
       {sessions.length === 0 ? <p className="admin-empty">No active sessions.</p> : <div className="admin-table-wrap"><table className="admin-table"><thead><tr><th>Device</th><th>IP address</th><th>Signed in</th><th>Last active</th><th>Expires</th></tr></thead><tbody>{sessions.map(session => <tr key={session.id}><td title={session.userAgent ?? ''}>{describeUserAgent(session.userAgent)}</td><td className="admin-mono">{session.ip ?? '—'}</td><td>{formatDateTime(session.createdAt)}</td><td>{formatDateTime(session.lastSeenAt)}</td><td>{formatDateTime(session.expiresAt)}</td></tr>)}</tbody></table></div>}
     </section>
@@ -89,7 +96,7 @@ export default function AdminCustomerDetail({params}: {params: Promise<{locale: 
     </section>
 
     <section className="card admin-panel admin-danger-zone"><h2>Delete account</h2>
-      <p className="field-caption">Only when the customer asks. Deletes the account, sessions, chat (including images) and sign-in history. This cannot be undone.</p>
+      <p className="field-caption">Only when the customer asks. Deletes the account, sessions, chat (including images) and sign-in history. Customers with orders are anonymised instead so order records stay. This cannot be undone.</p>
       <form onSubmit={event => {event.preventDefault(); if (window.confirm(`Delete ${customer.email} permanently?`)) void act({action: 'delete', confirmEmail}, 'Deleted.');}}>
         <label>Type the customer’s email to confirm<input value={confirmEmail} onChange={event => setConfirmEmail(event.target.value)} placeholder={customer.email} autoComplete="off"/></label>
         <button type="submit" className="danger-button" disabled={busy || confirmEmail.trim().toLowerCase() !== customer.email}>Delete account</button>

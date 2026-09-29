@@ -23,7 +23,7 @@ for (const path of ['/vi', '/en', '/en/login']) {
   assert.equal((await fetch(new URL(asset.replaceAll('&amp;', '&'), base))).status, 200);
 }
 assert.equal((await fetch(base + '/api/admin/products')).status, 403);
-assert.equal((await fetch(base + '/api/payment-admin')).status, 401);
+assert.equal((await fetch(base + '/api/admin/orders')).status, 403);
 // Admin signs in with Google only; a registered customer proves database-backed accounts work.
 const register = await fetch(base + '/api/auth/register', {
   method: 'POST',

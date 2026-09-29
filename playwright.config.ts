@@ -6,8 +6,10 @@ try { process.loadEnvFile('.env'); } catch { /* no local .env */ }
 export default defineConfig({
   testDir: './tests/e2e',
   workers: 1,
-  // Locally the E2E database is a remote Neon branch and the dev server compiles on demand; 5 s is too tight for sign-in round trips.
-  expect: {timeout: 10000},
+  // Locally the E2E database is a remote Neon branch (80-300 ms per query from Vietnam) behind a dev server that compiles on demand,
+  // so multi-step flows need more than the defaults. CI uses a local PostgreSQL service and finishes far below these limits.
+  timeout: 60000,
+  expect: {timeout: 15000},
   globalSetup: './tests/e2e/global-setup.ts',
   use: {baseURL: 'http://127.0.0.1:3001', channel: process.env.PLAYWRIGHT_CHANNEL || (process.platform === 'win32' ? 'msedge' : undefined)},
   webServer: {

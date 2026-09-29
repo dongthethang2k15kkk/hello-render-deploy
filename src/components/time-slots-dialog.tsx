@@ -1,0 +1,62 @@
+'use client';
+import {useEffect, useRef, useState} from 'react';
+import {MAX_SLOTS, slotProblem} from '@/lib/order-rules';
+
+type Row = {date: string; from: string; to: string};
+
+const pad = (value: number) => String(value).padStart(2, '0');
+const localDate = (date: Date) => `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+function defaultRow(offsetDays = 1): Row {
+  const date = new Date(); date.setDate(date.getDate() + offsetDays);
+  return {date: localDate(date), from: '19:00', to: '21:00'};
+}
+/** Browser-local date + times to ISO instants. */
+function toSlot(row: Row) {
+  return {start: new Date(`${row.date}T${row.from}`).toISOString(), end: new Date(`${row.date}T${row.to}`).toISOString()};
+}
+
+/** Lets the customer propose 1–5 free time windows, entered in their own time zone. */
+export default function TimeSlotsDialog({open, title, submitLabel, onClose, onSubmit}: {open: boolean; title: string; submitLabel: string; onClose: () => void; onSubmit: (input: {timeZone: string; slots: {start: string; end: string}[]}) => Promise<string | null>}) {
+  const [rows, setRows] = useState<Row[]>([defaultRow(1)]);
+  const [error, setError] = useState('');
+  const [busy, setBusy] = useState(false);
+  const dialog = useRef<HTMLDialogElement>(null);
+  const timeZone = typeof Intl !== 'undefined' ? Intl.DateTimeFormat().resolvedOptions().timeZone : 'Asia/Ho_Chi_Minh';
+
+  useEffect(() => {
+    const element = dialog.current;
+    if (!element) return;
+    if (open && !element.open) { setError(''); element.showModal(); }
+    if (!open && element.open) element.close();
+  }, [open]);
+
+  async function submit(event: React.FormEvent) {
+    event.preventDefault();
+    if (rows.some(row => !row.date || !row.from || !row.to)) { setError('Fill in the date and both times for every row.'); return; }
+    if (rows.some(row => row.to <= row.from)) { setError('Each end time must be after its start time (same day).'); return; }
+    const slots = rows.map(toSlot);
+    const problem = slotProblem(slots);
+    if (problem) { setError(problem); return; }
+    setBusy(true); setError('');
+    const failure = await onSubmit({timeZone, slots});
+    setBusy(false);
+    if (failure) setError(failure);
+  }
+
+  return <dialog ref={dialog} className="slots-dialog" aria-labelledby="slots-title" onClose={onClose} onCancel={onClose}>
+    <form onSubmit={event => void submit(event)}>
+      <h2 id="slots-title">{title}</h2>
+      <p className="field-caption">Add 1–{MAX_SLOTS} times when you are free to receive your order (your time zone: {timeZone}). We will confirm one of them.</p>
+      <div className="slot-rows">{rows.map((row, index) => <fieldset className="slot-row" key={index}>
+        <legend>Time {index + 1}</legend>
+        <label>Date<input type="date" required value={row.date} min={localDate(new Date())} onChange={event => setRows(rows.map((item, i) => i === index ? {...item, date: event.target.value} : item))}/></label>
+        <label>From<input type="time" required value={row.from} onChange={event => setRows(rows.map((item, i) => i === index ? {...item, from: event.target.value} : item))}/></label>
+        <label>To<input type="time" required value={row.to} onChange={event => setRows(rows.map((item, i) => i === index ? {...item, to: event.target.value} : item))}/></label>
+        {rows.length > 1 && <button type="button" className="admin-remove-link" onClick={() => setRows(rows.filter((_, i) => i !== index))}>Remove</button>}
+      </fieldset>)}</div>
+      {rows.length < MAX_SLOTS && <button type="button" className="secondary" onClick={() => setRows([...rows, defaultRow(rows.length + 1)])}>+ Add another time</button>}
+      {error && <p className="error-text" role="alert">{error}</p>}
+      <div className="dialog-actions"><button type="button" className="secondary" onClick={onClose} disabled={busy}>Cancel</button><button type="submit" disabled={busy}>{busy ? 'Sending…' : submitLabel}</button></div>
+    </form>
+  </dialog>;
+}

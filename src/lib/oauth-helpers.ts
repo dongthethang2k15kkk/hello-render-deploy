@@ -1,7 +1,7 @@
 // Pure helpers for Google admin sign-in (no Next.js imports so they can be unit tested).
 import {createHash, randomBytes, timingSafeEqual} from 'node:crypto';
 
-export const oauthCookie = {state: 'oauth_state', verifier: 'oauth_verifier', next: 'oauth_next'} as const;
+export const oauthCookie = {state: 'oauth_state', verifier: 'oauth_verifier', next: 'oauth_next', purpose: 'oauth_purpose'} as const;
 export const oauthCookiePath = '/api/auth/google';
 export const devAdminEmail = 'dev-admin@localhost';
 

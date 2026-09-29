@@ -108,6 +108,19 @@ Admin nằm trong PostgreSQL (bảng `Customer`, `CustomerSession`, `LoginEvent`
 - Xóa tài khoản trong Admin xóa luôn phiên, chat, ảnh chat và lịch sử đăng nhập của khách đó.
 - Thiết kế: `docs/specs/2026-09-29-phase1-accounts-chat-design.md`.
 
+## Đơn hàng, thanh toán và lịch hẹn
+
+Giai đoạn 2–5 thêm `Order`, `OrderItem` (bản chụp giá, tên, thông tin giao), `OrderSlot` (khung giờ khách chọn),
+`OrderEvent` (dòng thời gian), `Notification` (Inbox), `BankAccount`, `StoreSetting` (tỷ giá), `EmailLog`,
+`MailConnection` (refresh token Gmail mã hóa AES-256-GCM bằng khóa dẫn xuất từ `AUTH_SECRET`; đổi `AUTH_SECRET`
+thì phải kết nối Gmail lại). Giá gói nằm ở `Package.priceVnd`/`salePriceVnd`; cột USD cũ giữ lại, không dùng.
+
+- Đặt hàng trừ tồn ngay trong transaction; đơn chưa báo chuyển sau 30 phút tự hết hạn và trả tồn (kiểm tra khi có
+  người mở catalog/đơn/Admin, vì Render Free không có tác vụ nền).
+- Khách có đơn không bị xóa hẳn: Admin xóa sẽ ẩn danh tài khoản, giữ đơn để đối soát.
+- Đây là dữ liệu tài chính: định kỳ tạo bản sao lưu (`scripts/backup-postgres.ps1` hoặc Neon Console) và kiểm tra
+  khôi phục được. Bảng staging cũ `PaymentReceiver`/`PaymentOrder`/`PaymentEvent` rỗng và không còn được dùng.
+
 ## Database cho E2E
 
 Playwright cần `E2E_DATABASE_URL` trỏ tới database dùng một lần, **không bao giờ** là production.

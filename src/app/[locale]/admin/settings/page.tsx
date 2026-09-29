@@ -3,5 +3,11 @@ import SettingsViewers from '@/components/settings-viewers';
 
 export default async function AdminSettings({params}: {params: Promise<{locale: string}>}) {
   const {locale} = await params;
-  return <div className="page-heading"><p className="eyebrow">ADMIN / SETTINGS</p><h1>{'Store settings'}</h1><SettingsViewers resource="settings" prefix context="Settings"/><p className="notice">{'Manage store operations and configuration.'}</p><div className="grid"><section className="card"><h2>{'Products'}</h2><SettingsViewers resource="settings/products" context="Products"/><p className="muted">{'Create, edit, activate products, sale prices, stock and packages.'}</p><Link className="button" href={`/${locale}/admin/settings/products`}>{'Manage products'}</Link></section><section className="card"><h2>{'Staging payments'}</h2><SettingsViewers resource="payments" context="Payments"/><p className="muted">{'For internal operations only; requires a separate Bearer key.'}</p><Link className="button secondary" href={`/${locale}/admin/payments`}>{'Open staging'}</Link></section></div></div>;
+  return <div className="page-heading"><p className="eyebrow">ADMIN / SETTINGS</p><h1>Store settings</h1><SettingsViewers resource="settings" prefix context="Settings"/><p className="notice">Manage the catalog, how customers pay and how the shop sends email.</p>
+    <div className="grid settings-grid">
+      <section className="card"><h2>Products</h2><SettingsViewers resource="settings/products" context="Products"/><p className="muted">Create and edit products, VND prices, sale prices, stock, images and delivery forms.</p><Link className="button" href={`/${locale}/admin/settings/products`}>Manage products</Link></section>
+      <section className="card"><h2>Payments</h2><p className="muted">Bank accounts shown to customers with a VietQR code, and the VND/USD rate used to display USD prices.</p><Link className="button" href={`/${locale}/admin/settings/payments`}>Payment settings</Link></section>
+      <section className="card"><h2>Email</h2><p className="muted">Connect the shop’s Gmail to send order emails to Admins and customers, send a test and review the email log.</p><Link className="button" href={`/${locale}/admin/settings/email`}>Email settings</Link></section>
+    </div>
+  </div>;
 }
