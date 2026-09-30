@@ -54,12 +54,14 @@ export function customerPaymentConfirmed(input: {code: string; name: string; ord
 }
 
 export function customerAppointment(input: {code: string; name: string; start: Date; end: Date; timeZone: string; orderUrl: string; calendarUrl: string; rescheduled: boolean}): EmailContent {
-  const title = input.rescheduled ? `Your appointment has changed · order ${input.code}` : `Your appointment is booked · order ${input.code}`;
+  // An Admin who is free can start right away ("Start now"); the email then says so instead of naming a later time.
+  const startsNow = input.start.getTime() - Date.now() <= 2 * 60_000;
+  const title = startsNow ? `We are ready for you now · order ${input.code}` : input.rescheduled ? `Your appointment has changed · order ${input.code}` : `Your appointment is booked · order ${input.code}`;
   const lines = [
     `Hi ${escapeHtml(input.name)},`,
-    input.rescheduled ? 'Your appointment time has been updated.' : 'Thank you. Your payment is confirmed and your appointment is booked.',
+    startsNow ? 'An Admin is available now to deliver your order.' : input.rescheduled ? 'Your appointment time has been updated.' : 'Thank you. Your payment is confirmed and your appointment is booked.',
     `<strong>${escapeHtml(formatRange(input.start, input.end, input.timeZone))}</strong>`,
-    'At that time, sign in to our website and open Chat. We will deliver your order with you there. A calendar file is attached so your phone can remind you.'
+    startsNow ? 'Sign in to our website and open Chat now. We are waiting for you there.' : 'At that time, sign in to our website and open Chat. We will deliver your order with you there. A calendar file is attached so your phone can remind you.'
   ];
   const links = [{label: 'Open your order', url: input.orderUrl}, {label: 'Add to Google Calendar', url: input.calendarUrl}];
   return {subject: `Jewish Horse: ${title}`, html: layout(title, lines, links[0], links[1]), text: plain(title, lines, links)};
@@ -83,5 +85,51 @@ export function adminTestEmail(input: {sender: string; adminUrl: string}): Email
   const title = 'Email thử từ Jewish Horse';
   const lines = [`Gmail <strong>${escapeHtml(input.sender)}</strong> đã được kết nối và gửi thư thành công.`, 'Thư báo đơn mới sẽ được gửi tới tất cả email Admin.'];
   const link = {label: 'Mở Admin', url: input.adminUrl};
+  return {subject: `[Jewish Horse] ${title}`, html: layout(title, lines, link), text: plain(title, lines, [link])};
+}
+
+// ---------- Automatic payment detection, ASAP appointments and reminders ----------
+
+export function adminPaymentDetected(input: {code: string; customerName: string; source: 'sepay' | 'blockchain'; amountLabel: string; slots: Slot[]; asap: boolean; orderUrl: string}): EmailContent {
+  const title = `Đơn ${input.code} đã thanh toán (tự động)`;
+  const lines = [
+    `Hệ thống đã tự nhận ${input.source === 'sepay' ? 'chuyển khoản qua SePay' : 'giao dịch Litecoin trên blockchain'}: <strong>${escapeHtml(input.amountLabel)}</strong> từ khách <strong>${escapeHtml(input.customerName)}</strong>.`,
+    input.asap ? '<strong>Khách đang rảnh NGAY BÂY GIỜ.</strong> Nếu bạn rảnh, mở đơn và bấm "Start now".' : input.slots.length ? `Khung giờ khách rảnh (giờ Việt Nam):<br>${input.slots.map(slot => `• ${escapeHtml(formatRange(slot.start, slot.end, VN_TIME_ZONE))}`).join('<br>')}` : 'Khách chưa chọn giờ; web đã nhắc khách chọn.',
+    'Hãy chốt lịch hẹn trong trang đơn.'
+  ];
+  const link = {label: 'Mở đơn', url: input.orderUrl};
+  return {subject: `[Jewish Horse] ${title}${input.asap ? ' · khách rảnh ngay' : ''}`, html: layout(title, lines, link), text: plain(title, lines, [link])};
+}
+
+export function adminUnderpaid(input: {code: string; receivedVnd: number; totalVnd: number; orderUrl: string}): EmailContent {
+  const title = `Đơn ${input.code}: chuyển thiếu tiền`;
+  const lines = [`SePay báo nhận <strong>${formatVnd(input.receivedVnd)}</strong> với nội dung ${input.code}, nhưng đơn là <strong>${formatVnd(input.totalVnd)}</strong>.`, 'Đơn chưa được xác nhận tự động. Hãy liên hệ khách qua chat, rồi xác nhận thủ công nếu chấp nhận.'];
+  const link = {label: 'Mở đơn', url: input.orderUrl};
+  return {subject: `[Jewish Horse] ${title}`, html: layout(title, lines, link), text: plain(title, lines, [link])};
+}
+
+export function adminTimesAdded(input: {code: string; customerName: string; slots: Slot[]; asap: boolean; orderUrl: string}): EmailContent {
+  const title = `Đơn ${input.code}: khách đã chọn giờ`;
+  const lines = [`Khách <strong>${escapeHtml(input.customerName)}</strong> vừa chọn thời gian nhận hàng.`, input.asap ? '<strong>Khách đang rảnh NGAY BÂY GIỜ.</strong>' : input.slots.map(slot => `• ${escapeHtml(formatRange(slot.start, slot.end, VN_TIME_ZONE))}`).join('<br>')];
+  const link = {label: 'Mở đơn để chốt lịch', url: input.orderUrl};
+  return {subject: `[Jewish Horse] ${title}${input.asap ? ' · rảnh ngay' : ''}`, html: layout(title, lines, link), text: plain(title, lines, [link])};
+}
+
+export function customerReminder(input: {code: string; name: string; start: Date; end: Date; timeZone: string; orderUrl: string; now: boolean}): EmailContent {
+  const title = input.now ? `We are ready for you now · order ${input.code}` : `Your appointment starts soon · order ${input.code}`;
+  const lines = [
+    `Hi ${escapeHtml(input.name)},`,
+    input.now ? 'The shop is ready to deliver your order now.' : 'Your appointment is coming up:',
+    `<strong>${escapeHtml(formatRange(input.start, input.end, input.timeZone))}</strong>`,
+    'Sign in to our website and open Chat. We have also left you a message there.'
+  ];
+  const link = {label: 'Open chat', url: input.orderUrl.replace(/\/orders\/.*$/, '/workspace')};
+  return {subject: `Jewish Horse: ${title}`, html: layout(title, lines, link, {label: 'View order', url: input.orderUrl}), text: plain(title, lines, [link, {label: 'View order', url: input.orderUrl}])};
+}
+
+export function adminReminder(input: {code: string; customerName: string; start: Date; end: Date; orderUrl: string}): EmailContent {
+  const title = `Sắp tới giờ hẹn đơn ${input.code}`;
+  const lines = [`Khách <strong>${escapeHtml(input.customerName)}</strong> · <strong>${escapeHtml(formatRange(input.start, input.end, VN_TIME_ZONE))}</strong>.`, 'Web đã nhắn nhắc khách trong chat. Mở chat của khách từ trang đơn.'];
+  const link = {label: 'Mở đơn', url: input.orderUrl};
   return {subject: `[Jewish Horse] ${title}`, html: layout(title, lines, link), text: plain(title, lines, [link])};
 }

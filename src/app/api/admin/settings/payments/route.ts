@@ -9,6 +9,7 @@ import {validLitecoinAddress} from '@/lib/ltc';
 import {litecoinUri} from '@/lib/ltc-format';
 import {getLtcOverride, getLtcRate, setLtcOverride} from '@/lib/ltc-rate';
 import {vietQrPayload} from '@/lib/vietqr';
+import {getSepayKey, rotateSepayKey} from '@/lib/payment-detection';
 import {bankName, vnBanks} from '@/lib/vn-banks';
 
 export const runtime = 'nodejs';
@@ -22,7 +23,8 @@ async function state() {
     db.cryptoWallet.findMany({orderBy: {createdAt: 'asc'}, select: {id: true, network: true, address: true, label: true, active: true}}),
     getLtcOverride(), getLtcRate()
   ]);
-  return {vndPerUsd, accounts, banks: vnBanks, wallets, ltcOverride, ltcRate};
+  const [sepayKey, transfers] = await Promise.all([getSepayKey(), db.bankTransaction.findMany({orderBy: {receivedAt: 'desc'}, take: 20, select: {id: true, amountVnd: true, content: true, outcome: true, orderId: true, receivedAt: true}})]);
+  return {vndPerUsd, accounts, banks: vnBanks, wallets, ltcOverride, ltcRate, sepay: {configured: Boolean(sepayKey), keyHint: sepayKey ? `…${sepayKey.slice(-4)}` : null}, transfers};
 }
 
 export async function GET() {
@@ -42,7 +44,8 @@ const action = z.discriminatedUnion('action', [
   z.object({action: z.literal('save-wallet'), id: z.string().max(40).optional(), address: z.string().trim().max(100), label: z.string().trim().max(60).default(''), active: z.boolean()}).strict(),
   z.object({action: z.literal('delete-wallet'), id: z.string().max(40)}).strict(),
   z.object({action: z.literal('test-wallet-qr'), id: z.string().max(40)}).strict(),
-  z.object({action: z.literal('ltc-override'), vndPerLtc: z.number().int().min(1000).max(1_000_000_000).nullable()}).strict()
+  z.object({action: z.literal('ltc-override'), vndPerLtc: z.number().int().min(1000).max(1_000_000_000).nullable()}).strict(),
+  z.object({action: z.literal('sepay-rotate')}).strict()
 ]);
 
 export async function POST(request: Request) {
@@ -82,6 +85,11 @@ export async function POST(request: Request) {
       const wallet = await db.cryptoWallet.findUnique({where: {id: input.id}});
       if (!wallet) return json({error: 'Wallet not found.'}, 404);
       return json({qrSvg: await QRCode.toString(litecoinUri(wallet.address, '0.00100000', 'TEST'), {type: 'svg', margin: 1, errorCorrectionLevel: 'M'})});
+    } else if (input.action === 'sepay-rotate') {
+      const key = await rotateSepayKey(admin.email);
+      await recordAudit({actorEmail: admin.email, action: 'settings.sepay_key', summary: 'Generated a new SePay webhook key', entityType: 'settings'});
+      // The full key is shown once so it can be pasted into SePay.
+      return json({ok: true, sepayKey: key, ...(await state())});
     } else if (input.action === 'ltc-override') {
       await setLtcOverride(input.vndPerLtc, admin.email);
       await recordAudit({actorEmail: admin.email, action: 'settings.ltc_rate', summary: input.vndPerLtc ? `Set a manual Litecoin price of ${input.vndPerLtc.toLocaleString('vi-VN')} VND/LTC` : 'Switched the Litecoin price back to automatic', entityType: 'settings'});

@@ -69,7 +69,8 @@ describe('time windows', () => {
   const at = (hours: number) => new Date(now + hours * 3_600_000).toISOString();
   it('accepts future windows between 30 minutes and 12 hours', () => expect(slotProblem([{start: at(2), end: at(4)}], now)).toBeNull());
   it('rejects past, too short, too long and too far windows', () => {
-    expect(slotProblem([{start: at(0), end: at(2)}], now)).toMatch(/15 minutes/);
+    expect(slotProblem([{start: at(0), end: at(2)}], now)).toBeNull();
+    expect(slotProblem([{start: at(-1), end: at(1)}], now)).toMatch(/past/);
     expect(slotProblem([{start: at(2), end: at(2.2)}], now)).toMatch(/30 minutes/);
     expect(slotProblem([{start: at(2), end: at(20)}], now)).toMatch(/12 hours/);
     expect(slotProblem([{start: at(24 * 31), end: at(24 * 31 + 1)}], now)).toMatch(/30 days/);

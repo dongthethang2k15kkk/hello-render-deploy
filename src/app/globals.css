@@ -1367,3 +1367,18 @@ html,body {max-width:100%; overflow-x:clip;}
 .pay-details .button.full-width {margin:4px 0;}
 .announcement-caption {color:#f0fae8!important;}
 .interval-field select {width:auto; min-width:160px;}
+.asap-option {display:flex; gap:12px; align-items:flex-start; margin:12px 0 4px; padding:12px 14px; border:2px solid #95d47a; border-radius:12px; background:#f1f9ec; cursor:pointer;}
+.asap-option input {width:20px; height:20px; margin-top:2px; accent-color:#2f7a3d; flex:none;}
+.asap-option span {display:grid; gap:2px;}
+.asap-option strong {color:#1f4f2b;}
+.asap-option small {font-size:12px; color:#4f6255;}
+.payment-seen {margin:10px 0; padding:10px 12px; border-radius:10px; background:rgba(149,212,122,.18); border:1px solid rgba(149,212,122,.55); color:#e8f7dc;}
+.asap-badge {display:inline-block; margin-left:8px; padding:2px 9px; border-radius:999px; background:#e5484d; color:#fff; font-size:12px; font-weight:800; vertical-align:middle;}
+.start-now {display:flex; flex-wrap:wrap; gap:10px; align-items:end; margin-bottom:14px; padding:12px; border-radius:12px; background:rgba(229,72,77,.12); border:1px solid rgba(229,72,77,.4);}
+.start-now label {display:grid; gap:4px; font-size:12px; font-weight:700;}
+.sepay-key {font-family:ui-monospace,Consolas,monospace; overflow-wrap:anywhere; padding:10px 12px; border-radius:10px; background:#fff7d6; color:#3b3000; border:1px solid #e6cf6a;}
+.transfer-list {list-style:none; padding:0; margin:10px 0 0; display:grid; gap:8px;}
+.transfer-list li {display:grid; grid-template-columns:auto 1fr auto; gap:10px; align-items:center; padding:8px 12px; border-radius:10px; background:rgba(0,0,0,.05); font-size:13px;}
+.transfer-list small {overflow-wrap:anywhere;}
+.admin-surface ol.field-caption {color:#536259;}
+.sepay-steps {padding-left:20px; line-height:1.7;}

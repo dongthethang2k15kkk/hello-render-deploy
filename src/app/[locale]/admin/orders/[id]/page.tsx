@@ -11,6 +11,7 @@ type Order = {
   paidAt: string | null; paidAmountVnd: number | null; paymentReference: string | null; paymentConfirmedBy: string | null; assignedAdmin: string | null;
   appointmentStart: string | null; appointmentEnd: string | null; deliveryNote: string | null; cancelReason: string | null;
   paymentMethod: 'bank' | 'ltc'; cryptoAmount: string | null; cryptoRateVnd: number | null; customerTxid: string | null;
+  asap: boolean; paymentSource: string | null; paymentSeenAt: string | null; txConfirmations: number | null;
   bankSnapshot: {bankName: string; accountNumber: string; accountHolder: string} | {network: 'LTC'; address: string; label: string};
   customer: {id: string; name: string; email: string; status: string};
   items: {id: string; title: string; sku: string; unitPriceVnd: number; quantity: number; delivery: Record<string, string>}[];
@@ -35,6 +36,7 @@ export default function AdminOrderDetail({params}: {params: Promise<{locale: str
   const [delivery, setDelivery] = useState('');
   const [reason, setReason] = useState('');
   const [note, setNote] = useState('');
+  const [startMinutes, setStartMinutes] = useState('60');
 
   const adopt = useCallback((next: Order) => {
     setOrder(next);
@@ -53,6 +55,12 @@ export default function AdminOrderDetail({params}: {params: Promise<{locale: str
     adopt(body.order);
   }, [id, adopt]);
   useEffect(() => {void load();}, [load]);
+  const live = order ? ['awaiting_payment', 'payment_reported', 'paid'].includes(order.status) : false;
+  useEffect(() => {
+    if (!live) return;
+    const timer = window.setInterval(() => { if (document.visibilityState === 'visible') void load(); }, 20000);
+    return () => window.clearInterval(timer);
+  }, [live, load]);
 
   async function act(body: Record<string, unknown>, success: string) {
     setBusy(true); setError(''); setMessage('');
@@ -79,14 +87,14 @@ export default function AdminOrderDetail({params}: {params: Promise<{locale: str
   </div>;
 
   return <div className="admin-order-detail">
-    <div className="page-heading admin-page-heading"><div><p className="eyebrow"><Link href={`/${locale}/admin/orders`}>ADMIN / ORDERS</Link></p><h1>Order {order.code}</h1><p className="admin-lede"><span className={`badge ${statusTone[order.status]}`}>{statusLabels[order.status]}</span> {formatVnd(order.totalVnd)} · placed {formatDateTime(order.createdAt)}{order.assignedAdmin ? ` · handled by ${order.assignedAdmin}` : ''}</p></div>
+    <div className="page-heading admin-page-heading"><div><p className="eyebrow"><Link href={`/${locale}/admin/orders`}>ADMIN / ORDERS</Link></p><h1>Order {order.code}</h1><p className="admin-lede"><span className={`badge ${statusTone[order.status]}`}>{statusLabels[order.status]}</span>{order.asap && ['payment_reported', 'paid'].includes(order.status) && <span className="asap-badge">Free now</span>} {formatVnd(order.totalVnd)} · placed {formatDateTime(order.createdAt)}{order.assignedAdmin ? ` · handled by ${order.assignedAdmin}` : ''}</p></div>
       <Link className="button secondary" href={`/${locale}/admin/chat?room=user:${order.customer.id}`}>Open customer chat</Link></div>
     {error && <p className="admin-feedback error" role="alert">{error}</p>}
     {message && <p className="admin-feedback success" role="status">{message}</p>}
 
     <div className="admin-detail-grid">
       <section className="card admin-panel"><h2>Customer</h2>
-        <dl className="account-details"><dt>Name</dt><dd><Link href={`/${locale}/admin/customers/${order.customer.id}`}>{order.customer.name}</Link></dd><dt>Email</dt><dd>{order.customer.email}</dd>{'address' in order.bankSnapshot ? <><dt>Method</dt><dd>Litecoin</dd><dt>Expected</dt><dd><strong>{order.cryptoAmount} LTC</strong>{order.cryptoRateVnd ? ` at ${order.cryptoRateVnd.toLocaleString('vi-VN')} ₫/LTC` : ''}</dd><dt>To wallet</dt><dd>{order.bankSnapshot.label} · <a className="admin-mono" href={explorerAddress(order.bankSnapshot.address)} target="_blank" rel="noreferrer">{order.bankSnapshot.address}</a></dd>{order.customerTxid && <><dt>Customer TXID</dt><dd><a className="admin-mono" href={explorerTx(order.customerTxid)} target="_blank" rel="noreferrer">{order.customerTxid.slice(0, 16)}…</a></dd></>}</> : <><dt>Method</dt><dd>Bank transfer</dd><dt>Transfer content</dt><dd><strong>{order.code}</strong></dd><dt>To account</dt><dd>{order.bankSnapshot.bankName} · {order.bankSnapshot.accountNumber}</dd></>}{order.reportedAt && <><dt>Reported transfer</dt><dd>{formatDateTime(order.reportedAt)}</dd></>}{order.paidAt && <><dt>Payment confirmed</dt><dd>{formatVnd(order.paidAmountVnd ?? 0)} · {formatDateTime(order.paidAt)} by {order.paymentConfirmedBy}{order.paymentReference ? ` · ref ${order.paymentReference}` : ''}</dd></>}{order.appointmentStart && order.appointmentEnd && <><dt>Appointment</dt><dd><strong>{formatRange(order.appointmentStart, order.appointmentEnd, VN_TIME_ZONE)}</strong></dd></>}{order.cancelReason && <><dt>Reason</dt><dd>{order.cancelReason}</dd></>}</dl>
+        <dl className="account-details"><dt>Name</dt><dd><Link href={`/${locale}/admin/customers/${order.customer.id}`}>{order.customer.name}</Link></dd><dt>Email</dt><dd>{order.customer.email}</dd>{'address' in order.bankSnapshot ? <><dt>Method</dt><dd>Litecoin</dd><dt>Expected</dt><dd><strong>{order.cryptoAmount} LTC</strong>{order.cryptoRateVnd ? ` at ${order.cryptoRateVnd.toLocaleString('vi-VN')} ₫/LTC` : ''}</dd><dt>To wallet</dt><dd>{order.bankSnapshot.label} · <a className="admin-mono" href={explorerAddress(order.bankSnapshot.address)} target="_blank" rel="noreferrer">{order.bankSnapshot.address}</a></dd>{order.paymentSeenAt && <><dt>Seen on chain</dt><dd>{formatDateTime(order.paymentSeenAt)} · {order.txConfirmations ?? 0} confirmation{order.txConfirmations === 1 ? '' : 's'}</dd></>}{order.customerTxid && <><dt>Customer TXID</dt><dd><a className="admin-mono" href={explorerTx(order.customerTxid)} target="_blank" rel="noreferrer">{order.customerTxid.slice(0, 16)}…</a></dd></>}</> : <><dt>Method</dt><dd>Bank transfer</dd><dt>Transfer content</dt><dd><strong>{order.code}</strong></dd><dt>To account</dt><dd>{order.bankSnapshot.bankName} · {order.bankSnapshot.accountNumber}</dd></>}{order.reportedAt && <><dt>Reported transfer</dt><dd>{formatDateTime(order.reportedAt)}</dd></>}{order.paidAt && <><dt>Payment confirmed</dt><dd>{formatVnd(order.paidAmountVnd ?? 0)} · {formatDateTime(order.paidAt)} by {order.paymentConfirmedBy?.startsWith('auto:') ? (order.paymentSource === 'blockchain' ? 'automatic (Litecoin network)' : 'automatic (SePay bank)') : order.paymentConfirmedBy}{order.paymentReference ? ` · ref ${order.paymentReference}` : ''}</dd></>}{order.appointmentStart && order.appointmentEnd && <><dt>Appointment</dt><dd><strong>{formatRange(order.appointmentStart, order.appointmentEnd, VN_TIME_ZONE)}</strong></dd></>}{order.cancelReason && <><dt>Reason</dt><dd>{order.cancelReason}</dd></>}</dl>
       </section>
       <section className="card admin-panel"><h2>Items</h2>
         {order.items.map(item => <div className="admin-order-item" key={item.id}><strong>{item.title} × {item.quantity}</strong><span>{item.sku} · {formatVnd(item.unitPriceVnd * item.quantity)}</span>{Object.entries(item.delivery).filter(([, value]) => value).map(([key, value]) => <small key={key}>{key}: {value}</small>)}</div>)}
@@ -96,6 +104,7 @@ export default function AdminOrderDetail({params}: {params: Promise<{locale: str
 
     {canConfirm && <section className="card admin-panel action-panel"><h2>Confirm payment{scheduleNow ? ' and book the appointment' : ''}</h2>
       <p className="field-caption">{'address' in order.bankSnapshot ? <>Check that the wallet received exactly <strong>{order.cryptoAmount} LTC</strong> (<a href={order.customerTxid ? explorerTx(order.customerTxid) : explorerAddress(order.bankSnapshot.address)} target="_blank" rel="noreferrer">open in explorer</a>). The order value is recorded as {formatVnd(order.totalVnd)}.</> : <>Check your bank statement for <strong>{formatVnd(order.totalVnd)}</strong> with content <strong>{order.code}</strong>.</>}{order.status === 'expired' ? ' This order expired; confirming re-reserves its items if they are still in stock.' : ''}</p>
+      {order.paymentMethod === 'ltc' && <p className="field-caption">The site checks the Litecoin network by itself and confirms at 2 confirmations. <button type="button" className="secondary copy-button" disabled={busy} onClick={() => void act({action: 'check-payment'}, 'Checked the Litecoin network.')}>Check payment now</button></p>}
       <form onSubmit={event => {event.preventDefault(); void act({action: 'confirm-payment', amountVnd: Number(amount), reference, ...(scheduleNow ? {appointment} : {})}, scheduleNow ? 'Payment confirmed and appointment sent to the customer.' : 'Payment confirmed.');}}>
         <div className="admin-field-row"><label>{order.paymentMethod === 'ltc' ? 'Order value received (VND)' : 'Amount received (VND)'}<input type="number" min="1" step="1" value={amount} onChange={event => setAmount(event.target.value)} required/></label><label>{order.paymentMethod === 'ltc' ? 'Transaction ID (optional)' : 'Bank reference (optional)'}<input value={reference} onChange={event => setReference(event.target.value)} maxLength={120} placeholder={order.paymentMethod === 'ltc' ? '64-character TXID' : 'e.g. FT26273…'}/></label></div>
         {Number(amount) !== order.totalVnd && amount !== '' && <p className="admin-feedback error">This differs from the order total ({formatVnd(order.totalVnd)}). Confirm only if you accept it.</p>}
@@ -106,6 +115,11 @@ export default function AdminOrderDetail({params}: {params: Promise<{locale: str
     </section>}
 
     {canSchedule && <section className="card admin-panel action-panel"><h2>{order.status === 'scheduled' ? 'Change the appointment' : 'Book the appointment'}</h2>
+      <div className="start-now">
+        <div><strong>Free right now?</strong><p className="field-caption">{order.asap ? 'The customer said they are free now. ' : ''}Starts the appointment immediately and messages the customer in Chat, Inbox and email.</p></div>
+        <label>Length<select value={startMinutes} onChange={event => setStartMinutes(event.target.value)}><option value="30">30 minutes</option><option value="60">1 hour</option><option value="90">1.5 hours</option><option value="120">2 hours</option></select></label>
+        <button type="button" disabled={busy} onClick={() => { if (window.confirm(`Start order ${order.code} now and notify the customer?`)) void act({action: 'start-now', minutes: Number(startMinutes)}, 'Started now; the customer was messaged in Chat.'); }}>Start now</button>
+      </div>
       <form onSubmit={event => {event.preventDefault(); void act({action: 'schedule', appointment}, order.status === 'scheduled' ? 'Appointment changed; the customer was notified.' : 'Appointment booked; the customer was notified.');}}>
         {timePicker}
         <button type="submit" disabled={busy}>{order.status === 'scheduled' ? 'Save new time & notify' : 'Book & notify customer'}</button>

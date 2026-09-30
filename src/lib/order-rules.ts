@@ -61,7 +61,9 @@ export const reportSchema = z.object({
   timeZone: z.string().max(64),
   slots: z.array(slot).min(1, 'Add at least one time.').max(MAX_SLOTS, `Add at most ${MAX_SLOTS} times.`),
   // Optional Litecoin transaction id so the shop can find the payment quickly.
-  txid: z.string().trim().regex(/^[0-9a-fA-F]{64}$/, 'The transaction ID is 64 letters and digits (0-9, a-f).').optional().or(z.literal('').transform(() => undefined))
+  txid: z.string().trim().regex(/^[0-9a-fA-F]{64}$/, 'The transaction ID is 64 letters and digits (0-9, a-f).').optional().or(z.literal('').transform(() => undefined)),
+  // "I am free right now": the shop can start as soon as an Admin is available.
+  asap: z.boolean().optional()
 }).strict();
 
 /** Checks customer time windows: future (≥ 15 min), within 30 days, 30 min to 12 h long. Returns an error message or null. */
@@ -70,7 +72,7 @@ export function slotProblem(slots: {start: string; end: string}[], now = Date.no
     const start = Date.parse(item.start); const end = Date.parse(item.end);
     const label = `Time ${index + 1}`;
     if (!Number.isFinite(start) || !Number.isFinite(end)) return `${label} is not a valid date.`;
-    if (start < now + 15 * 60_000) return `${label} must start at least 15 minutes from now.`;
+    if (start < now - 10 * 60_000) return `${label} must not be in the past.`;
     if (start > now + 30 * 24 * 60 * 60_000) return `${label} must be within the next 30 days.`;
     if (end - start < 30 * 60_000) return `${label} must be at least 30 minutes long.`;
     if (end - start > 12 * 60 * 60_000) return `${label} must be at most 12 hours long.`;

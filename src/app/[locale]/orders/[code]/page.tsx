@@ -11,6 +11,7 @@ import {formatRange, statusLabels, statusTone, type OrderStatus} from '@/lib/ord
 type Order = {
   id: string; code: string; status: OrderStatus; totalVnd: number; vndPerUsd: number; holdExpiresAt: string; createdAt: string;
   paymentMethod: 'bank' | 'ltc'; cryptoAmount: string | null; cryptoRateVnd: number | null; customerTxid: string | null;
+  asap: boolean; paymentSource: string | null; paymentSeenAt: string | null; txConfirmations: number | null;
   bankSnapshot: {bankName: string; accountNumber: string; accountHolder: string} | {network: 'LTC'; address: string; label: string};
   appointmentStart: string | null; appointmentEnd: string | null; deliveryNote: string | null; cancelReason: string | null;
   items: {title: string; sku: string; unitPriceVnd: number; quantity: number; delivery: Record<string, string>}[];
@@ -31,6 +32,7 @@ export default function OrderPage({params}: {params: Promise<{locale: string; co
   const [order, setOrder] = useState<Order | null>(null);
   const [qr, setQr] = useState<string | null>(null);
   const [paymentUri, setPaymentUri] = useState<string | null>(null);
+  const [autoDetect, setAutoDetect] = useState(false);
   const [offset, setOffset] = useState(0);
   const [now, setNow] = useState(Date.now());
   const [error, setError] = useState('');
@@ -43,14 +45,14 @@ export default function OrderPage({params}: {params: Promise<{locale: string; co
     if (response?.status === 401) { router.replace(`/${locale}/login?next=account`); return; }
     const data = await response?.json().catch(() => null);
     if (!response?.ok || !data?.order) { setError(data?.error ?? 'This order could not be loaded.'); return; }
-    setOrder(data.order); setQr(data.qrSvg); setPaymentUri(data.paymentUri ?? null); setOffset(Date.parse(data.serverTime) - Date.now()); setError('');
+    setOrder(data.order); setQr(data.qrSvg); setPaymentUri(data.paymentUri ?? null); setAutoDetect(Boolean(data.autoDetect)); setOffset(Date.parse(data.serverTime) - Date.now()); setError('');
   }, [code, locale, router]);
 
   useEffect(() => {void load();}, [load]);
   // Refresh while waiting on the shop so confirmations appear without reloading.
   useEffect(() => {
     if (!order || !['awaiting_payment', 'payment_reported', 'paid'].includes(order.status)) return;
-    const timer = window.setInterval(() => void load(), 20000);
+    const timer = window.setInterval(() => void load(), order.status === 'awaiting_payment' ? 10000 : 20000);
     return () => window.clearInterval(timer);
   }, [order, load]);
   useEffect(() => { const timer = window.setInterval(() => setNow(Date.now()), 1000); return () => window.clearInterval(timer); }, []);
@@ -98,17 +100,22 @@ export default function OrderPage({params}: {params: Promise<{locale: string; co
             </>}
           </div>
           <div className="pay-actions"><button type="button" disabled={secondsLeft <= 0} onClick={() => setDialog('report')}>{order.paymentMethod === 'ltc' ? 'I’ve sent the LTC →' : 'I’ve transferred →'}</button><button type="button" className="secondary" onClick={() => { if (window.confirm('Cancel this order?')) void act({action: 'cancel'}).then(failure => failure ? setError(failure) : setNotice('Order cancelled.')); }}>Cancel order</button></div>
+          {order.paymentSeenAt && <p className="payment-seen" role="status">Payment seen on the Litecoin network. Waiting for confirmations ({Math.min(order.txConfirmations ?? 0, 2)}/2); this page updates by itself.</p>}
+          {autoDetect && !order.paymentSeenAt && <p className="field-caption">This page updates by itself when your payment arrives, usually within a minute or two. You can also tap the button after paying.</p>}
           {secondsLeft <= 0 && <p className="field-caption">If you already transferred, message us in <Link href={`/${locale}/workspace`}>Chat</Link> with the order code.</p>}
         </section>}
 
         {(order.status === 'payment_reported' || order.status === 'paid') && <section className="card">
           <span className="eyebrow">{order.status === 'paid' ? 'PAYMENT CONFIRMED' : 'CHECKING YOUR PAYMENT'}</span>
           {order.customerTxid && <p className="field-caption">Your transaction: <a href={explorerTx(order.customerTxid)} target="_blank" rel="noreferrer">{order.customerTxid.slice(0, 12)}…</a></p>}
-          <h2>{order.status === 'paid' ? 'We are booking one of your times' : 'Thanks! We are confirming your transfer'}</h2>
+          <h2>{order.status === 'paid' ? (order.slots.length || order.asap ? 'We are booking your appointment' : 'Payment received! When are you free?') : 'Thanks! We are confirming your transfer'}</h2>
+          {order.paymentSource && order.status === 'paid' && <p className="payment-seen">Payment confirmed automatically{order.paymentSource === 'blockchain' ? ' on the Litecoin network' : ' from your bank transfer'}.</p>}
+          {order.status === 'payment_reported' && order.paymentSeenAt && <p className="payment-seen" role="status">Payment seen on the Litecoin network ({Math.min(order.txConfirmations ?? 0, 2)}/2 confirmations). It is confirmed automatically.</p>}
+          {order.asap && <p className="payment-seen">You are free right now: we will message you in <Link href={`/${locale}/workspace`}>Chat</Link> as soon as an Admin is available.</p>}
           <p className="muted">You will get an email and a message in your <Link href={`/${locale}/inbox`}>Inbox</Link> when your appointment is booked.</p>
-          <h3>Your available times</h3>
-          <ul className="slot-list">{order.slots.map(slot => <li key={slot.startsAt}>{formatRange(slot.startsAt, slot.endsAt, timeZone)}</li>)}</ul>
-          <button type="button" className="secondary" onClick={() => setDialog('update-times')}>Change my times</button>
+          {order.slots.length > 0 && <><h3>Your available times</h3>
+          <ul className="slot-list">{order.slots.map(slot => <li key={slot.startsAt}>{formatRange(slot.startsAt, slot.endsAt, timeZone)}</li>)}</ul></>}
+          <button type="button" className={order.slots.length || order.asap ? 'secondary' : ''} onClick={() => setDialog('update-times')}>{order.slots.length || order.asap ? 'Change my times' : 'Choose my times'}</button>
         </section>}
 
         {order.status === 'scheduled' && calendar && <section className="card appointment-card">
@@ -130,7 +137,7 @@ export default function OrderPage({params}: {params: Promise<{locale: string; co
         <p className="field-caption">Placed {new Date(order.createdAt).toLocaleString('en-GB')}</p>
       </aside>
     </div>
-    <TimeSlotsDialog open={dialog !== null} askTxid={dialog === 'report' && order.paymentMethod === 'ltc'} title={dialog === 'report' ? 'When can you receive your order?' : 'Change your available times'} submitLabel={dialog === 'report' ? 'Send my times' : 'Save times'} onClose={() => setDialog(null)} onSubmit={async input => {
+    <TimeSlotsDialog open={dialog !== null} askTxid={dialog === 'report' && order.paymentMethod === 'ltc'} title={dialog === 'report' || !order.slots.length ? 'When can you receive your order?' : 'Change your available times'} submitLabel={dialog === 'report' || !order.slots.length ? 'Send my times' : 'Save times'} onClose={() => setDialog(null)} onSubmit={async input => {
       const failure = await act({action: dialog ?? 'report', ...input});
       if (!failure) { setDialog(null); setNotice(dialog === 'report' ? 'Thanks! We received your times and are confirming your payment.' : 'Your times were updated.'); }
       return failure;

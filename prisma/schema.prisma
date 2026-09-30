@@ -260,6 +260,11 @@ model Order {
   cryptoAmount       String?
   cryptoRateVnd      Int?
   customerTxid       String?
+  asap               Boolean        @default(false)
+  paymentSource      String?
+  paymentSeenAt      DateTime?
+  txConfirmations    Int?
+  reminderSentAt     DateTime?
   holdExpiresAt      DateTime
   reportedAt         DateTime?
   customerTimeZone   String?
@@ -373,4 +378,21 @@ model CryptoWallet {
   active       Boolean  @default(true)
   lastAssigned DateTime @default(now())
   createdAt    DateTime @default(now())
+}
+
+// Incoming bank transfers reported by SePay (idempotency, matching and an audit trail of unmatched money).
+model BankTransaction {
+  id            String   @id
+  provider      String
+  amountVnd     Int
+  content       String
+  referenceCode String?
+  accountNumber String?
+  gateway       String?
+  orderId       String?
+  outcome       String
+  receivedAt    DateTime @default(now())
+
+  @@index([receivedAt])
+  @@index([orderId])
 }

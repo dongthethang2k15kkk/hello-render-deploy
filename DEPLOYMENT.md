@@ -113,6 +113,25 @@ sau 20 giây; chỉ đúng khi chạy **một instance** (đúng với Render Fr
   số lẻ riêng để nhận ra đơn nào đã trả; khách có thể dán TXID. Kiểm tra tiền về trên litecoinspace.org.
 - **Liên hệ**: Discord `https://discord.gg/pD4MdsJB` (`src/lib/contact.ts`, ảnh `public/contact/discord-qr.png`).
 
+## Tự nhận diện thanh toán, "rảnh ngay" và nhắc hẹn (2026-09-30)
+
+- **Chuyển khoản ngân hàng (SePay, gói miễn phí 50 giao dịch/tháng)**: đăng ký https://my.sepay.vn, liên kết đúng tài
+  khoản ngân hàng đang dùng trong Settings → Payments. Trong web: Settings → Payments → *Automatic bank payment detection*
+  → **Generate key** (key chỉ hiện một lần). Trong SePay → Webhooks → thêm webhook: URL
+  `https://jewish-horse.onrender.com/api/payments/sepay`, sự kiện *Có tiền vào*, xác thực *API Key*, dán key. Khi nội
+  dung chuyển khoản có mã đơn `JH…` và số tiền đủ, đơn tự chuyển sang *Paid*, khách và mọi Admin được báo. Thiếu tiền →
+  Admin nhận email, đơn giữ nguyên. Danh sách *Recent incoming transfers* cho biết từng giao dịch đã được xử lý ra sao.
+  Tạo key mới thì key cũ hết hiệu lực ngay.
+- **Litecoin**: không cần cài gì; web tự đọc blockchain qua litecoinspace.org khi khách/Admin mở trang đơn và mỗi lần
+  lịch định kỳ chạy, tự xác nhận khi giao dịch đủ 2 confirmations. Admin có nút *Check payment now*.
+- **Lịch định kỳ**: Render Free không có cron, nên `.github/workflows/tick.yml` gọi `GET /api/cron/tick` mỗi 15 phút từ
+  08:00 đến 23:59 giờ Việt Nam (GitHub có thể chạy trễ vài phút). Tick: hết hạn đơn chưa trả, kiểm tra LTC, gửi nhắc hẹn
+  (Chat + Inbox + email ~10–20 phút trước giờ hẹn, mỗi lịch một lần). Khi có Admin đang mở trang Admin, việc này cũng
+  chạy mỗi 3 phút kể cả ban đêm. Chạy tay: GitHub → Actions → *Shop housekeeping* → *Run workflow*. GitHub tự tắt lịch
+  của repo public sau 60 ngày không có commit; khi đó bấm *Enable workflow*.
+- **Rảnh ngay**: khách tích *I'm free right now* khi báo đã chuyển khoản hoặc sau khi thanh toán tự nhận diện. Admin thấy
+  nhãn *Free now*, bấm **Start now** (30 phút–2 giờ) → khách nhận ngay tin trong Chat, Inbox và email.
+
 ## Chạy Docker trên máy
 
 Cài Docker Desktop tương thích kiến trúc máy và bật Linux containers. Máy đã

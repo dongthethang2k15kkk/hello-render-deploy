@@ -12,6 +12,8 @@ import {notifyCustomer} from './notifications';
 import {allAdminEmails} from './admin-team';
 import {appointmentProblem, generateOrderCode, HOLD_MINUTES, NEEDS_ACTION, nextStatus, slotProblem, validTimeZone, VN_TIME_ZONE, type OrderStatus} from './order-rules';
 import {getPaymentDb} from './payment-db';
+import {alertAppointment} from './payment-detection';
+import {reReserveItems, restockItems, StockError} from './order-stock';
 import {uniqueLitoshi} from './ltc';
 import {formatLtc, parseLtc} from './ltc-format';
 import {getLtcRate} from './ltc-rate';
@@ -28,10 +30,7 @@ export type PaymentSnapshot = BankSnapshot | WalletSnapshot;
 const txOptions = {maxWait: 10000, timeout: 20000};
 const customerLink = (code: string) => `/en/orders/${code}`;
 
-async function restock(tx: Tx, orderId: string) {
-  const items = await tx.orderItem.findMany({where: {orderId}, select: {packageId: true, quantity: true}});
-  for (const item of items) await tx.package.updateMany({where: {id: item.packageId}, data: {stockOnHand: {increment: item.quantity}}});
-}
+const restock = restockItems;
 
 const expiryState = globalThis as unknown as {orderExpiryAt?: number};
 /** Expires unpaid orders past their 30-minute hold and returns their stock. Render Free has no scheduler, so reads call this. */
@@ -134,7 +133,7 @@ export async function customerOrders(customerId: string) {
   return getPaymentDb().order.findMany({where: {customerId}, orderBy: {createdAt: 'desc'}, take: 100, select: {code: true, status: true, totalVnd: true, vndPerUsd: true, createdAt: true, appointmentStart: true, appointmentEnd: true, customerTimeZone: true, items: {select: {title: true, quantity: true}}}});
 }
 
-export async function reportTransfer(customer: {id: string; name: string; email: string}, code: string, input: {timeZone: string; slots: {start: string; end: string}[]; txid?: string}, origin: string) {
+export async function reportTransfer(customer: {id: string; name: string; email: string}, code: string, input: {timeZone: string; slots: {start: string; end: string}[]; txid?: string; asap?: boolean}, origin: string) {
   const db = getPaymentDb();
   const order = await db.order.findFirst({where: {code, customerId: customer.id}, include: {items: true}});
   if (!order) throw new OrderError('Order not found.', 404);
@@ -148,7 +147,7 @@ export async function reportTransfer(customer: {id: string; name: string; email:
   const timeZone = validTimeZone(input.timeZone) ? input.timeZone : VN_TIME_ZONE;
   const slots = input.slots.map(slot => ({startsAt: new Date(slot.start), endsAt: new Date(slot.end)})).sort((a, b) => a.startsAt.getTime() - b.startsAt.getTime());
   await db.$transaction(async tx => {
-    const changed = await tx.order.updateMany({where: {id: order.id, status: 'awaiting_payment'}, data: {status: 'payment_reported', reportedAt: new Date(), customerTimeZone: timeZone, ...(input.txid ? {customerTxid: input.txid.toLowerCase()} : {})}});
+    const changed = await tx.order.updateMany({where: {id: order.id, status: 'awaiting_payment'}, data: {status: 'payment_reported', reportedAt: new Date(), customerTimeZone: timeZone, asap: Boolean(input.asap), ...(input.txid ? {customerTxid: input.txid.toLowerCase()} : {})}});
     if (changed.count !== 1) throw new OrderError('This order is not waiting for payment.', 409);
     await tx.orderSlot.createMany({data: slots.map(slot => ({orderId: order.id, ...slot}))});
     await tx.orderEvent.create({data: {orderId: order.id, actor: 'customer', action: 'payment_reported', note: `${slots.length} available time${slots.length === 1 ? '' : 's'} proposed`}});
@@ -158,9 +157,9 @@ export async function reportTransfer(customer: {id: string; name: string; email:
   await sendMail({to: await allAdminEmails(), ...mail, kind: 'admin.payment_reported', orderId: order.id});
 }
 
-export async function updateTimes(customerId: string, code: string, input: {timeZone: string; slots: {start: string; end: string}[]}) {
+export async function updateTimes(customerId: string, code: string, input: {timeZone: string; slots: {start: string; end: string}[]; asap?: boolean}, origin = '') {
   const db = getPaymentDb();
-  const order = await db.order.findFirst({where: {code, customerId}, select: {id: true, status: true}});
+  const order = await db.order.findFirst({where: {code, customerId}, select: {id: true, code: true, status: true, asap: true, customer: {select: {name: true}}, _count: {select: {slots: true}}}});
   if (!order) throw new OrderError('Order not found.', 404);
   if (order.status !== 'payment_reported' && order.status !== 'paid') throw new OrderError('Times can only be changed before the appointment is booked. Message us in Chat.', 409);
   const problem = slotProblem(input.slots);
@@ -168,9 +167,13 @@ export async function updateTimes(customerId: string, code: string, input: {time
   await db.$transaction(async tx => {
     await tx.orderSlot.deleteMany({where: {orderId: order.id}});
     await tx.orderSlot.createMany({data: input.slots.map(slot => ({orderId: order.id, startsAt: new Date(slot.start), endsAt: new Date(slot.end)}))});
-    await tx.order.update({where: {id: order.id}, data: {customerTimeZone: validTimeZone(input.timeZone) ? input.timeZone : VN_TIME_ZONE}});
-    await tx.orderEvent.create({data: {orderId: order.id, actor: 'customer', action: 'times_updated', note: `${input.slots.length} available time${input.slots.length === 1 ? '' : 's'}`}});
+    await tx.order.update({where: {id: order.id}, data: {customerTimeZone: validTimeZone(input.timeZone) ? input.timeZone : VN_TIME_ZONE, asap: Boolean(input.asap)}});
+    await tx.orderEvent.create({data: {orderId: order.id, actor: 'customer', action: 'times_updated', note: input.asap ? 'Free right now' : `${input.slots.length} available time${input.slots.length === 1 ? '' : 's'}`}});
   }, txOptions);
+  // After an automatic payment the Admins have not seen any times yet, so tell them when the customer picks some.
+  if (order.status === 'paid' && (order._count.slots === 0 || (input.asap && !order.asap)) && origin) {
+    await sendMail({to: await allAdminEmails(), ...templates.adminTimesAdded({code: order.code, customerName: order.customer.name, slots: input.slots, asap: Boolean(input.asap), orderUrl: `${origin}/en/admin/orders/${order.id}`}), kind: 'admin.times_added', orderId: order.id});
+  }
 }
 
 export async function cancelByCustomer(customerId: string, code: string) {
@@ -246,6 +249,11 @@ async function sendAppointment(order: {id: string; code: string; customerTimeZon
     sendMail({to: [order.customer.email], ...customerMail, attachments: ics, kind: rescheduled ? 'customer.rescheduled' : 'customer.appointment', orderId: order.id}),
     sendMail({to: [adminEmail], ...adminMail, attachments: [{...ics[0], content: icsEvent(adminCalendar)}], kind: 'admin.appointment', orderId: order.id})
   ]);
+  // A new or changed time resets the reminder. An appointment starting within 20 minutes is announced in Chat and
+  // Inbox right away (the appointment email above already went out).
+  await getPaymentDb().order.update({where: {id: order.id}, data: {reminderSentAt: null}});
+  const lead = start.getTime() - Date.now();
+  if (lead <= 20 * 60_000) await alertAppointment(order.id, origin, lead <= 2 * 60_000, {email: false});
 }
 
 /** Confirms the transfer and, optionally in the same step, books the appointment. */
@@ -259,15 +267,8 @@ export async function confirmPayment(adminEmail: string, id: string, input: {amo
   }
   const status: OrderStatus = input.appointment ? 'scheduled' : 'paid';
   await getPaymentDb().$transaction(async tx => {
-    if (order.status === 'expired') {
-      // A late transfer revives the order only if its items can be reserved again.
-      const items = await tx.orderItem.findMany({where: {orderId: id}, select: {packageId: true, quantity: true}});
-      for (const item of items) {
-        const reserved = await tx.package.updateMany({where: {id: item.packageId, stockOnHand: {gte: item.quantity}}, data: {stockOnHand: {decrement: item.quantity}}});
-        if (reserved.count !== 1) throw new OrderError('This expired order can no longer be filled: an item is out of stock. Cancel it and refund the customer, or add stock first.', 409);
-      }
-      await tx.order.update({where: {id}, data: {cancelledAt: null, cancelReason: null}});
-    }
+    // A late transfer revives the order only if its items can be reserved again.
+    if (order.status === 'expired') await reReserveItems(tx, id).catch(error => { throw error instanceof StockError ? new OrderError(error.message, 409) : error; });
     const changed = await tx.order.updateMany({where: {id, status: order.status}, data: {
       status, paidAt: new Date(), paidAmountVnd: input.amountVnd, paymentReference: input.reference || null, paymentConfirmedBy: adminEmail, assignedAdmin: adminEmail,
       ...(input.appointment ? {appointmentStart: input.appointment.start, appointmentEnd: input.appointment.end} : {})

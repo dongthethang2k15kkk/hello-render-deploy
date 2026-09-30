@@ -7,18 +7,25 @@ import {orderCodePattern, reportSchema} from '@/lib/order-rules';
 import {cancelByCustomer, customerOrder, OrderError, reportTransfer, updateTimes} from '@/lib/order-store';
 import {litecoinUri} from '@/lib/ltc-format';
 import {vietQrPayload} from '@/lib/vietqr';
+import {checkLtcOrder, getSepayKey} from '@/lib/payment-detection';
 
 export const runtime = 'nodejs';
 const json = (data: unknown, status = 200) => Response.json(data, {status, headers: {'Cache-Control': 'no-store'}});
 
-export async function GET(_request: Request, {params}: {params: Promise<{code: string}>}) {
+export async function GET(request: Request, {params}: {params: Promise<{code: string}>}) {
   const account = await getSession();
   if (account?.role !== 'user') return json({error: 'Sign in required.'}, 401);
   const {code} = await params;
   if (!orderCodePattern.test(code)) return json({error: 'Order not found.'}, 404);
   try {
-    const order = await customerOrder(account.id, code);
+    let order = await customerOrder(account.id, code);
     if (!order) return json({error: 'Order not found.'}, 404);
+    if (order.paymentMethod === 'ltc' && ['awaiting_payment', 'payment_reported'].includes(order.status)) {
+      const check = await checkLtcOrder(order.id, appOrigin(request.url));
+      if (check?.seen) order = (await customerOrder(account.id, code)) ?? order;
+    }
+    // Tells the page whether it will update by itself when the money arrives.
+    const autoDetect = order.paymentMethod === 'ltc' || Boolean(await getSepayKey().catch(() => null));
     let qrSvg: string | null = null;
     let paymentUri: string | null = null;
     if (order.status === 'awaiting_payment') {
@@ -27,7 +34,7 @@ export async function GET(_request: Request, {params}: {params: Promise<{code: s
       const payload = 'address' in snapshot ? paymentUri! : vietQrPayload({bankBin: snapshot.bankBin, accountNumber: snapshot.accountNumber, amountVnd: order.totalVnd, note: order.code});
       qrSvg = await QRCode.toString(payload, {type: 'svg', margin: 1, errorCorrectionLevel: 'M'});
     }
-    return json({order, qrSvg, paymentUri, serverTime: new Date().toISOString()});
+    return json({order, qrSvg, paymentUri, autoDetect, serverTime: new Date().toISOString()});
   } catch (error) {
     console.error('Order load failed', error instanceof Error ? error.message.split('\n')[0] : error);
     return json({error: 'This order is unavailable right now.'}, 503);
@@ -51,7 +58,7 @@ export async function POST(request: Request, {params}: {params: Promise<{code: s
   try {
     const input = parsed.data;
     if (input.action === 'report') await reportTransfer(account, code, input, appOrigin(request.url));
-    else if (input.action === 'update-times') await updateTimes(account.id, code, input);
+    else if (input.action === 'update-times') await updateTimes(account.id, code, input, appOrigin(request.url));
     else await cancelByCustomer(account.id, code);
     return json({ok: true});
   } catch (error) {
