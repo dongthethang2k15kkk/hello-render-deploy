@@ -8,7 +8,7 @@ nhận tiền, chốt lịch hẹn và giao hàng qua chat trên web. Live: http
 ## Chức năng hiện có
 
 **Khách hàng**
-- Đăng ký / đăng nhập bằng email + mật khẩu hoặc Google; trang Account, Forgot password (QR Zalo), Privacy.
+- Đăng ký / đăng nhập bằng email + mật khẩu hoặc Google; trang Account, Forgot password (Discord: link + QR), Privacy.
 - Catalog từ PostgreSQL: giá nhập bằng VND, hiển thị USD (to) và VND (nhỏ) theo tỷ giá Admin đặt.
 - Giỏ hàng lưu trên thiết bị; Checkout tạo đơn thật, giữ hàng 30 phút.
 - Trang đơn: mã VietQR điền sẵn số tiền + nội dung (mã đơn), đồng hồ đếm ngược, nút "I've transferred"

@@ -28,6 +28,8 @@ export function AdminPresenceProvider({children}: {children: React.ReactNode}) {
   const beat = useCallback(async (signal?: AbortSignal) => {
     try {
       const response = await fetch('/api/admin/presence', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({resource: resourceRef.current}), cache: 'no-store', signal});
+      // The Admin session expired (24 h) while this tab stayed open: sign in again and return here.
+      if (response.status === 403) { window.location.assign(`/en/login?next=${encodeURIComponent(window.location.pathname)}`); return; }
       if (!response.ok) return;
       const data = await response.json() as {self: string; admins: PresenceAdmin[]};
       setSelf(data.self);

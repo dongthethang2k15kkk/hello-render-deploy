@@ -14,7 +14,7 @@ viewable; Admin can set a new password for a customer who forgot theirs.
 |---|---|
 | Customer sign-in | Google, or email + password |
 | Email delivery | None for now (no owned domain; Render Free blocks SMTP). Password accounts are unverified |
-| Forgotten password | `/en/forgot-password` shows the shop's Zalo QR (`public/contact/zalo-qr.png`). Admin verifies identity and sets a new password |
+| Forgotten password | `/en/forgot-password` shows the shop's Discord invite (link and QR, `public/contact/discord-qr.png`; the owner first described it as Zalo). Admin verifies identity and sets a new password |
 | Sign-in history | Time, method, result, device (user agent) and IP; deleted after 90 days |
 | Chat | Stored in PostgreSQL; chat images are private and deleted after 90 days; text is kept |
 | Session length | Customers 30 days; revoked on password change, lock, or "sign out everywhere". Admin unchanged (Google, 8 h signed cookie) |

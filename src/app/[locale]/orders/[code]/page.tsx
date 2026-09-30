@@ -5,11 +5,13 @@ import {useRouter} from 'next/navigation';
 import TimeSlotsDialog from '@/components/time-slots-dialog';
 import {googleCalendarLink} from '@/lib/calendar';
 import {formatUsdFromVnd, formatVnd} from '@/lib/money';
+import {explorerTx} from '@/lib/ltc-format';
 import {formatRange, statusLabels, statusTone, type OrderStatus} from '@/lib/order-rules';
 
 type Order = {
   id: string; code: string; status: OrderStatus; totalVnd: number; vndPerUsd: number; holdExpiresAt: string; createdAt: string;
-  bankSnapshot: {bankName: string; accountNumber: string; accountHolder: string};
+  paymentMethod: 'bank' | 'ltc'; cryptoAmount: string | null; cryptoRateVnd: number | null; customerTxid: string | null;
+  bankSnapshot: {bankName: string; accountNumber: string; accountHolder: string} | {network: 'LTC'; address: string; label: string};
   appointmentStart: string | null; appointmentEnd: string | null; deliveryNote: string | null; cancelReason: string | null;
   items: {title: string; sku: string; unitPriceVnd: number; quantity: number; delivery: Record<string, string>}[];
   slots: {startsAt: string; endsAt: string}[];
@@ -28,6 +30,7 @@ export default function OrderPage({params}: {params: Promise<{locale: string; co
   const router = useRouter();
   const [order, setOrder] = useState<Order | null>(null);
   const [qr, setQr] = useState<string | null>(null);
+  const [paymentUri, setPaymentUri] = useState<string | null>(null);
   const [offset, setOffset] = useState(0);
   const [now, setNow] = useState(Date.now());
   const [error, setError] = useState('');
@@ -40,7 +43,7 @@ export default function OrderPage({params}: {params: Promise<{locale: string; co
     if (response?.status === 401) { router.replace(`/${locale}/login?next=account`); return; }
     const data = await response?.json().catch(() => null);
     if (!response?.ok || !data?.order) { setError(data?.error ?? 'This order could not be loaded.'); return; }
-    setOrder(data.order); setQr(data.qrSvg); setOffset(Date.parse(data.serverTime) - Date.now()); setError('');
+    setOrder(data.order); setQr(data.qrSvg); setPaymentUri(data.paymentUri ?? null); setOffset(Date.parse(data.serverTime) - Date.now()); setError('');
   }, [code, locale, router]);
 
   useEffect(() => {void load();}, [load]);
@@ -71,25 +74,36 @@ export default function OrderPage({params}: {params: Promise<{locale: string; co
     <div className="order-layout">
       <div>
         {order.status === 'awaiting_payment' && <section className="card pay-card">
-          <span className="eyebrow">STEP 1 / PAY BY BANK TRANSFER</span>
+          <span className="eyebrow">STEP 1 / {order.paymentMethod === 'ltc' ? 'PAY WITH LITECOIN' : 'PAY BY BANK TRANSFER'}</span>
           <h2>{secondsLeft > 0 ? <>Pay within <span className="countdown">{Math.floor(secondsLeft / 60)}:{String(secondsLeft % 60).padStart(2, '0')}</span></> : 'Payment window ended'}</h2>
           <div className="pay-grid">
-            {qr && <figure className="vietqr"><img src={`data:image/svg+xml;utf8,${encodeURIComponent(qr)}`} alt={`VietQR code: ${formatVnd(order.totalVnd)} to ${order.bankSnapshot.bankName}`}/><figcaption>Scan with your banking app</figcaption></figure>}
-            <div className="pay-details">
-              <Copy label="Bank" value={order.bankSnapshot.bankName}/>
-              <Copy label="Account number" value={order.bankSnapshot.accountNumber}/>
-              <Copy label="Account holder" value={order.bankSnapshot.accountHolder}/>
-              <Copy label="Amount (VND)" value={String(order.totalVnd)}/>
-              <Copy label="Transfer content" value={order.code}/>
-              <p className="field-caption">Transfer exactly <strong>{formatVnd(order.totalVnd)}</strong> with the content <strong>{order.code}</strong> so we can match your payment.</p>
-            </div>
+            {'address' in order.bankSnapshot ? <>
+              {qr && <figure className="vietqr"><img src={`data:image/svg+xml;utf8,${encodeURIComponent(qr)}`} alt={`Litecoin QR code: ${order.cryptoAmount} LTC`}/><figcaption>Scan with your Litecoin wallet</figcaption></figure>}
+              <div className="pay-details">
+                <Copy label="Amount (LTC)" value={order.cryptoAmount ?? ''}/>
+                <Copy label="Litecoin address" value={order.bankSnapshot.address}/>
+                {paymentUri && <a className="button full-width" href={paymentUri}>Open in wallet app</a>}
+                <p className="field-caption">Send <strong>exactly {order.cryptoAmount} LTC</strong> (≈ {formatVnd(order.totalVnd)}). The last digits identify your order, so do not round the amount. Send on the Litecoin network only.</p>
+              </div>
+            </> : <>
+              {qr && <figure className="vietqr"><img src={`data:image/svg+xml;utf8,${encodeURIComponent(qr)}`} alt={`VietQR code: ${formatVnd(order.totalVnd)} to ${order.bankSnapshot.bankName}`}/><figcaption>Scan with your banking app</figcaption></figure>}
+              <div className="pay-details">
+                <Copy label="Bank" value={order.bankSnapshot.bankName}/>
+                <Copy label="Account number" value={order.bankSnapshot.accountNumber}/>
+                <Copy label="Account holder" value={order.bankSnapshot.accountHolder}/>
+                <Copy label="Amount (VND)" value={String(order.totalVnd)}/>
+                <Copy label="Transfer content" value={order.code}/>
+                <p className="field-caption">Transfer exactly <strong>{formatVnd(order.totalVnd)}</strong> with the content <strong>{order.code}</strong> so we can match your payment.</p>
+              </div>
+            </>}
           </div>
-          <div className="pay-actions"><button type="button" disabled={secondsLeft <= 0} onClick={() => setDialog('report')}>I’ve transferred →</button><button type="button" className="secondary" onClick={() => { if (window.confirm('Cancel this order?')) void act({action: 'cancel'}).then(failure => failure ? setError(failure) : setNotice('Order cancelled.')); }}>Cancel order</button></div>
+          <div className="pay-actions"><button type="button" disabled={secondsLeft <= 0} onClick={() => setDialog('report')}>{order.paymentMethod === 'ltc' ? 'I’ve sent the LTC →' : 'I’ve transferred →'}</button><button type="button" className="secondary" onClick={() => { if (window.confirm('Cancel this order?')) void act({action: 'cancel'}).then(failure => failure ? setError(failure) : setNotice('Order cancelled.')); }}>Cancel order</button></div>
           {secondsLeft <= 0 && <p className="field-caption">If you already transferred, message us in <Link href={`/${locale}/workspace`}>Chat</Link> with the order code.</p>}
         </section>}
 
         {(order.status === 'payment_reported' || order.status === 'paid') && <section className="card">
           <span className="eyebrow">{order.status === 'paid' ? 'PAYMENT CONFIRMED' : 'CHECKING YOUR PAYMENT'}</span>
+          {order.customerTxid && <p className="field-caption">Your transaction: <a href={explorerTx(order.customerTxid)} target="_blank" rel="noreferrer">{order.customerTxid.slice(0, 12)}…</a></p>}
           <h2>{order.status === 'paid' ? 'We are booking one of your times' : 'Thanks! We are confirming your transfer'}</h2>
           <p className="muted">You will get an email and a message in your <Link href={`/${locale}/inbox`}>Inbox</Link> when your appointment is booked.</p>
           <h3>Your available times</h3>
@@ -112,11 +126,11 @@ export default function OrderPage({params}: {params: Promise<{locale: string; co
       <aside className="card order-summary">
         <h2>Items</h2>
         {order.items.map((item, index) => <div className="summary-item" key={index}><div className="summary-line"><span>{item.title} × {item.quantity}</span><strong>{formatVnd(item.unitPriceVnd * item.quantity)}</strong></div>{Object.entries(item.delivery).filter(([, value]) => value).map(([key, value]) => <small key={key}>{key}: {value}</small>)}</div>)}
-        <div className="summary-total"><small>Total</small><p className="pay-amount">{formatVnd(order.totalVnd)}</p><small>≈ {formatUsdFromVnd(order.totalVnd, order.vndPerUsd)}</small></div>
+        <div className="summary-total"><small>Total</small><p className="pay-amount">{formatVnd(order.totalVnd)}</p><small>≈ {formatUsdFromVnd(order.totalVnd, order.vndPerUsd)}{order.cryptoAmount ? ` · paid as ${order.cryptoAmount} LTC` : ''}</small></div>
         <p className="field-caption">Placed {new Date(order.createdAt).toLocaleString('en-GB')}</p>
       </aside>
     </div>
-    <TimeSlotsDialog open={dialog !== null} title={dialog === 'report' ? 'When can you receive your order?' : 'Change your available times'} submitLabel={dialog === 'report' ? 'Send my times' : 'Save times'} onClose={() => setDialog(null)} onSubmit={async input => {
+    <TimeSlotsDialog open={dialog !== null} askTxid={dialog === 'report' && order.paymentMethod === 'ltc'} title={dialog === 'report' ? 'When can you receive your order?' : 'Change your available times'} submitLabel={dialog === 'report' ? 'Send my times' : 'Save times'} onClose={() => setDialog(null)} onSubmit={async input => {
       const failure = await act({action: dialog ?? 'report', ...input});
       if (!failure) { setDialog(null); setNotice(dialog === 'report' ? 'Thanks! We received your times and are confirming your payment.' : 'Your times were updated.'); }
       return failure;

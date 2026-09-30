@@ -3,7 +3,8 @@
 import {useEffect, useMemo, useRef, useState} from 'react';
 import {productSlug, storefrontStatus} from '@/lib/admin-product-status';
 import {formatVnd} from '@/lib/money';
-import {MAX_PRODUCT_IMAGE_BYTES, MAX_PRODUCT_IMAGE_SOURCE_BYTES, productImageId, productImageTypes} from '@/lib/product-image';
+import {prepareImage as prepareProductImage} from '@/lib/image-upload';
+import {productImageId} from '@/lib/product-image';
 
 type DeliveryField = {key: string; labelEn: string; required: boolean; maxLength: number};
 type ProductPackage = {sku: string; priceVnd: number; salePriceVnd: number | null; stockOnHand: number; active: boolean; translations: Record<string, {title: string; description: string}>; fields: DeliveryField[]};
@@ -17,28 +18,6 @@ const englishFields = (fields: DeliveryField[] = []) => fields.map(({key, labelE
 const tidyNumber = (event: React.FocusEvent<HTMLInputElement>) => { if (event.target.value !== '') event.target.value = String(Number(event.target.value)); };
 const imageMegabytes = (bytes: number) => `${(bytes / 1024 / 1024).toFixed(bytes >= 1024 * 1024 ? 1 : 2)} MB`;
 
-async function prepareProductImage(file: File) {
-  if (!productImageTypes.has(file.type)) throw new Error('Choose a PNG, JPEG or WebP image.');
-  if (file.size === 0 || file.size > MAX_PRODUCT_IMAGE_SOURCE_BYTES) throw new Error('Choose an image up to 12 MB. Large images are optimized before upload.');
-  let bitmap: ImageBitmap;
-  try { bitmap = await createImageBitmap(file); }
-  catch { throw new Error('This image could not be read. Try exporting it as PNG, JPEG or WebP.'); }
-  try {
-    const maxDimension = 1800;
-    if (file.size <= MAX_PRODUCT_IMAGE_BYTES && bitmap.width <= maxDimension && bitmap.height <= maxDimension) return file;
-    const scale = Math.min(1, maxDimension / Math.max(bitmap.width, bitmap.height));
-    const canvas = document.createElement('canvas');
-    canvas.width = Math.max(1, Math.round(bitmap.width * scale));
-    canvas.height = Math.max(1, Math.round(bitmap.height * scale));
-    const context = canvas.getContext('2d');
-    if (!context) throw new Error('Image optimization is unavailable in this browser.');
-    context.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
-    const blob = await new Promise<Blob | null>(resolve => canvas.toBlob(resolve, 'image/webp', 0.84));
-    if (!blob || blob.size > MAX_PRODUCT_IMAGE_BYTES) throw new Error('The optimized image is still over 2 MB. Choose a smaller image.');
-    const baseName = file.name.replace(/\.[^.]+$/, '').replace(/[^a-zA-Z0-9_-]+/g, '-').slice(0, 80) || 'product';
-    return new File([blob], `${baseName}.webp`, {type: 'image/webp'});
-  } finally { bitmap.close(); }
-}
 
 export default function ProductsAdmin() {
   const [products, setProducts] = useState<Product[]>([]);
@@ -62,6 +41,8 @@ export default function ProductsAdmin() {
     const timer = window.setTimeout(() => controller.abort(), 8000);
     try {
       const response = await fetch('/api/admin/products', {cache: 'no-store', signal: controller.signal});
+      // 403 means the Admin session expired, not a database problem: sign in again and come back here.
+      if (response.status === 403) { window.location.assign(`/en/login?next=${encodeURIComponent(window.location.pathname)}`); return; }
       const data = await response.json();
       if (!response.ok) throw new Error(data.error);
       setProducts(data.products); setDatabaseReady(true); setError('');
@@ -165,7 +146,7 @@ export default function ProductsAdmin() {
     <div className="page-heading admin-page-heading"><div><p className="eyebrow">ADMIN / SETTINGS / PRODUCTS</p><h1>Products</h1><p className="admin-lede">Create products, set prices and stock, and define the information required for delivery.</p></div><button type="button" onClick={startNew} disabled={databaseReady !== true || uploadingImage || busy}>+ New product</button></div>
 
     {databaseReady === null && <div className="admin-system-banner" role="status">Checking product database…</div>}
-    {databaseReady === false && <div className="admin-system-banner error" role="alert"><strong>Product management is unavailable.</strong><span>{error} Configure PostgreSQL before entering product information.</span><button className="secondary" type="button" onClick={() => void load()}>Try again</button></div>}
+    {databaseReady === false && <div className="admin-system-banner error" role="alert"><strong>Product management is unavailable.</strong><span>{error} Try again in a moment; if it keeps failing, check the database status in Admin → Overview.</span><button className="secondary" type="button" onClick={() => void load()}>Try again</button></div>}
 
     {databaseReady === true && <div className="admin-products-layout">
       <aside className="admin-product-list card" aria-label="Product list">

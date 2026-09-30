@@ -64,8 +64,8 @@ export default function AdminCustomerDetail({params}: {params: Promise<{locale: 
       </section>
 
       <section className="card admin-panel"><h2>Set a new password</h2>
-        <p className="field-caption">For a customer who forgot their password. First confirm on Zalo that the person owns <strong>{customer.email}</strong>. The customer’s current password stops working and all their devices are signed out.</p>
-        <form onSubmit={event => {event.preventDefault(); void act({action: 'set-password', password, requireChange}, 'Password set. Send it to the customer on Zalo now; it is not stored anywhere readable and disappears when you leave this page.');}}>
+        <p className="field-caption">For a customer who forgot their password. First confirm on Discord that the person owns <strong>{customer.email}</strong>. The customer’s current password stops working and all their devices are signed out.</p>
+        <form onSubmit={event => {event.preventDefault(); void act({action: 'set-password', password, requireChange}, 'Password set. Send it to the customer on Discord now; it is not stored anywhere readable and disappears when you leave this page.');}}>
           <label>New password<span className="password-field"><input className="admin-mono" value={password} onChange={event => setPassword(event.target.value)} minLength={8} maxLength={128} required autoComplete="off"/><button type="button" className="secondary" onClick={() => setPassword(generatePassword())}>Generate</button></span></label>
           <label className="admin-compact-check"><input type="checkbox" checked={requireChange} onChange={event => setRequireChange(event.target.checked)}/> Customer must choose a new password at next sign-in</label>
           <button type="submit" disabled={busy || password.length < 8}>Set password</button>

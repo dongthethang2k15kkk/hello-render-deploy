@@ -5,7 +5,7 @@ import type {ChatMessage} from '@/lib/chat-store';
 import type {Role} from '@/lib/admin-session';
 import {PresenceBadges, useAdminPresence} from './admin-presence';
 
-type Room = {id: string; name: string; lastMessage?: {body: string; createdAt: string; role: Role} | null};
+type Room = {id: string; name: string; unread?: number; lastMessage?: {body: string; createdAt: string; role: Role} | null};
 
 export default function ChatPanel({role, compact = false, initialRoom = ''}: {role: Role; compact?: boolean; initialRoom?: string}) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -104,7 +104,7 @@ export default function ChatPanel({role, compact = false, initialRoom = ''}: {ro
       {shownRooms.map(item => {
         return <button type="button" className={`chat-room ${room === item.id ? 'active' : ''}`} aria-current={room === item.id ? 'true' : undefined} key={item.id} onClick={() => {roomRef.current = item.id; setRoom(item.id); setImage(null); if (imageInput.current) imageInput.current.value = ''; setShowRoomList(false);}}>
           <span className="chat-avatar" aria-hidden="true">{item.name.charAt(0).toUpperCase()}</span>
-          <span className="chat-room-info"><strong>{item.name}</strong><small>{item.lastMessage?.body ?? ''}</small><PresenceBadges viewers={viewersOf(item.id)} context={`the chat with ${item.name}`}/></span>
+          <span className="chat-room-info"><strong>{item.name}{item.unread ? <b className="room-unread" aria-label={`${item.unread} unread`}>{item.unread}</b> : null}</strong><small>{item.lastMessage?.body ?? ''}</small><PresenceBadges viewers={viewersOf(item.id)} context={`the chat with ${item.name}`}/></span>
           <time dateTime={item.lastMessage?.createdAt}>{item.lastMessage ? new Date(item.lastMessage.createdAt).toLocaleTimeString('en-US', {hour: '2-digit', minute: '2-digit'}) : ''}</time>
         </button>;
       })}

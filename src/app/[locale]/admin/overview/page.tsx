@@ -14,7 +14,7 @@ type Overview = {
   lowStock: {id: string; sku: string; stock: number; title: string}[];
   databaseBytes: number; emailFailures: number;
   mail: {email: string} | null;
-  setup: {bankAccounts: number; gmail: boolean; vndPerUsd: number};
+  setup: {bankAccounts: number; wallets: number; gmail: boolean; vndPerUsd: number};
 };
 
 export default function AdminOverview() {
@@ -32,7 +32,8 @@ export default function AdminOverview() {
     {!data && !error && <p className="muted" role="status">Loading…</p>}
     {data && <>
       {(!data.setup.bankAccounts || !data.setup.gmail) && <section className="card admin-panel setup-panel"><h2>Finish setting up</h2><ul>
-        {!data.setup.bankAccounts && <li>No active bank account: customers cannot place orders. <Link href={`/${locale}/admin/settings/payments`}>Add one →</Link></li>}
+        {!data.setup.bankAccounts && !data.setup.wallets && <li>No active bank account or Litecoin wallet: customers cannot place orders. <Link href={`/${locale}/admin/settings/payments`}>Add one →</Link></li>}
+        {!data.setup.bankAccounts && data.setup.wallets > 0 && <li>Only Litecoin is available: add a bank account so customers can pay by VietQR. <Link href={`/${locale}/admin/settings/payments`}>Add one →</Link></li>}
         {!data.setup.gmail && <li>Gmail is not connected: nobody receives order emails (Inbox messages still work). <Link href={`/${locale}/admin/settings/email`}>Connect Gmail →</Link></li>}
       </ul></section>}
       <div className="stat-grid">

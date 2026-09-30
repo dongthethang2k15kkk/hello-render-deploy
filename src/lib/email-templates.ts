@@ -25,16 +25,18 @@ const plain = (title: string, lines: string[], links: {label: string; url: strin
 
 type Slot = {start: Date | string; end: Date | string};
 
-export function adminPaymentReported(input: {code: string; customerName: string; customerEmail: string; totalVnd: number; items: string[]; slots: Slot[]; orderUrl: string}): EmailContent {
-  const title = `Đơn ${input.code} đã báo chuyển khoản`;
+export function adminPaymentReported(input: {code: string; customerName: string; customerEmail: string; totalVnd: number; crypto?: {amount: string; address: string; txid: string | null} | null; items: string[]; slots: Slot[]; orderUrl: string}): EmailContent {
+  const title = `Đơn ${input.code} đã báo ${input.crypto ? 'gửi Litecoin' : 'chuyển khoản'}`;
   const lines = [
-    `Khách <strong>${escapeHtml(input.customerName)}</strong> (${escapeHtml(input.customerEmail)}) báo đã chuyển <strong>${formatVnd(input.totalVnd)}</strong> với nội dung <strong>${input.code}</strong>.`,
+    input.crypto
+      ? `Khách <strong>${escapeHtml(input.customerName)}</strong> (${escapeHtml(input.customerEmail)}) báo đã gửi <strong>${escapeHtml(input.crypto.amount)} LTC</strong> (≈ ${formatVnd(input.totalVnd)}) tới ví <strong>${escapeHtml(input.crypto.address)}</strong>.${input.crypto.txid ? ` TXID: ${escapeHtml(input.crypto.txid)}` : ''}`
+      : `Khách <strong>${escapeHtml(input.customerName)}</strong> (${escapeHtml(input.customerEmail)}) báo đã chuyển <strong>${formatVnd(input.totalVnd)}</strong> với nội dung <strong>${input.code}</strong>.`,
     `Sản phẩm: ${input.items.map(escapeHtml).join('; ')}`,
     `Khung giờ khách rảnh (giờ Việt Nam):<br>${input.slots.map(slot => `• ${escapeHtml(formatRange(slot.start, slot.end, VN_TIME_ZONE))}`).join('<br>')}`,
-    'Hãy đối chiếu sao kê ngân hàng, rồi xác nhận tiền và chọn giờ hẹn trong trang đơn.'
+    input.crypto ? 'Hãy kiểm tra giao dịch trên blockchain (link trong trang đơn), rồi xác nhận và chọn giờ hẹn.' : 'Hãy đối chiếu sao kê ngân hàng, rồi xác nhận tiền và chọn giờ hẹn trong trang đơn.'
   ];
   const link = {label: 'Mở đơn để xác nhận', url: input.orderUrl};
-  return {subject: `[Jewish Horse] ${title} ${formatVnd(input.totalVnd)}`, html: layout(title, lines, link), text: plain(title, lines, [link])};
+  return {subject: `[Jewish Horse] ${title} ${input.crypto ? `${input.crypto.amount} LTC` : formatVnd(input.totalVnd)}`, html: layout(title, lines, link), text: plain(title, lines, [link])};
 }
 
 export function adminAppointmentAssigned(input: {code: string; customerName: string; start: Date; end: Date; orderUrl: string; calendarUrl: string}): EmailContent {

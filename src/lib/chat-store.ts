@@ -29,13 +29,13 @@ export async function listMessages(customerId: string) {
 
 /** Conversations for the Admin inbox, most recent first. */
 export async function listRooms() {
-  const customers = await getPaymentDb().customer.findMany({
+  const [unread, customers] = await Promise.all([adminUnreadByCustomer(), getPaymentDb().customer.findMany({
     where: {chatMessages: {some: {}}}, take: 200,
     select: {id: true, name: true, email: true, chatMessages: {orderBy: {createdAt: 'desc'}, take: 1, select: {body: true, imageId: true, authorRole: true, createdAt: true}}}
-  });
+  })]);
   return customers.map(customer => {
     const last = customer.chatMessages[0];
-    return {id: roomFor(customer.id), name: customer.name, email: customer.email, lastMessage: last ? {body: last.imageId && !last.body ? '[Image]' : last.body, createdAt: last.createdAt.toISOString(), role: (last.authorRole === 'admin' ? 'admin' : 'user') as Role} : null};
+    return {id: roomFor(customer.id), name: customer.name, email: customer.email, unread: unread.get(customer.id) ?? 0, lastMessage: last ? {body: last.imageId && !last.body ? '[Image]' : last.body, createdAt: last.createdAt.toISOString(), role: (last.authorRole === 'admin' ? 'admin' : 'user') as Role} : null};
   }).sort((a, b) => (b.lastMessage?.createdAt ?? '').localeCompare(a.lastMessage?.createdAt ?? ''));
 }
 
@@ -58,4 +58,32 @@ export async function addMessage(input: {customerId: string; role: Role; authorN
 /** Image bytes plus the owning conversation, for the access check in the image route. */
 export async function chatImage(id: string) {
   return getPaymentDb().chatImage.findUnique({where: {id}, select: {data: true, mimeType: true, sizeBytes: true, message: {select: {customerId: true}}}});
+}
+
+// ---------- Read state (one mark per side: the customer, and the Admin team as a whole) ----------
+
+/** Admin messages the customer has not seen yet. */
+export async function customerUnreadCount(customerId: string) {
+  const db = getPaymentDb();
+  const customer = await db.customer.findUnique({where: {id: customerId}, select: {chatReadAt: true}});
+  return db.chatMessage.count({where: {customerId, authorRole: 'admin', ...(customer?.chatReadAt ? {createdAt: {gt: customer.chatReadAt}} : {})}});
+}
+
+/** Marks replies up to `latest` as seen; writes only when something new arrived (the panel polls every 5 s). */
+export async function markCustomerRead(customerId: string, latest: Date) {
+  await getPaymentDb().customer.updateMany({where: {id: customerId, OR: [{chatReadAt: null}, {chatReadAt: {lt: latest}}]}, data: {chatReadAt: new Date()}});
+}
+
+/** Unread customer messages per conversation for the Admin inbox. */
+export async function adminUnreadByCustomer() {
+  const rows = await getPaymentDb().$queryRaw<{customerId: string; unread: number}[]>`
+    SELECT m."customerId" AS "customerId", COUNT(*)::int AS unread
+    FROM "ChatMessage" m JOIN "Customer" c ON c.id = m."customerId"
+    WHERE m."authorRole" = 'customer' AND (c."adminChatReadAt" IS NULL OR m."createdAt" > c."adminChatReadAt")
+    GROUP BY m."customerId"`;
+  return new Map(rows.map(row => [row.customerId, Number(row.unread)]));
+}
+
+export async function markAdminRead(customerId: string) {
+  await getPaymentDb().customer.update({where: {id: customerId}, data: {adminChatReadAt: new Date()}});
 }

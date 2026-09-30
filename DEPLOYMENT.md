@@ -101,6 +101,18 @@ sau 20 giây; chỉ đúng khi chạy **một instance** (đúng với Render Fr
 6. **Publish OAuth app** (Testing → In production) với homepage và privacy URL ở trên để mọi khách dùng được Google.
 7. Thử một đơn thật số tiền nhỏ từ đầu đến cuối trước khi quảng bá.
 
+## Admin, thông báo và Litecoin (2026-09-30)
+
+- **Thêm Admin**: Admin → Settings → Admins. Email trong `ADMIN_GOOGLE_EMAILS` là chủ (không xóa được từ web);
+  email thêm trong web được lưu trong database và có hiệu lực trong khoảng 30 giây. Khi OAuth app còn Testing, thêm họ
+  vào Test users trong Google Cloud.
+- **Thông báo trang chủ**: Settings → Announcements, tải 1–10 ảnh (nên 4:3), chú thích/link tùy chọn, chọn số giây tự
+  chuyển, bấm Save. Không có ảnh thì trang chủ hiện hình minh họa mặc định.
+- **Litecoin**: Settings → Payments → Litecoin wallets → Add wallet (địa chỉ nhận LTC từ ví, web kiểm tra checksum) →
+  **Test QR** bằng app ví. Giá LTC tự lấy từ thị trường (CoinGecko, dự phòng Binance), có thể đặt giá tay. Mỗi đơn LTC có
+  số lẻ riêng để nhận ra đơn nào đã trả; khách có thể dán TXID. Kiểm tra tiền về trên litecoinspace.org.
+- **Liên hệ**: Discord `https://discord.gg/pD4MdsJB` (`src/lib/contact.ts`, ảnh `public/contact/discord-qr.png`).
+
 ## Chạy Docker trên máy
 
 Cài Docker Desktop tương thích kiến trúc máy và bật Linux containers. Máy đã

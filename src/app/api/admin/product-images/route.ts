@@ -1,6 +1,7 @@
 import {createHash} from 'node:crypto';
 import {Prisma} from '@prisma/client';
 import {getSession} from '@/lib/auth';
+import {announcementImagePaths} from '@/lib/announcements';
 import {getPaymentDb} from '@/lib/payment-db';
 import {cleanImageFilename, MAX_PRODUCT_IMAGE_BYTES, productImageId, productImageTypes, validProductImageSignature} from '@/lib/product-image';
 
@@ -35,7 +36,8 @@ export async function POST(request: Request) {
     if (stale.length) {
       const paths = stale.map(image => `/api/product-images/${image.id}`);
       const referenced = await db.product.findMany({where: {imagePath: {in: paths}}, select: {imagePath: true}});
-      const used = new Set(referenced.map(product => product.imagePath));
+      // Images are shared by products and storefront announcements; keep anything either one uses.
+      const used = new Set([...referenced.map(product => product.imagePath), ...await announcementImagePaths()]);
       const unusedIds = stale.filter(image => !used.has(`/api/product-images/${image.id}`)).map(image => image.id);
       if (unusedIds.length) await db.productImage.deleteMany({where: {id: {in: unusedIds}}});
     }
@@ -62,6 +64,7 @@ export async function DELETE(request: Request) {
   try {
     const references = await getPaymentDb().product.count({where: {imagePath: path}});
     if (references > 0) return Response.json({error: 'This image is still used by a product'}, {status: 409});
+    if ((await announcementImagePaths()).has(path)) return Response.json({error: 'This image is still used by an announcement'}, {status: 409});
     const result = await getPaymentDb().productImage.deleteMany({where: {id}});
     return Response.json({ok: true, deleted: result.count === 1});
   } catch {

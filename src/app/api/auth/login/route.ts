@@ -30,7 +30,7 @@ export async function POST(request: Request) {
     if (!verifyPassword(customer.passwordHash, password)) { await recordLoginEvent({customerId: customer.id, email, method: 'password', outcome: 'wrong_password', headers}); return wrong(); }
     if (customer.status !== 'active') {
       await recordLoginEvent({customerId: customer.id, email, method: 'password', outcome: 'locked', headers});
-      return NextResponse.json({error: 'This account is locked. Contact the shop on Zalo.'}, {status: 403});
+      return NextResponse.json({error: 'This account is locked. Contact the shop on Discord.'}, {status: 403});
     }
     const [token] = await Promise.all([
       createCustomerSession(customer.id, headers),

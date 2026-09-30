@@ -16,10 +16,11 @@ function toSlot(row: Row) {
 }
 
 /** Lets the customer propose 1–5 free time windows, entered in their own time zone. */
-export default function TimeSlotsDialog({open, title, submitLabel, onClose, onSubmit}: {open: boolean; title: string; submitLabel: string; onClose: () => void; onSubmit: (input: {timeZone: string; slots: {start: string; end: string}[]}) => Promise<string | null>}) {
+export default function TimeSlotsDialog({open, title, submitLabel, askTxid = false, onClose, onSubmit}: {open: boolean; title: string; submitLabel: string; askTxid?: boolean; onClose: () => void; onSubmit: (input: {timeZone: string; slots: {start: string; end: string}[]; txid?: string}) => Promise<string | null>}) {
   const [rows, setRows] = useState<Row[]>([defaultRow(1)]);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
+  const [txid, setTxid] = useState('');
   const dialog = useRef<HTMLDialogElement>(null);
   const timeZone = typeof Intl !== 'undefined' ? Intl.DateTimeFormat().resolvedOptions().timeZone : 'Asia/Ho_Chi_Minh';
 
@@ -37,8 +38,9 @@ export default function TimeSlotsDialog({open, title, submitLabel, onClose, onSu
     const slots = rows.map(toSlot);
     const problem = slotProblem(slots);
     if (problem) { setError(problem); return; }
+    if (askTxid && txid.trim() && !/^[0-9a-fA-F]{64}$/.test(txid.trim())) { setError('The transaction ID is 64 characters (0-9, a-f). Leave it empty if you do not have it.'); return; }
     setBusy(true); setError('');
-    const failure = await onSubmit({timeZone, slots});
+    const failure = await onSubmit({timeZone, slots, ...(askTxid && txid.trim() ? {txid: txid.trim()} : {})});
     setBusy(false);
     if (failure) setError(failure);
   }
@@ -46,6 +48,7 @@ export default function TimeSlotsDialog({open, title, submitLabel, onClose, onSu
   return <dialog ref={dialog} className="slots-dialog" aria-labelledby="slots-title" onClose={onClose} onCancel={onClose}>
     <form onSubmit={event => void submit(event)}>
       <h2 id="slots-title">{title}</h2>
+      {askTxid && <label className="txid-field">Litecoin transaction ID (optional)<input value={txid} onChange={event => setTxid(event.target.value)} placeholder="64-character TXID from your wallet" autoComplete="off" spellCheck={false}/><small>Helps us find your payment faster.</small></label>}
       <p className="field-caption">Add 1–{MAX_SLOTS} times when you are free to receive your order (your time zone: {timeZone}). We will confirm one of them.</p>
       <div className="slot-rows">{rows.map((row, index) => <fieldset className="slot-row" key={index}>
         <legend>Time {index + 1}</legend>

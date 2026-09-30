@@ -1,16 +1,18 @@
 import Link from 'next/link';
 import {notFound} from 'next/navigation';
 import {Catalog, ProductArt} from '@/components/store-ui';
+import AnnouncementCarousel from '@/components/announcement-carousel';
+import {getAnnouncements} from '@/lib/announcements';
 import {getPublicCatalog} from '@/lib/catalog-server';
 
 export default async function Store({params}: {params: Promise<{locale: string}>}) {
   const {locale} = await params;
   if (locale !== 'en') notFound();
-  const catalog = await getPublicCatalog();
+  const [catalog, announcements] = await Promise.all([getPublicCatalog(), getAnnouncements()]);
   return <>
     <div className="floating-horse-1" aria-hidden="true"></div>
     <div className="floating-horse-2" aria-hidden="true"></div>
-    <section className="hero"><div className="hero-copy"><span className="pill">✦ Digital packages · delivered by appointment</span><h1>Digital goods.<br/>A better <em>experience.</em></h1><p>Choose a package, pay by bank transfer with a QR code, and pick a time that suits you. We deliver it with you, live in the site chat.</p><div className="hero-actions"><Link className="button" href="#catalog">Explore packages →</Link><Link className="text-link" href="#how-it-works">How it works ↗</Link></div><div className="hero-meta"><span>Prices in USD · paid in VND</span><span>Delivered by appointment</span></div></div><div className="hero-visual"><div className="visual-label">A NEW WAY TO EXPLORE <span>↗</span></div><ProductArt/><div className="floating-card"><span>✦</span><div><strong>Every detail, considered.</strong><small>Discover → Cart → Checkout</small></div></div><div className="visual-bottom">COLLECTION 01 <span>INTERACTIVE CONCEPT</span></div></div></section>
+    <section className="hero"><div className="hero-copy"><span className="pill">✦ Digital packages · delivered by appointment</span><h1>Digital goods.<br/>A better <em>experience.</em></h1><p>Choose a package, pay by bank transfer with a QR code, and pick a time that suits you. We deliver it with you, live in the site chat.</p><div className="hero-actions"><Link className="button" href="#catalog">Explore packages →</Link><Link className="text-link" href="#how-it-works">How it works ↗</Link></div><div className="hero-meta"><span>Prices in USD · paid in VND</span><span>Delivered by appointment</span></div></div>{announcements.slides.length ? <div className="hero-visual announcement-visual"><AnnouncementCarousel slides={announcements.slides} intervalSeconds={announcements.intervalSeconds}/></div> : <div className="hero-visual"><div className="visual-label">A NEW WAY TO EXPLORE <span>↗</span></div><ProductArt/><div className="floating-card"><span>✦</span><div><strong>Every detail, considered.</strong><small>Discover → Cart → Checkout</small></div></div><div className="visual-bottom">COLLECTION 01 <span>INTERACTIVE CONCEPT</span></div></div>}</section>
     <div className="feature-strip">{[['01','Clear information','Review prices and details first'],['02','Package by package','Individual delivery forms'],['03','Chat support','Ask the team before you buy']].map(([n,title,desc]) => <div key={n}><span className="feature-index">{n}</span><div><strong>{title}</strong><small>{desc}</small></div></div>)}</div>
     <Catalog products={catalog.products} source={catalog.source} vndPerUsd={catalog.vndPerUsd}/>
     <section id="how-it-works" className="section how-section"><p className="eyebrow">HOW IT WORKS</p><h2>Simple, from start to finish.</h2><div className="steps-grid">{[['Choose and order','Pick a package, fill in its details and place your order. We hold it for 30 minutes.'],['Transfer and pick times','Scan the VietQR code in your banking app, then tell us when you are free.'],['Meet and receive','We confirm your payment, book a time and deliver with you in the site chat.']].map(([title,desc],i) => <article key={title}><span className="step-number">0{i+1}</span><h3>{title}</h3><p className="muted">{desc}</p></article>)}</div></section>

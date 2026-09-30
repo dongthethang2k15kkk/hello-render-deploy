@@ -5,6 +5,9 @@ import {getSession} from '@/lib/auth';
 import {sameOrigin} from '@/lib/customer-rules';
 import {getPaymentDb} from '@/lib/payment-db';
 import {getVndPerUsd, setVndPerUsd} from '@/lib/store-settings';
+import {validLitecoinAddress} from '@/lib/ltc';
+import {litecoinUri} from '@/lib/ltc-format';
+import {getLtcOverride, getLtcRate, setLtcOverride} from '@/lib/ltc-rate';
 import {vietQrPayload} from '@/lib/vietqr';
 import {bankName, vnBanks} from '@/lib/vn-banks';
 
@@ -13,8 +16,13 @@ const json = (data: unknown, status = 200) => Response.json(data, {status, heade
 const accountSelect = {id: true, bankBin: true, bankName: true, accountNumber: true, accountHolder: true, active: true, lastAssigned: true} as const;
 
 async function state() {
-  const [vndPerUsd, accounts] = await Promise.all([getVndPerUsd(), getPaymentDb().bankAccount.findMany({orderBy: {createdAt: 'asc'}, select: accountSelect})]);
-  return {vndPerUsd, accounts, banks: vnBanks};
+  const db = getPaymentDb();
+  const [vndPerUsd, accounts, wallets, ltcOverride, ltcRate] = await Promise.all([
+    getVndPerUsd(), db.bankAccount.findMany({orderBy: {createdAt: 'asc'}, select: accountSelect}),
+    db.cryptoWallet.findMany({orderBy: {createdAt: 'asc'}, select: {id: true, network: true, address: true, label: true, active: true}}),
+    getLtcOverride(), getLtcRate()
+  ]);
+  return {vndPerUsd, accounts, banks: vnBanks, wallets, ltcOverride, ltcRate};
 }
 
 export async function GET() {
@@ -30,7 +38,11 @@ const action = z.discriminatedUnion('action', [
   z.object({action: z.literal('rate'), vndPerUsd: z.number().int().min(1000).max(1_000_000)}).strict(),
   z.object({action: z.literal('save-account'), id: z.string().max(40).optional(), bankBin: z.string().regex(/^\d{6}$/, 'Bank BIN must be 6 digits.'), accountNumber: z.string().trim().regex(/^[0-9A-Za-z]{4,19}$/, 'Account number: 4–19 letters or digits, no spaces.'), accountHolder: z.string().max(80), active: z.boolean()}).strict(),
   z.object({action: z.literal('delete-account'), id: z.string().max(40)}).strict(),
-  z.object({action: z.literal('test-qr'), id: z.string().max(40)}).strict()
+  z.object({action: z.literal('test-qr'), id: z.string().max(40)}).strict(),
+  z.object({action: z.literal('save-wallet'), id: z.string().max(40).optional(), address: z.string().trim().max(100), label: z.string().trim().max(60).default(''), active: z.boolean()}).strict(),
+  z.object({action: z.literal('delete-wallet'), id: z.string().max(40)}).strict(),
+  z.object({action: z.literal('test-wallet-qr'), id: z.string().max(40)}).strict(),
+  z.object({action: z.literal('ltc-override'), vndPerLtc: z.number().int().min(1000).max(1_000_000_000).nullable()}).strict()
 ]);
 
 export async function POST(request: Request) {
@@ -55,6 +67,24 @@ export async function POST(request: Request) {
     } else if (input.action === 'delete-account') {
       const removed = await db.bankAccount.delete({where: {id: input.id}});
       await recordAudit({actorEmail: admin.email, action: 'settings.bank_deleted', summary: `Removed bank account ${removed.bankName} ••${removed.accountNumber.slice(-4)}`, entityType: 'settings', entityId: input.id});
+    } else if (input.action === 'save-wallet') {
+      // A typo in a receiving address would lose customer money, so the checksum is verified.
+      if (!validLitecoinAddress(input.address)) return json({error: 'This is not a valid Litecoin address (checksum failed). Copy it again from your wallet.'}, 400);
+      const duplicate = await db.cryptoWallet.findUnique({where: {address: input.address}});
+      if (duplicate && duplicate.id !== input.id) return json({error: 'This wallet address is already added.'}, 409);
+      const data = {address: input.address, label: input.label || 'Litecoin wallet', active: input.active, network: 'LTC'};
+      const saved = input.id ? await db.cryptoWallet.update({where: {id: input.id}, data}) : await db.cryptoWallet.create({data});
+      await recordAudit({actorEmail: admin.email, action: input.id ? 'settings.wallet_updated' : 'settings.wallet_added', summary: `${input.id ? 'Updated' : 'Added'} Litecoin wallet …${data.address.slice(-6)} (${data.active ? 'active' : 'inactive'})`, entityType: 'settings', entityId: saved.id});
+    } else if (input.action === 'delete-wallet') {
+      const removed = await db.cryptoWallet.delete({where: {id: input.id}});
+      await recordAudit({actorEmail: admin.email, action: 'settings.wallet_deleted', summary: `Removed Litecoin wallet …${removed.address.slice(-6)}`, entityType: 'settings', entityId: input.id});
+    } else if (input.action === 'test-wallet-qr') {
+      const wallet = await db.cryptoWallet.findUnique({where: {id: input.id}});
+      if (!wallet) return json({error: 'Wallet not found.'}, 404);
+      return json({qrSvg: await QRCode.toString(litecoinUri(wallet.address, '0.00100000', 'TEST'), {type: 'svg', margin: 1, errorCorrectionLevel: 'M'})});
+    } else if (input.action === 'ltc-override') {
+      await setLtcOverride(input.vndPerLtc, admin.email);
+      await recordAudit({actorEmail: admin.email, action: 'settings.ltc_rate', summary: input.vndPerLtc ? `Set a manual Litecoin price of ${input.vndPerLtc.toLocaleString('vi-VN')} VND/LTC` : 'Switched the Litecoin price back to automatic', entityType: 'settings'});
     } else {
       const account = await db.bankAccount.findUnique({where: {id: input.id}});
       if (!account) return json({error: 'Bank account not found.'}, 404);

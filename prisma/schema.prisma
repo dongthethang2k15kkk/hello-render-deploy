@@ -136,6 +136,8 @@ model Customer {
   status             String            @default("active")
   lockedReason       String?
   mustChangePassword Boolean           @default(false)
+  chatReadAt         DateTime?
+  adminChatReadAt    DateTime?
   createdAt          DateTime          @default(now())
   lastLoginAt        DateTime?
   sessions           CustomerSession[]
@@ -253,7 +255,11 @@ model Order {
   status             String
   totalVnd           Int
   vndPerUsd          Int
+  paymentMethod      String         @default("bank")
   bankSnapshot       Json
+  cryptoAmount       String?
+  cryptoRateVnd      Int?
+  customerTxid       String?
   holdExpiresAt      DateTime
   reportedAt         DateTime?
   customerTimeZone   String?
@@ -356,4 +362,15 @@ model MailConnection {
   refreshTokenEnc String
   connectedBy     String
   connectedAt     DateTime @default(now())
+}
+
+// Litecoin receiving addresses (payment method "ltc").
+model CryptoWallet {
+  id           String   @id @default(cuid())
+  network      String   @default("LTC")
+  address      String   @unique
+  label        String
+  active       Boolean  @default(true)
+  lastAssigned DateTime @default(now())
+  createdAt    DateTime @default(now())
 }

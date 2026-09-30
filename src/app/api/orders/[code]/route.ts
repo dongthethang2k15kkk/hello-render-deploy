@@ -5,6 +5,7 @@ import {sameOrigin} from '@/lib/customer-rules';
 import {appOrigin} from '@/lib/oauth-helpers';
 import {orderCodePattern, reportSchema} from '@/lib/order-rules';
 import {cancelByCustomer, customerOrder, OrderError, reportTransfer, updateTimes} from '@/lib/order-store';
+import {litecoinUri} from '@/lib/ltc-format';
 import {vietQrPayload} from '@/lib/vietqr';
 
 export const runtime = 'nodejs';
@@ -19,11 +20,14 @@ export async function GET(_request: Request, {params}: {params: Promise<{code: s
     const order = await customerOrder(account.id, code);
     if (!order) return json({error: 'Order not found.'}, 404);
     let qrSvg: string | null = null;
+    let paymentUri: string | null = null;
     if (order.status === 'awaiting_payment') {
-      const payload = vietQrPayload({bankBin: order.bankSnapshot.bankBin, accountNumber: order.bankSnapshot.accountNumber, amountVnd: order.totalVnd, note: order.code});
+      const snapshot = order.bankSnapshot;
+      if ('address' in snapshot) paymentUri = litecoinUri(snapshot.address, order.cryptoAmount ?? '', order.code);
+      const payload = 'address' in snapshot ? paymentUri! : vietQrPayload({bankBin: snapshot.bankBin, accountNumber: snapshot.accountNumber, amountVnd: order.totalVnd, note: order.code});
       qrSvg = await QRCode.toString(payload, {type: 'svg', margin: 1, errorCorrectionLevel: 'M'});
     }
-    return json({order, qrSvg, serverTime: new Date().toISOString()});
+    return json({order, qrSvg, paymentUri, serverTime: new Date().toISOString()});
   } catch (error) {
     console.error('Order load failed', error instanceof Error ? error.message.split('\n')[0] : error);
     return json({error: 'This order is unavailable right now.'}, 503);

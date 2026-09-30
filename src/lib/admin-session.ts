@@ -6,7 +6,7 @@ export type Role = 'admin' | 'user';
 export type Account = {id: string; name: string; role: Role; email: string; mustChangePassword?: boolean};
 
 export const adminCookie = 'shop_admin_session';
-export const adminCookieOptions = {httpOnly: true, sameSite: 'lax' as const, secure: process.env.NODE_ENV === 'production', path: '/', maxAge: 60 * 60 * 8};
+export const adminCookieOptions = {httpOnly: true, sameSite: 'lax' as const, secure: process.env.NODE_ENV === 'production', path: '/', maxAge: 60 * 60 * 24};
 const prefix = 'ga-';
 const secret = () => process.env.AUTH_SECRET || 'local-demo-secret-change-before-production';
 const sign = (value: string) => createHmac('sha256', secret()).update(value).digest('base64url');
@@ -22,13 +22,16 @@ export function encodeAdminSession(account: Account) {
   return `${value}.${sign(value)}`;
 }
 
-/** Re-checks the allowlist on every request, so removing an email from ADMIN_GOOGLE_EMAILS revokes access. */
-export function decodeAdminSession(value?: string | null): Account | null {
+/**
+ * Re-checks the allowlist on every request, so removing an email from ADMIN_GOOGLE_EMAILS (or from the
+ * Admins added in Settings, passed as `extraAdmins`) revokes access.
+ */
+export function decodeAdminSession(value?: string | null, extraAdmins: readonly string[] = []): Account | null {
   const [id, role, signature, extra] = value?.split('.') ?? [];
   if (!id?.startsWith(prefix) || role !== 'admin' || !signature || extra !== undefined) return null;
   const expected = sign(`${id}.admin`);
   if (signature.length !== expected.length || !timingSafeEqual(Buffer.from(signature), Buffer.from(expected))) return null;
   const email = Buffer.from(id.slice(prefix.length), 'base64url').toString('utf8');
-  const allowed = email === devAdminEmail ? devAdminLoginEnabled() : isAllowedAdmin(email);
+  const allowed = email === devAdminEmail ? devAdminLoginEnabled() : isAllowedAdmin(email) || extraAdmins.includes(email);
   return allowed ? googleAdminAccount(email) : null;
 }

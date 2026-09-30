@@ -9,9 +9,12 @@ import * as templates from './email-templates';
 import {sendMail} from './mailer';
 import {formatVnd} from './money';
 import {notifyCustomer} from './notifications';
-import {parseAllowlist} from './oauth-helpers';
+import {allAdminEmails} from './admin-team';
 import {appointmentProblem, generateOrderCode, HOLD_MINUTES, NEEDS_ACTION, nextStatus, slotProblem, validTimeZone, VN_TIME_ZONE, type OrderStatus} from './order-rules';
 import {getPaymentDb} from './payment-db';
+import {uniqueLitoshi} from './ltc';
+import {formatLtc, parseLtc} from './ltc-format';
+import {getLtcRate} from './ltc-rate';
 
 export class OrderError extends Error {
   constructor(message: string, readonly status = 400) { super(message); }
@@ -19,8 +22,10 @@ export class OrderError extends Error {
 
 type Tx = Prisma.TransactionClient;
 type BankSnapshot = {bankBin: string; bankName: string; accountNumber: string; accountHolder: string};
+type WalletSnapshot = {network: 'LTC'; address: string; label: string};
+export type PaymentMethod = 'bank' | 'ltc';
+export type PaymentSnapshot = BankSnapshot | WalletSnapshot;
 const txOptions = {maxWait: 10000, timeout: 20000};
-const adminEmails = () => parseAllowlist(process.env.ADMIN_GOOGLE_EMAILS);
 const customerLink = (code: string) => `/en/orders/${code}`;
 
 async function restock(tx: Tx, orderId: string) {
@@ -50,7 +55,7 @@ export async function expireStaleOrders(throttleMs = 0) {
 
 // ---------- Customer side ----------
 
-export async function createOrder(customer: {id: string}, lines: CartLine[]) {
+export async function createOrder(customer: {id: string}, lines: CartLine[], method: PaymentMethod = 'bank') {
   if (!lines.length) throw new OrderError('Your cart is empty.');
   await expireStaleOrders();
   const catalog = await getPublicCatalog();
@@ -64,23 +69,39 @@ export async function createOrder(customer: {id: string}, lines: CartLine[]) {
   const totalVnd = items.reduce((sum, item) => sum + item.unitPriceVnd * item.quantity, 0);
   const quantities = new Map<string, number>();
   for (const item of items) quantities.set(item.packageId, (quantities.get(item.packageId) ?? 0) + item.quantity);
+  // The Litecoin price is locked when the order is placed and holds for the 30-minute payment window.
+  const ltcRate = method === 'ltc' ? await getLtcRate() : null;
+  if (method === 'ltc' && !ltcRate) throw new OrderError('Litecoin payments are temporarily unavailable. Choose bank transfer or try again shortly.', 503);
 
   return getPaymentDb().$transaction(async tx => {
-    const bank = await tx.bankAccount.findFirst({where: {active: true}, orderBy: [{lastAssigned: 'asc'}, {id: 'asc'}]});
-    if (!bank) throw new OrderError('Payments are not set up yet. Please contact the shop on Zalo.', 503);
+    const bank = method === 'bank' ? await tx.bankAccount.findFirst({where: {active: true}, orderBy: [{lastAssigned: 'asc'}, {id: 'asc'}]}) : null;
+    const wallet = method === 'ltc' ? await tx.cryptoWallet.findFirst({where: {active: true, network: 'LTC'}, orderBy: [{lastAssigned: 'asc'}, {id: 'asc'}]}) : null;
+    if (!bank && !wallet) throw new OrderError(method === 'ltc' ? 'Litecoin payments are not set up yet. Choose bank transfer or contact the shop on Discord.' : 'Payments are not set up yet. Please contact the shop on Discord.', 503);
     // Reserve stock atomically; a concurrent order that took the last unit makes this fail cleanly.
     for (const [packageId, quantity] of quantities) {
       const reserved = await tx.package.updateMany({where: {id: packageId, active: true, stockOnHand: {gte: quantity}}, data: {stockOnHand: {decrement: quantity}}});
       if (reserved.count !== 1) throw new OrderError('Sorry, an item just sold out. Please review your cart.', 409);
     }
-    await tx.bankAccount.update({where: {id: bank.id}, data: {lastAssigned: new Date()}});
     let code = generateOrderCode();
     while (await tx.order.findUnique({where: {code}, select: {id: true}})) code = generateOrderCode();
-    const snapshot: BankSnapshot = {bankBin: bank.bankBin, bankName: bank.bankName, accountNumber: bank.accountNumber, accountHolder: bank.accountHolder};
+    let snapshot: PaymentSnapshot;
+    let cryptoAmount: string | null = null;
+    if (bank) {
+      await tx.bankAccount.update({where: {id: bank.id}, data: {lastAssigned: new Date()}});
+      snapshot = {bankBin: bank.bankBin, bankName: bank.bankName, accountNumber: bank.accountNumber, accountHolder: bank.accountHolder};
+    } else {
+      await tx.cryptoWallet.update({where: {id: wallet!.id}, data: {lastAssigned: new Date()}});
+      // Crypto transfers carry no note, so each open order on an address gets a distinct amount.
+      const open = await tx.order.findMany({where: {paymentMethod: 'ltc', status: {in: ['awaiting_payment', 'payment_reported']}, cryptoAmount: {not: null}}, select: {cryptoAmount: true, bankSnapshot: true}});
+      const taken = new Set(open.filter(item => (item.bankSnapshot as WalletSnapshot).address === wallet!.address).map(item => parseLtc(item.cryptoAmount!)).filter((value): value is bigint => value !== null));
+      cryptoAmount = formatLtc(uniqueLitoshi(totalVnd, ltcRate!.vndPerLtc, taken));
+      snapshot = {network: 'LTC', address: wallet!.address, label: wallet!.label};
+    }
     return tx.order.create({data: {
       code, customerId: customer.id, status: 'awaiting_payment', totalVnd, vndPerUsd: catalog.vndPerUsd, bankSnapshot: snapshot,
+      paymentMethod: method, cryptoAmount, cryptoRateVnd: ltcRate?.vndPerLtc ?? null,
       holdExpiresAt: new Date(Date.now() + HOLD_MINUTES * 60_000),
-      items: {create: items}, events: {create: {actor: 'customer', action: 'created', note: `Order placed · ${formatVnd(totalVnd)}`}}
+      items: {create: items}, events: {create: {actor: 'customer', action: 'created', note: `Order placed · ${formatVnd(totalVnd)}${cryptoAmount ? ` · pay ${cryptoAmount} LTC` : ''}`}}
     }, select: {id: true, code: true}});
   }, txOptions);
 }
@@ -105,7 +126,7 @@ export async function customerOrder(customerId: string, code: string) {
   if (!order) return null;
   // Internal Admin notes and the paying Admin's identity are never shown to customers.
   const {internalNote: _internal, paymentConfirmedBy: _confirmedBy, assignedAdmin: _assigned, customerId: _customer, ...visible} = order;
-  return {...visible, bankSnapshot: order.bankSnapshot as BankSnapshot};
+  return {...visible, paymentMethod: order.paymentMethod as PaymentMethod, bankSnapshot: order.bankSnapshot as PaymentSnapshot};
 }
 
 export async function customerOrders(customerId: string) {
@@ -113,7 +134,7 @@ export async function customerOrders(customerId: string) {
   return getPaymentDb().order.findMany({where: {customerId}, orderBy: {createdAt: 'desc'}, take: 100, select: {code: true, status: true, totalVnd: true, vndPerUsd: true, createdAt: true, appointmentStart: true, appointmentEnd: true, customerTimeZone: true, items: {select: {title: true, quantity: true}}}});
 }
 
-export async function reportTransfer(customer: {id: string; name: string; email: string}, code: string, input: {timeZone: string; slots: {start: string; end: string}[]}, origin: string) {
+export async function reportTransfer(customer: {id: string; name: string; email: string}, code: string, input: {timeZone: string; slots: {start: string; end: string}[]; txid?: string}, origin: string) {
   const db = getPaymentDb();
   const order = await db.order.findFirst({where: {code, customerId: customer.id}, include: {items: true}});
   if (!order) throw new OrderError('Order not found.', 404);
@@ -127,14 +148,14 @@ export async function reportTransfer(customer: {id: string; name: string; email:
   const timeZone = validTimeZone(input.timeZone) ? input.timeZone : VN_TIME_ZONE;
   const slots = input.slots.map(slot => ({startsAt: new Date(slot.start), endsAt: new Date(slot.end)})).sort((a, b) => a.startsAt.getTime() - b.startsAt.getTime());
   await db.$transaction(async tx => {
-    const changed = await tx.order.updateMany({where: {id: order.id, status: 'awaiting_payment'}, data: {status: 'payment_reported', reportedAt: new Date(), customerTimeZone: timeZone}});
+    const changed = await tx.order.updateMany({where: {id: order.id, status: 'awaiting_payment'}, data: {status: 'payment_reported', reportedAt: new Date(), customerTimeZone: timeZone, ...(input.txid ? {customerTxid: input.txid.toLowerCase()} : {})}});
     if (changed.count !== 1) throw new OrderError('This order is not waiting for payment.', 409);
     await tx.orderSlot.createMany({data: slots.map(slot => ({orderId: order.id, ...slot}))});
     await tx.orderEvent.create({data: {orderId: order.id, actor: 'customer', action: 'payment_reported', note: `${slots.length} available time${slots.length === 1 ? '' : 's'} proposed`}});
   }, txOptions);
   await notifyCustomer({customerId: customer.id, orderId: order.id, title: `We are checking your payment · ${order.code}`, body: 'Thanks! We will confirm your transfer and book one of the times you chose. You will get an email and a message here.', link: customerLink(order.code)});
-  const mail = templates.adminPaymentReported({code: order.code, customerName: customer.name, customerEmail: customer.email, totalVnd: order.totalVnd, items: order.items.map(item => `${item.title} × ${item.quantity}`), slots: slots.map(slot => ({start: slot.startsAt, end: slot.endsAt})), orderUrl: `${origin}/en/admin/orders/${order.id}`});
-  await sendMail({to: adminEmails(), ...mail, kind: 'admin.payment_reported', orderId: order.id});
+  const mail = templates.adminPaymentReported({code: order.code, customerName: customer.name, customerEmail: customer.email, totalVnd: order.totalVnd, crypto: order.paymentMethod === 'ltc' ? {amount: order.cryptoAmount ?? '', address: (order.bankSnapshot as WalletSnapshot).address, txid: input.txid ?? null} : null, items: order.items.map(item => `${item.title} × ${item.quantity}`), slots: slots.map(slot => ({start: slot.startsAt, end: slot.endsAt})), orderUrl: `${origin}/en/admin/orders/${order.id}`});
+  await sendMail({to: await allAdminEmails(), ...mail, kind: 'admin.payment_reported', orderId: order.id});
 }
 
 export async function updateTimes(customerId: string, code: string, input: {timeZone: string; slots: {start: string; end: string}[]}) {
@@ -198,7 +219,7 @@ export async function adminOrder(id: string) {
   if (order && await expireIfDue(order)) order = await db.order.findUnique({where: {id}, include});
   if (!order) return null;
   const emails = await db.emailLog.findMany({where: {orderId: id}, orderBy: {createdAt: 'desc'}, take: 20, select: {id: true, recipient: true, subject: true, kind: true, status: true, error: true, createdAt: true}});
-  return {...order, bankSnapshot: order.bankSnapshot as BankSnapshot, emails};
+  return {...order, paymentMethod: order.paymentMethod as PaymentMethod, bankSnapshot: order.bankSnapshot as PaymentSnapshot, emails};
 }
 
 export async function needsActionCount() {
@@ -321,8 +342,8 @@ export async function resendEmail(adminEmail: string, id: string, kind: 'admin.p
   const order = await getPaymentDb().order.findUnique({where: {id}, include: {customer: {select: {name: true, email: true}}, items: true, slots: {orderBy: {startsAt: 'asc'}}}});
   if (!order) throw new OrderError('Order not found.', 404);
   if (kind === 'admin.payment_reported') {
-    const mail = templates.adminPaymentReported({code: order.code, customerName: order.customer.name, customerEmail: order.customer.email, totalVnd: order.totalVnd, items: order.items.map(item => `${item.title} × ${item.quantity}`), slots: order.slots.map(slot => ({start: slot.startsAt, end: slot.endsAt})), orderUrl: `${origin}/en/admin/orders/${order.id}`});
-    await sendMail({to: adminEmails(), ...mail, kind, orderId: id});
+    const mail = templates.adminPaymentReported({code: order.code, customerName: order.customer.name, customerEmail: order.customer.email, totalVnd: order.totalVnd, crypto: order.paymentMethod === 'ltc' ? {amount: order.cryptoAmount ?? '', address: (order.bankSnapshot as WalletSnapshot).address, txid: order.customerTxid} : null, items: order.items.map(item => `${item.title} × ${item.quantity}`), slots: order.slots.map(slot => ({start: slot.startsAt, end: slot.endsAt})), orderUrl: `${origin}/en/admin/orders/${order.id}`});
+    await sendMail({to: await allAdminEmails(), ...mail, kind, orderId: id});
   } else if (kind === 'customer.appointment') {
     if (!order.appointmentStart || !order.appointmentEnd) throw new OrderError('This order has no appointment yet.', 409);
     await sendAppointment(order, order.appointmentStart, order.appointmentEnd, order.assignedAdmin ?? adminEmail, origin, false);

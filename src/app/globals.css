@@ -1299,3 +1299,71 @@ html,body {max-width:100%; overflow-x:clip;}
 .slots-dialog input {background:#fff!important; color:#1f2c24!important; border:1px solid #b9cbae!important; box-shadow:none!important;}
 .slot-choices .field-caption {color:#5c6e61;}
 .timeline li strong::first-letter {text-transform:uppercase;}
+
+/* Header pills with counts (Orders = cart items, Inbox = unread notifications, Chat = unread replies) */
+.header-pills {display:flex; align-items:center; gap:8px;}
+.header-pill {position:relative; display:inline-flex; align-items:center; gap:7px; padding:8px 14px; border-radius:999px; background:rgba(149,212,122,.16); border:1.5px solid rgba(149,212,122,.55); color:#f0fae8!important; font-weight:700; font-size:14px; text-decoration:none; line-height:1; transition:background .15s,border-color .15s,transform .15s;}
+.header-pill:hover,.header-pill:focus-visible {background:rgba(149,212,122,.3); border-color:#95d47a; transform:translateY(-1px);}
+.header-pill svg {width:17px; height:17px; fill:none; stroke:currentColor; stroke-width:2; stroke-linecap:round; stroke-linejoin:round; flex:none;}
+.pill-badge {position:absolute; top:-7px; right:-7px; min-width:20px; height:20px; padding:0 6px; box-sizing:border-box; border-radius:999px; background:#e5484d; color:#fff; font-size:11px; font-weight:800; line-height:20px; text-align:center; box-shadow:0 0 0 2px #1a472a;}
+.support-launcher {position:relative;}
+.launcher-badge {top:-6px; right:-4px;}
+.site-header .account-menu a {font-weight:600;}
+@media (max-width:640px) {
+  .header-pills {gap:6px;}
+  .header-pill {padding:8px 10px;}
+  .header-pill span {display:none;}
+}
+
+/* Admin navigation: active page and live badges */
+.admin-header nav a {position:relative;}
+.admin-header nav a.active {color:#1f4d2e; text-decoration:underline; text-decoration-thickness:3px; text-underline-offset:8px;}
+.admin-header nav .nav-badge {position:relative; top:-1px; margin-left:5px; background:#e5484d; color:#fff;}
+.room-unread {display:inline-block; min-width:18px; margin-left:6px; padding:0 5px; border-radius:999px; background:#e5484d; color:#fff; font-size:11px; line-height:18px; text-align:center; vertical-align:middle;}
+
+/* Announcement carousel (storefront hero and Admin preview) */
+.announcement-visual {padding:0!important; overflow:hidden;}
+.announcements {position:relative; width:100%; aspect-ratio:4/3; overflow:hidden; border-radius:inherit; background:#10261a; touch-action:pan-y; user-select:none;}
+.announcement-track {display:flex; height:100%; transition:transform .5s ease;}
+.announcement-slide {position:relative; flex:0 0 100%; height:100%;}
+.announcement-slide a {display:block; height:100%;}
+.announcement-slide img {display:block; width:100%; height:100%; object-fit:contain; pointer-events:none;}
+.announcement-caption {position:absolute; left:14px; right:14px; bottom:44px; margin:0; padding:9px 13px; border-radius:10px; background:rgba(12,32,20,.78); color:#f0fae8; font-size:14px; line-height:1.4;}
+.announcement-arrow {position:absolute; top:50%; transform:translateY(-50%); width:40px; height:40px; padding:0!important; border-radius:50%!important; background:rgba(12,32,20,.6)!important; color:#fff!important; border:1px solid rgba(255,255,255,.35)!important; font-size:24px!important; line-height:1; box-shadow:none!important;}
+.announcement-arrow.prev {left:10px;}
+.announcement-arrow.next {right:10px;}
+.announcement-controls {position:absolute; left:0; right:0; bottom:10px; display:flex; justify-content:center; align-items:center; gap:12px;}
+.announcement-dots {display:flex; gap:7px;}
+.announcement-dots button {width:9px; height:9px; padding:0!important; border-radius:50%!important; background:rgba(255,255,255,.45)!important; border:0!important; box-shadow:none!important; min-height:0;}
+.announcement-dots button.active {background:#95d47a!important; width:22px; border-radius:999px!important;}
+.announcement-toggle {padding:3px 8px!important; font-size:10px!important; border-radius:999px!important; background:rgba(12,32,20,.6)!important; color:#fff!important; border:1px solid rgba(255,255,255,.35)!important; box-shadow:none!important; min-height:0;}
+@media (prefers-reduced-motion: reduce) {.announcement-track {transition:none;}}
+.announcement-preview {max-width:560px; border-radius:14px; overflow:hidden;}
+.slide-list {list-style:none; margin:16px 0; padding:0; display:grid; gap:12px;}
+.slide-row {display:grid; grid-template-columns:140px 1fr auto; gap:14px; align-items:center; padding:12px; border:1px solid #d7e1d3; border-radius:12px; background:#f8faf7;}
+.slide-row img {width:140px; aspect-ratio:4/3; object-fit:contain; background:#10261a; border-radius:8px;}
+.slide-fields {display:grid; gap:8px; min-width:0;}
+.slide-fields label {display:grid; gap:4px; font-size:12px; font-weight:700; margin:0!important;}
+.slide-fields input {width:100%; box-sizing:border-box;}
+.slide-actions {display:flex; flex-direction:column; gap:6px; align-items:stretch;}
+.interval-field {display:flex!important; align-items:center; gap:10px; margin-top:10px;}
+@media (max-width:700px) {.slide-row {grid-template-columns:1fr;} .slide-row img {width:100%;} .slide-actions {flex-direction:row;}}
+
+/* Inbox: upcoming appointments */
+.inbox-appointments {text-align:left; margin:14px 0;}
+.inbox-appointments h2 {font-family:var(--body-font); font-size:18px; text-shadow:none; letter-spacing:0; margin:0 0 8px;}
+.inbox-appointments ul {list-style:none; margin:0; padding:0; display:grid; gap:8px;}
+.inbox-appointments a {display:grid; gap:2px; padding:10px 12px; border-radius:10px; background:rgba(0,0,0,.2); color:#f0fae8; text-decoration:none;}
+.inbox-appointments span {font-size:12px; opacity:.85;}
+.discord-button {margin:10px 0 4px; background:#5865f2!important; border-color:#5865f2!important; color:#fff!important;}
+
+/* Litecoin: TXID field and payment choice on the dark storefront */
+.txid-field {display:grid!important; gap:4px; margin:10px 0 4px; font-size:12px; font-weight:700; color:#2f5039;}
+.txid-field input {width:100%; box-sizing:border-box; font-family:ui-monospace,SFMono-Regular,Consolas,monospace; font-size:12px;}
+.txid-field small {font-weight:400; color:#5c6e61;}
+.checkout-layout .payment-option {border-color:rgba(149,212,122,.4); color:#e8f4e0;}
+.checkout-layout .payment-option span small {display:block; font-size:12px; opacity:.85; margin-top:3px;}
+.checkout-layout .payment-option:has(:checked) {background:rgba(149,212,122,.18); border-color:#95d47a;}
+.pay-details .button.full-width {margin:4px 0;}
+.announcement-caption {color:#f0fae8!important;}
+.interval-field select {width:auto; min-width:160px;}

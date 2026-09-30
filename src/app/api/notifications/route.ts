@@ -2,6 +2,7 @@ import {z} from 'zod';
 import {getSession} from '@/lib/auth';
 import {sameOrigin} from '@/lib/customer-rules';
 import {listNotifications, markRead, unreadCount} from '@/lib/notifications';
+import {getPaymentDb} from '@/lib/payment-db';
 
 export const runtime = 'nodejs';
 const json = (data: unknown, status = 200) => Response.json(data, {status, headers: {'Cache-Control': 'no-store'}});
@@ -10,8 +11,11 @@ export async function GET() {
   const account = await getSession();
   if (account?.role !== 'user') return json({error: 'Sign in required.'}, 401);
   try {
-    const [notifications, unread] = await Promise.all([listNotifications(account.id), unreadCount(account.id)]);
-    return json({notifications, unread});
+    const [notifications, unread, appointments] = await Promise.all([
+      listNotifications(account.id), unreadCount(account.id),
+      getPaymentDb().order.findMany({where: {customerId: account.id, status: 'scheduled', appointmentEnd: {gte: new Date()}}, orderBy: {appointmentStart: 'asc'}, take: 10, select: {code: true, appointmentStart: true, appointmentEnd: true}})
+    ]);
+    return json({notifications, unread, appointments});
   } catch { return json({error: 'Your Inbox is unavailable right now.'}, 503); }
 }
 

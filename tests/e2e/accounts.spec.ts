@@ -157,12 +157,13 @@ test('customer signs out other devices from the account page', async ({browser})
   await first.close(); await second.close();
 });
 
-test('forgot password page shows the Zalo contact QR', async ({page}) => {
+test('forgot password page shows the Discord contact', async ({page}) => {
   await page.goto('/en/login');
   await page.getByRole('link', {name: 'Forgot your password?'}).click();
   await expect(page.getByRole('heading', {name: 'Forgot password?'})).toBeVisible();
-  await expect(page.getByRole('img', {name: /Zalo QR code/})).toBeVisible();
-  expect((await page.request.get('/contact/zalo-qr.png')).headers()['content-type']).toContain('image/png');
+  await expect(page.getByRole('img', {name: /Discord invite QR code/})).toBeVisible();
+  await expect(page.getByRole('link', {name: 'Open the shop’s Discord'})).toHaveAttribute('href', 'https://discord.gg/pD4MdsJB');
+  expect((await page.request.get('/contact/discord-qr.png')).headers()['content-type']).toContain('image/png');
   await page.goto('/en/privacy');
   await expect(page.getByText('deleted automatically after 90 days')).toBeVisible();
 });

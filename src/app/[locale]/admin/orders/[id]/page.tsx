@@ -3,13 +3,15 @@ import {use, useCallback, useEffect, useState} from 'react';
 import Link from 'next/link';
 import {formatDateTime} from '@/lib/customer-labels';
 import {formatVnd} from '@/lib/money';
+import {explorerAddress, explorerTx} from '@/lib/ltc-format';
 import {dateToVietnamLocal, formatRange, statusLabels, statusTone, VN_TIME_ZONE, type OrderStatus} from '@/lib/order-rules';
 
 type Order = {
   id: string; code: string; status: OrderStatus; totalVnd: number; createdAt: string; holdExpiresAt: string; reportedAt: string | null; customerTimeZone: string | null;
   paidAt: string | null; paidAmountVnd: number | null; paymentReference: string | null; paymentConfirmedBy: string | null; assignedAdmin: string | null;
   appointmentStart: string | null; appointmentEnd: string | null; deliveryNote: string | null; cancelReason: string | null;
-  bankSnapshot: {bankName: string; accountNumber: string; accountHolder: string};
+  paymentMethod: 'bank' | 'ltc'; cryptoAmount: string | null; cryptoRateVnd: number | null; customerTxid: string | null;
+  bankSnapshot: {bankName: string; accountNumber: string; accountHolder: string} | {network: 'LTC'; address: string; label: string};
   customer: {id: string; name: string; email: string; status: string};
   items: {id: string; title: string; sku: string; unitPriceVnd: number; quantity: number; delivery: Record<string, string>}[];
   slots: {id: string; startsAt: string; endsAt: string}[];
@@ -37,6 +39,7 @@ export default function AdminOrderDetail({params}: {params: Promise<{locale: str
   const adopt = useCallback((next: Order) => {
     setOrder(next);
     setAmount(current => current || String(next.paidAmountVnd ?? next.totalVnd));
+    if (next.customerTxid) setReference(current => current || next.customerTxid!);
     const first = next.appointmentStart ?? next.slots[0]?.startsAt;
     if (first) setStart(current => current || dateToVietnamLocal(new Date(first)));
     const firstEnd = next.appointmentEnd ?? (next.slots[0] ? new Date(Math.min(Date.parse(next.slots[0].startsAt) + 60 * 60_000, Date.parse(next.slots[0].endsAt))).toISOString() : null);
@@ -83,7 +86,7 @@ export default function AdminOrderDetail({params}: {params: Promise<{locale: str
 
     <div className="admin-detail-grid">
       <section className="card admin-panel"><h2>Customer</h2>
-        <dl className="account-details"><dt>Name</dt><dd><Link href={`/${locale}/admin/customers/${order.customer.id}`}>{order.customer.name}</Link></dd><dt>Email</dt><dd>{order.customer.email}</dd><dt>Transfer content</dt><dd><strong>{order.code}</strong></dd><dt>To account</dt><dd>{order.bankSnapshot.bankName} · {order.bankSnapshot.accountNumber}</dd>{order.reportedAt && <><dt>Reported transfer</dt><dd>{formatDateTime(order.reportedAt)}</dd></>}{order.paidAt && <><dt>Payment confirmed</dt><dd>{formatVnd(order.paidAmountVnd ?? 0)} · {formatDateTime(order.paidAt)} by {order.paymentConfirmedBy}{order.paymentReference ? ` · ref ${order.paymentReference}` : ''}</dd></>}{order.appointmentStart && order.appointmentEnd && <><dt>Appointment</dt><dd><strong>{formatRange(order.appointmentStart, order.appointmentEnd, VN_TIME_ZONE)}</strong></dd></>}{order.cancelReason && <><dt>Reason</dt><dd>{order.cancelReason}</dd></>}</dl>
+        <dl className="account-details"><dt>Name</dt><dd><Link href={`/${locale}/admin/customers/${order.customer.id}`}>{order.customer.name}</Link></dd><dt>Email</dt><dd>{order.customer.email}</dd>{'address' in order.bankSnapshot ? <><dt>Method</dt><dd>Litecoin</dd><dt>Expected</dt><dd><strong>{order.cryptoAmount} LTC</strong>{order.cryptoRateVnd ? ` at ${order.cryptoRateVnd.toLocaleString('vi-VN')} ₫/LTC` : ''}</dd><dt>To wallet</dt><dd>{order.bankSnapshot.label} · <a className="admin-mono" href={explorerAddress(order.bankSnapshot.address)} target="_blank" rel="noreferrer">{order.bankSnapshot.address}</a></dd>{order.customerTxid && <><dt>Customer TXID</dt><dd><a className="admin-mono" href={explorerTx(order.customerTxid)} target="_blank" rel="noreferrer">{order.customerTxid.slice(0, 16)}…</a></dd></>}</> : <><dt>Method</dt><dd>Bank transfer</dd><dt>Transfer content</dt><dd><strong>{order.code}</strong></dd><dt>To account</dt><dd>{order.bankSnapshot.bankName} · {order.bankSnapshot.accountNumber}</dd></>}{order.reportedAt && <><dt>Reported transfer</dt><dd>{formatDateTime(order.reportedAt)}</dd></>}{order.paidAt && <><dt>Payment confirmed</dt><dd>{formatVnd(order.paidAmountVnd ?? 0)} · {formatDateTime(order.paidAt)} by {order.paymentConfirmedBy}{order.paymentReference ? ` · ref ${order.paymentReference}` : ''}</dd></>}{order.appointmentStart && order.appointmentEnd && <><dt>Appointment</dt><dd><strong>{formatRange(order.appointmentStart, order.appointmentEnd, VN_TIME_ZONE)}</strong></dd></>}{order.cancelReason && <><dt>Reason</dt><dd>{order.cancelReason}</dd></>}</dl>
       </section>
       <section className="card admin-panel"><h2>Items</h2>
         {order.items.map(item => <div className="admin-order-item" key={item.id}><strong>{item.title} × {item.quantity}</strong><span>{item.sku} · {formatVnd(item.unitPriceVnd * item.quantity)}</span>{Object.entries(item.delivery).filter(([, value]) => value).map(([key, value]) => <small key={key}>{key}: {value}</small>)}</div>)}
@@ -92,9 +95,9 @@ export default function AdminOrderDetail({params}: {params: Promise<{locale: str
     </div>
 
     {canConfirm && <section className="card admin-panel action-panel"><h2>Confirm payment{scheduleNow ? ' and book the appointment' : ''}</h2>
-      <p className="field-caption">Check your bank statement for <strong>{formatVnd(order.totalVnd)}</strong> with content <strong>{order.code}</strong>.{order.status === 'expired' ? ' This order expired; confirming re-reserves its items if they are still in stock.' : ''}</p>
+      <p className="field-caption">{'address' in order.bankSnapshot ? <>Check that the wallet received exactly <strong>{order.cryptoAmount} LTC</strong> (<a href={order.customerTxid ? explorerTx(order.customerTxid) : explorerAddress(order.bankSnapshot.address)} target="_blank" rel="noreferrer">open in explorer</a>). The order value is recorded as {formatVnd(order.totalVnd)}.</> : <>Check your bank statement for <strong>{formatVnd(order.totalVnd)}</strong> with content <strong>{order.code}</strong>.</>}{order.status === 'expired' ? ' This order expired; confirming re-reserves its items if they are still in stock.' : ''}</p>
       <form onSubmit={event => {event.preventDefault(); void act({action: 'confirm-payment', amountVnd: Number(amount), reference, ...(scheduleNow ? {appointment} : {})}, scheduleNow ? 'Payment confirmed and appointment sent to the customer.' : 'Payment confirmed.');}}>
-        <div className="admin-field-row"><label>Amount received (VND)<input type="number" min="1" step="1" value={amount} onChange={event => setAmount(event.target.value)} required/></label><label>Bank reference (optional)<input value={reference} onChange={event => setReference(event.target.value)} maxLength={120} placeholder="e.g. FT26273…"/></label></div>
+        <div className="admin-field-row"><label>{order.paymentMethod === 'ltc' ? 'Order value received (VND)' : 'Amount received (VND)'}<input type="number" min="1" step="1" value={amount} onChange={event => setAmount(event.target.value)} required/></label><label>{order.paymentMethod === 'ltc' ? 'Transaction ID (optional)' : 'Bank reference (optional)'}<input value={reference} onChange={event => setReference(event.target.value)} maxLength={120} placeholder={order.paymentMethod === 'ltc' ? '64-character TXID' : 'e.g. FT26273…'}/></label></div>
         {Number(amount) !== order.totalVnd && amount !== '' && <p className="admin-feedback error">This differs from the order total ({formatVnd(order.totalVnd)}). Confirm only if you accept it.</p>}
         <label className="admin-compact-check"><input type="checkbox" checked={scheduleNow} onChange={event => setScheduleNow(event.target.checked)}/> Book the appointment now</label>
         {scheduleNow && timePicker}

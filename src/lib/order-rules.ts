@@ -57,7 +57,12 @@ export function validTimeZone(value: string) {
 }
 
 const slot = z.object({start: z.string().datetime({offset: true}), end: z.string().datetime({offset: true})}).strict();
-export const reportSchema = z.object({timeZone: z.string().max(64), slots: z.array(slot).min(1, 'Add at least one time.').max(MAX_SLOTS, `Add at most ${MAX_SLOTS} times.`)}).strict();
+export const reportSchema = z.object({
+  timeZone: z.string().max(64),
+  slots: z.array(slot).min(1, 'Add at least one time.').max(MAX_SLOTS, `Add at most ${MAX_SLOTS} times.`),
+  // Optional Litecoin transaction id so the shop can find the payment quickly.
+  txid: z.string().trim().regex(/^[0-9a-fA-F]{64}$/, 'The transaction ID is 64 letters and digits (0-9, a-f).').optional().or(z.literal('').transform(() => undefined))
+}).strict();
 
 /** Checks customer time windows: future (≥ 15 min), within 30 days, 30 min to 12 h long. Returns an error message or null. */
 export function slotProblem(slots: {start: string; end: string}[], now = Date.now()) {

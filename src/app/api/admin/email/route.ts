@@ -3,7 +3,8 @@ import {getSession} from '@/lib/auth';
 import {sameOrigin} from '@/lib/customer-rules';
 import {adminTestEmail} from '@/lib/email-templates';
 import {disconnectMail, mailStatus, sendMail} from '@/lib/mailer';
-import {appOrigin, parseAllowlist} from '@/lib/oauth-helpers';
+import {allAdminEmails} from '@/lib/admin-team';
+import {appOrigin} from '@/lib/oauth-helpers';
 import {getPaymentDb} from '@/lib/payment-db';
 
 export const runtime = 'nodejs';
@@ -14,7 +15,7 @@ async function state() {
     mailStatus(),
     getPaymentDb().emailLog.findMany({orderBy: {createdAt: 'desc'}, take: 50, select: {id: true, recipient: true, subject: true, kind: true, status: true, error: true, orderId: true, createdAt: true}})
   ]);
-  return {connection, logs, adminRecipients: parseAllowlist(process.env.ADMIN_GOOGLE_EMAILS)};
+  return {connection, logs, adminRecipients: await allAdminEmails()};
 }
 
 export async function GET() {
@@ -30,7 +31,7 @@ export async function POST(request: Request) {
   if (admin?.role !== 'admin') return json({error: 'Admin role required'}, 403);
   const connection = await mailStatus();
   if (!connection) return json({error: 'Connect Gmail first.'}, 409);
-  const recipients = parseAllowlist(process.env.ADMIN_GOOGLE_EMAILS);
+  const recipients = await allAdminEmails();
   const result = await sendMail({to: recipients.length ? recipients : [admin.email], ...adminTestEmail({sender: connection.email, adminUrl: `${appOrigin(request.url)}/en/admin`}), kind: 'admin.test'});
   await recordAudit({actorEmail: admin.email, action: 'email.test', summary: `Sent a test email (${result.status})`, entityType: 'email'});
   return json({result, ...(await state())}, result.status === 'sent' ? 200 : 502);

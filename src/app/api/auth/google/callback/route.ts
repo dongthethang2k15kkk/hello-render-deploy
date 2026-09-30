@@ -1,5 +1,6 @@
 import {NextResponse, type NextRequest} from 'next/server';
 import {adminCookie, adminCookieOptions, encodeAdminSession, googleAdminAccount} from '@/lib/admin-session';
+import {isAdminEmail} from '@/lib/admin-team';
 import {recordAudit} from '@/lib/audit';
 import {createCustomerSession, customerCookie, customerCookieOptions, getSession, revokeCustomerSessions} from '@/lib/auth';
 import {decideGoogleLink, safeAdminPath, safeNext} from '@/lib/customer-rules';
@@ -66,7 +67,7 @@ export async function GET(request: NextRequest) {
     return mailDone('connected=1');
   }
 
-  if (isAllowedAdmin(email)) {
+  if (isAllowedAdmin(email) || await isAdminEmail(email)) {
     const response = clearOAuth(NextResponse.redirect(`${origin}${safeAdminPath(request.cookies.get(oauthCookie.next)?.value) ?? '/en/admin'}`));
     response.cookies.set(adminCookie, encodeAdminSession(googleAdminAccount(email)), adminCookieOptions);
     response.cookies.set(customerCookie, '', {path: '/', maxAge: 0});

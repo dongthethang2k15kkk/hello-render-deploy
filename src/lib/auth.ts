@@ -1,6 +1,7 @@
 import 'server-only';
 import {cookies} from 'next/headers';
 import {adminCookie, decodeAdminSession, type Account} from './admin-session';
+import {getExtraAdmins} from './admin-team';
 import {clientIp, hashToken, newSessionToken, SESSION_DAYS, userAgent} from './customer-rules';
 import {getPaymentDb} from './payment-db';
 
@@ -26,8 +27,12 @@ export function customerAccount(customer: {id: string; name: string; email: stri
 /** Returns the signed-in Admin or customer, or null. Customer sessions need the database. */
 export async function getSession(): Promise<Account | null> {
   const jar = await cookies();
-  const admin = decodeAdminSession(jar.get(adminCookie)?.value);
-  if (admin) return admin;
+  const adminValue = jar.get(adminCookie)?.value;
+  if (adminValue) {
+    // Owners are checked without a database call; Admins added in Settings need the cached list.
+    const admin = decodeAdminSession(adminValue) ?? decodeAdminSession(adminValue, await getExtraAdmins());
+    if (admin) return admin;
+  }
   const token = jar.get(customerCookie)?.value;
   return token ? (await readCustomerSession(token))?.account ?? null : null;
 }

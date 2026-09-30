@@ -21,7 +21,7 @@ export default async function PrivacyPage({params}: {params: Promise<{locale: st
       <h2>Who can see it</h2>
       <p>Only shop administrators, through the shop’s admin area. We do not sell your data. Our hosting and database providers process it on our behalf.</p>
       <h2>Your choices</h2>
-      <p>You can change your password or sign out of all devices on your <Link href={`/${locale}/account`}>account page</Link>. To delete your account and its data, contact us on Zalo (see <Link href={`/${locale}/forgot-password`}>contact</Link>).</p>
+      <p>You can change your password or sign out of all devices on your <Link href={`/${locale}/account`}>account page</Link>. To delete your account and its data, contact us on Discord (see <Link href={`/${locale}/forgot-password`}>contact</Link>).</p>
     </section>
   </article>;
 }

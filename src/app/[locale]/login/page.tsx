@@ -10,8 +10,8 @@ const oauthErrors: Record<string, string> = {
   google_invalid_state: 'Google sign-in expired. Please try again.',
   google_failed: 'Could not complete Google sign-in. Please try again.',
   google_unverified: 'This Google email is not verified.',
-  google_conflict: 'This email is already linked to a different Google account. Contact the shop on Zalo.',
-  account_locked: 'This account is locked. Contact the shop on Zalo.',
+  google_conflict: 'This email is already linked to a different Google account. Contact the shop on Discord.',
+  account_locked: 'This account is locked. Contact the shop on Discord.',
   accounts_unavailable: 'Accounts are unavailable right now. Please try again shortly.'
 };
 

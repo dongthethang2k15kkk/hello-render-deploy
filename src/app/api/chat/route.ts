@@ -1,6 +1,6 @@
 import {NextResponse} from 'next/server';
 import {getSession} from '@/lib/auth';
-import {addMessage, customerIdFromRoom, listMessages, listRooms, MAX_CHAT_IMAGE_BYTES, MAX_CHAT_IMAGES_PER_ROOM, roomFor, roomImageCount} from '@/lib/chat-store';
+import {addMessage, customerIdFromRoom, listMessages, listRooms, markAdminRead, markCustomerRead, MAX_CHAT_IMAGE_BYTES, MAX_CHAT_IMAGES_PER_ROOM, roomFor, roomImageCount} from '@/lib/chat-store';
 import {sameOrigin} from '@/lib/customer-rules';
 import {validProductImageSignature} from '@/lib/product-image';
 
@@ -17,9 +17,16 @@ export async function GET(request: Request) {
       const requested = new URL(request.url).searchParams.get('room');
       const room = requested && rooms.some(item => item.id === requested) ? requested : rooms[0]?.id ?? '';
       const customerId = customerIdFromRoom(room);
+      // Viewing a conversation marks it read for the whole Admin team.
+      const selected = rooms.find(item => item.id === room);
+      if (customerId && selected?.unread) { await markAdminRead(customerId); selected.unread = 0; }
       return NextResponse.json({rooms, messages: customerId ? await listMessages(customerId) : [], room});
     }
-    return NextResponse.json({rooms: [], messages: await listMessages(account.id), room: roomFor(account.id)});
+    const messages = await listMessages(account.id);
+    // The chat panel only loads while it is open, so loading means the customer has seen the replies.
+    const latestReply = messages.filter(message => message.role === 'admin').at(-1);
+    if (latestReply) await markCustomerRead(account.id, new Date(latestReply.createdAt));
+    return NextResponse.json({rooms: [], messages, room: roomFor(account.id)});
   } catch (error) {
     console.error('Chat load failed', error instanceof Error ? error.message.split('\n')[0] : error);
     return unavailable();

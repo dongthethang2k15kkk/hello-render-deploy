@@ -102,7 +102,7 @@ test('full order: checkout, VietQR, times, admin confirms and books, customer is
   expect(inbox.unread).toBeGreaterThanOrEqual(2);
   expect(inbox.notifications[0].title).toContain(`Appointment booked · ${code}`);
   await page.goto('/en');
-  await expect(page.locator('.inbox-link b')).toBeVisible();
+  await expect(page.getByRole('link', {name: /^Inbox, [1-9]\d* unread$/})).toBeVisible();
 
   await adminPage.getByLabel('Delivery details').fill('Your code: SECRET-CODE-123');
   adminPage.once('dialog', dialog => void dialog.accept());
@@ -162,4 +162,63 @@ test('orders cannot be placed without signing in or with a stale cart', async ({
   await registerCustomer(request, 'Stale Cart');
   const stale = await request.post('/api/orders', {data: {lines: [{productId: 'not-a-package', quantity: 1, delivery: {}}]}});
   expect(stale.status()).toBe(409);
+});
+
+test('Litecoin: wallet with checksum, unique amounts per order, litecoin: QR, TXID and confirmation', async ({browser}) => {
+  test.setTimeout(120000);
+  const {createHash} = await import('node:crypto');
+  const {base58Encode} = await import('../../src/lib/ltc');
+  const sha = (data: Uint8Array) => createHash('sha256').update(data).digest();
+  const body = Uint8Array.from([0x30, ...Array.from({length: 20}, (_, i) => (Date.now() + i) % 256)]);
+  const address = base58Encode(Uint8Array.from([...body, ...sha(sha(body)).subarray(0, 4)]));
+
+  const adminContext = await admin(browser);
+  const settings = '/api/admin/settings/payments';
+  expect((await adminContext.request.post(settings, {data: {action: 'save-wallet', address: address.slice(0, -1) + (address.endsWith('a') ? 'b' : 'a'), label: 'Typo', active: true}})).status()).toBe(400);
+  const added = await adminContext.request.post(settings, {data: {action: 'save-wallet', address, label: 'E2E wallet', active: true}});
+  expect(added.ok(), await added.text()).toBe(true);
+  const walletId = (await added.json()).wallets.find((wallet: {address: string}) => wallet.address === address).id as string;
+  expect((await adminContext.request.post(settings, {data: {action: 'ltc-override', vndPerLtc: 2000000}})).ok()).toBe(true);
+  // Only the E2E wallet is active while this test runs.
+  const state = await (await adminContext.request.get(settings)).json();
+  for (const wallet of state.wallets) if (wallet.id !== walletId && wallet.active) await adminContext.request.post(settings, {data: {action: 'save-wallet', id: wallet.id, address: wallet.address, label: wallet.label, active: false}});
+
+  const customerContext = await browser.newContext();
+  await registerCustomer(customerContext.request, 'LTC Customer');
+  const methods = await (await customerContext.request.get('/api/payment-methods')).json();
+  expect(methods.ltc).toMatchObject({vndPerLtc: 2000000, source: 'manual'});
+  const lines = [{productId: await catalogId(customerContext.request, 'SAMPLE_PLUS'), quantity: 1, delivery: {recipient: 'LTC buyer', note: ''}}];
+  const first = await (await customerContext.request.post('/api/orders', {data: {lines, method: 'ltc'}})).json();
+  const second = await (await customerContext.request.post('/api/orders', {data: {lines, method: 'ltc'}})).json();
+  const one = await (await customerContext.request.get(`/api/orders/${first.code}`)).json();
+  const two = await (await customerContext.request.get(`/api/orders/${second.code}`)).json();
+  // 650,000 VND at 2,000,000 VND/LTC = 0.325 LTC, plus a unique 1-999 litoshi tag.
+  expect(one.order.cryptoAmount).toMatch(/^0\.32500\d{3}$/);
+  expect(one.order.cryptoAmount).not.toBe('0.32500000');
+  expect(two.order.cryptoAmount).not.toBe(one.order.cryptoAmount);
+  expect(one.paymentUri).toBe(`litecoin:${address}?amount=${one.order.cryptoAmount}&label=Jewish%20Horse&message=Order%20${first.code}`);
+  expect(one.qrSvg).toContain('<svg');
+
+  const page = await customerContext.newPage();
+  await page.goto(`/en/orders/${first.code}`);
+  await expect(page.getByRole('img', {name: `Litecoin QR code: ${one.order.cryptoAmount} LTC`})).toBeVisible();
+  await expect(page.getByRole('link', {name: 'Open in wallet app'})).toHaveAttribute('href', one.paymentUri);
+  await page.getByRole('button', {name: 'I’ve sent the LTC →'}).click();
+  await page.getByLabel('Litecoin transaction ID (optional)').fill('ab'.repeat(32));
+  await page.getByRole('button', {name: 'Send my times'}).click();
+  await expect(page.getByText('We received your times')).toBeVisible();
+
+  const orderId = (await db.order.findUniqueOrThrow({where: {code: first.code}})).id;
+  const adminPage = await adminContext.newPage();
+  await adminPage.goto(`/en/admin/orders/${orderId}`);
+  await expect(adminPage.getByText(`${one.order.cryptoAmount} LTC`).first()).toBeVisible();
+  await expect(adminPage.getByLabel('Transaction ID (optional)')).toHaveValue('ab'.repeat(32));
+  await adminPage.getByLabel('Book the appointment now').uncheck();
+  await adminPage.getByRole('button', {name: 'Confirm payment'}).click();
+  await expect(adminPage.getByText('Payment confirmed.')).toBeVisible();
+
+  // Leave no active test wallet or manual price behind for the other tests.
+  await adminContext.request.post(settings, {data: {action: 'save-wallet', id: walletId, address, label: 'E2E wallet', active: false}});
+  await adminContext.request.post(settings, {data: {action: 'ltc-override', vndPerLtc: null}});
+  await customerContext.close(); await adminContext.close();
 });
