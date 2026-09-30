@@ -2,17 +2,11 @@
 import {useEffect, useState} from 'react';
 import Link from 'next/link';
 import {useLocale} from 'next-intl';
-import {formatDateTime} from '@/lib/customer-labels';
-import {formatUsdFromVnd, formatVnd} from '@/lib/money';
+import {formatUsdFromVnd} from '@/lib/money';
 
 type Account = {id: string; bankBin: string; bankName: string; accountNumber: string; accountHolder: string; active: boolean};
 type Wallet = {id: string; address: string; label: string; active: boolean};
-type Transfer = {id: string; amountVnd: number; content: string; outcome: string; orderId: string | null; receivedAt: string};
-type State = {vndPerUsd: number; accounts: Account[]; banks: readonly {bin: string; name: string}[]; wallets: Wallet[]; ltcOverride: number | null; ltcRate: {vndPerLtc: number; source: string} | null; sepay: {configured: boolean; keyHint: string | null}; transfers: Transfer[]};
-const outcomeLabels: Record<string, [string, string]> = {
-  matched: ['Paid automatically', 'ok'], underpaid: ['Too little', 'danger'], no_code: ['No order code', 'warn'], unknown_order: ['Unknown order', 'warn'],
-  wrong_account: ['Other account', 'warn'], already_handled: ['Already handled', ''], not_payable: ['Not payable', 'warn'], ignored: ['Outgoing / ignored', '']
-};
+type State = {vndPerUsd: number; accounts: Account[]; banks: readonly {bin: string; name: string}[]; wallets: Wallet[]; ltcOverride: number | null; ltcRate: {vndPerLtc: number; source: string} | null};
 type WalletDraft = {id?: string; address: string; label: string; active: boolean};
 const emptyWallet: WalletDraft = {address: '', label: '', active: true};
 type Draft = {id?: string; bankBin: string; customBin: string; accountNumber: string; accountHolder: string; active: boolean};
@@ -29,7 +23,6 @@ export default function PaymentSettings() {
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
   const [busy, setBusy] = useState(false);
-  const [sepayKey, setSepayKey] = useState('');
 
   useEffect(() => {
     fetch('/api/admin/settings/payments', {cache: 'no-store'}).then(async response => { const body = await response.json(); if (!response.ok) throw new Error(body.error); setState(body); setRate(String(body.vndPerUsd)); setOverride(body.ltcOverride ? String(body.ltcOverride) : ''); })
@@ -75,20 +68,6 @@ export default function PaymentSettings() {
         <label className="admin-compact-check"><input type="checkbox" checked={draft.active} onChange={event => setDraft({...draft, active: event.target.checked})}/> Active (shown to customers)</label>
         <div className="form-actions"><button type="submit" disabled={busy}>{draft.id ? 'Save account' : 'Add account'}</button>{draft.id && <button type="button" className="secondary" onClick={() => setDraft(emptyDraft)}>Cancel edit</button>}</div>
       </form>
-    </section>
-
-    <section className="card admin-panel"><h2>Automatic bank payment detection (SePay)</h2>
-      <p className="field-caption">SePay reads your bank account and tells this site about each incoming transfer. When the content contains the order code and the amount is enough, the order is marked paid automatically and everyone is notified. The free SePay plan covers 50 transactions a month.</p>
-      <ol className="field-caption sepay-steps">
-        <li>Sign up at <a href="https://my.sepay.vn/register" target="_blank" rel="noreferrer">my.sepay.vn</a> and link the same bank account as above.</li>
-        <li>Generate a key below, then in SePay → Webhooks add a webhook: URL <strong className="admin-mono">{typeof window === 'undefined' ? '' : window.location.origin}/api/payments/sepay</strong>, event “Money in”, authentication “API Key”, and paste the key.</li>
-        <li>Make a small test transfer with an order code in the content, or use SePay’s test button, and watch the list below.</li>
-      </ol>
-      <p>Status: <span className={`badge ${state.sepay.configured ? 'ok' : 'warn'}`}>{state.sepay.configured ? `Key set (${state.sepay.keyHint})` : 'Not set up'}</span></p>
-      {sepayKey && <div><p className="field-caption">Copy this key into SePay now. It is shown only once.</p><p className="sepay-key" data-testid="sepay-key">{sepayKey}</p><button type="button" className="secondary" onClick={() => void navigator.clipboard?.writeText(sepayKey)}>Copy key</button></div>}
-      <div className="form-actions"><button type="button" disabled={busy} onClick={() => { if (!state.sepay.configured || window.confirm('Make a new key? The old key stops working until you paste the new one into SePay.')) void post({action: 'sepay-rotate'}, 'New SePay key generated.').then(data => data?.sepayKey && setSepayKey(data.sepayKey)); }}>{state.sepay.configured ? 'Generate a new key' : 'Generate key'}</button></div>
-      <h3>Recent incoming transfers</h3>
-      {state.transfers.length === 0 ? <p className="admin-empty">No transfers received from SePay yet.</p> : <ul className="transfer-list">{state.transfers.map(item => <li key={item.id}><strong>{formatVnd(item.amountVnd)}</strong><small>{formatDateTime(item.receivedAt)} · {item.content || '(no content)'}{item.orderId ? <> · <Link href={`/${locale}/admin/orders/${item.orderId}`}>order</Link></> : null}</small><span className={`badge ${outcomeLabels[item.outcome]?.[1] ?? ''}`}>{outcomeLabels[item.outcome]?.[0] ?? item.outcome}</span></li>)}</ul>}
     </section>
 
     <section className="card admin-panel"><h2>Litecoin wallets</h2>

@@ -2,6 +2,8 @@
 import {z} from 'zod';
 
 export const HOLD_MINUTES = 30;
+/** The "I've transferred" button unlocks this long after ordering, so customers pay before they report. */
+export const REPORT_DELAY_SECONDS = 60;
 export const MAX_SLOTS = 5;
 export const ORDER_STATUSES = ['awaiting_payment', 'payment_reported', 'paid', 'scheduled', 'completed', 'cancelled', 'expired'] as const;
 export type OrderStatus = typeof ORDER_STATUSES[number];

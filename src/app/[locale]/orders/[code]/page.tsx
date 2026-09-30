@@ -6,7 +6,7 @@ import TimeSlotsDialog from '@/components/time-slots-dialog';
 import {googleCalendarLink} from '@/lib/calendar';
 import {formatUsdFromVnd, formatVnd} from '@/lib/money';
 import {explorerTx} from '@/lib/ltc-format';
-import {formatRange, statusLabels, statusTone, type OrderStatus} from '@/lib/order-rules';
+import {formatRange, REPORT_DELAY_SECONDS, statusLabels, statusTone, type OrderStatus} from '@/lib/order-rules';
 
 type Order = {
   id: string; code: string; status: OrderStatus; totalVnd: number; vndPerUsd: number; holdExpiresAt: string; createdAt: string;
@@ -67,6 +67,7 @@ export default function OrderPage({params}: {params: Promise<{locale: string; co
 
   if (!order) return <div className="page-heading"><p className="eyebrow">ORDER {code}</p>{error ? <><p className="error-text" role="alert">{error}</p><Link href={`/${locale}/orders`}>← My orders</Link></> : <p aria-busy="true">Loading order…</p>}</div>;
   const secondsLeft = Math.max(0, Math.floor((Date.parse(order.holdExpiresAt) - (now + offset)) / 1000));
+  const reportIn = Math.max(0, Math.ceil((Date.parse(order.createdAt) + REPORT_DELAY_SECONDS * 1000 - (now + offset)) / 1000));
   const calendar = order.appointmentStart && order.appointmentEnd ? {start: new Date(order.appointmentStart), end: new Date(order.appointmentEnd), title: `Jewish Horse · order ${order.code}`, description: 'Open the Jewish Horse website and go to Chat at this time.', url: typeof window === 'undefined' ? '' : window.location.href} : null;
 
   return <div className="order-page">
@@ -99,9 +100,10 @@ export default function OrderPage({params}: {params: Promise<{locale: string; co
               </div>
             </>}
           </div>
-          <div className="pay-actions"><button type="button" disabled={secondsLeft <= 0} onClick={() => setDialog('report')}>{order.paymentMethod === 'ltc' ? 'I’ve sent the LTC →' : 'I’ve transferred →'}</button><button type="button" className="secondary" onClick={() => { if (window.confirm('Cancel this order?')) void act({action: 'cancel'}).then(failure => failure ? setError(failure) : setNotice('Order cancelled.')); }}>Cancel order</button></div>
+          <div className="pay-actions"><button type="button" disabled={secondsLeft <= 0 || reportIn > 0} onClick={() => setDialog('report')}>{order.paymentMethod === 'ltc' ? 'I’ve sent the LTC →' : 'I’ve transferred →'}{reportIn > 0 && secondsLeft > 0 ? ` (${reportIn}s)` : ''}</button><button type="button" className="secondary" onClick={() => { if (window.confirm('Cancel this order?')) void act({action: 'cancel'}).then(failure => failure ? setError(failure) : setNotice('Order cancelled.')); }}>Cancel order</button></div>
           {order.paymentSeenAt && <p className="payment-seen" role="status">Payment seen on the Litecoin network. Waiting for confirmations ({Math.min(order.txConfirmations ?? 0, 2)}/2); this page updates by itself.</p>}
           {autoDetect && !order.paymentSeenAt && <p className="field-caption">This page updates by itself when your payment arrives, usually within a minute or two. You can also tap the button after paying.</p>}
+          {reportIn > 0 && secondsLeft > 0 && <p className="field-caption">First {order.paymentMethod === 'ltc' ? 'send the LTC from your wallet' : 'make the transfer in your banking app'}. The button unlocks one minute after you order.</p>}
           {secondsLeft <= 0 && <p className="field-caption">If you already transferred, message us in <Link href={`/${locale}/workspace`}>Chat</Link> with the order code.</p>}
         </section>}
 
@@ -109,7 +111,7 @@ export default function OrderPage({params}: {params: Promise<{locale: string; co
           <span className="eyebrow">{order.status === 'paid' ? 'PAYMENT CONFIRMED' : 'CHECKING YOUR PAYMENT'}</span>
           {order.customerTxid && <p className="field-caption">Your transaction: <a href={explorerTx(order.customerTxid)} target="_blank" rel="noreferrer">{order.customerTxid.slice(0, 12)}…</a></p>}
           <h2>{order.status === 'paid' ? (order.slots.length || order.asap ? 'We are booking your appointment' : 'Payment received! When are you free?') : 'Thanks! We are confirming your transfer'}</h2>
-          {order.paymentSource && order.status === 'paid' && <p className="payment-seen">Payment confirmed automatically{order.paymentSource === 'blockchain' ? ' on the Litecoin network' : ' from your bank transfer'}.</p>}
+          {order.paymentSource && order.status === 'paid' && <p className="payment-seen">Payment confirmed automatically on the Litecoin network.</p>}
           {order.status === 'payment_reported' && order.paymentSeenAt && <p className="payment-seen" role="status">Payment seen on the Litecoin network ({Math.min(order.txConfirmations ?? 0, 2)}/2 confirmations). It is confirmed automatically.</p>}
           {order.asap && <p className="payment-seen">You are free right now: we will message you in <Link href={`/${locale}/workspace`}>Chat</Link> as soon as an Admin is available.</p>}
           <p className="muted">You will get an email and a message in your <Link href={`/${locale}/inbox`}>Inbox</Link> when your appointment is booked.</p>

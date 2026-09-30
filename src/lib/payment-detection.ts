@@ -1,43 +1,22 @@
 import 'server-only';
-import {randomBytes, timingSafeEqual} from 'node:crypto';
 import {allAdminEmails} from './admin-team';
 import {recordAudit} from './audit';
 import {addMessage} from './chat-store';
 import * as templates from './email-templates';
 import {parseLtc} from './ltc-format';
 import {sendMail} from './mailer';
-import {formatVnd} from './money';
 import {notifyCustomer} from './notifications';
 import {VN_TIME_ZONE} from './order-rules';
 import {reReserveItems} from './order-stock';
-import {extractOrderCode, findLtcPayment, REQUIRED_LTC_CONFIRMATIONS} from './payment-match';
+import {findLtcPayment, REQUIRED_LTC_CONFIRMATIONS} from './payment-match';
 import {getPaymentDb} from './payment-db';
 
-type Source = 'sepay' | 'blockchain';
 const PAYABLE = ['awaiting_payment', 'payment_reported', 'expired'];
-
-// ---------- SePay webhook key ----------
-
-const SEPAY_KEY = 'sepayWebhookKey';
-export async function getSepayKey() {
-  const row = await getPaymentDb().storeSetting.findUnique({where: {key: SEPAY_KEY}});
-  return typeof row?.value === 'string' ? row.value : null;
-}
-export async function rotateSepayKey(actorEmail: string) {
-  const key = randomBytes(24).toString('base64url');
-  await getPaymentDb().storeSetting.upsert({where: {key: SEPAY_KEY}, create: {key: SEPAY_KEY, value: key, updatedBy: actorEmail}, update: {value: key, updatedBy: actorEmail}});
-  return key;
-}
-export async function sepayAuthorized(header: string | null) {
-  const key = await getSepayKey();
-  const given = header?.replace(/^Apikey\s+/i, '').trim() ?? '';
-  return Boolean(key) && given.length === key!.length && timingSafeEqual(Buffer.from(given), Buffer.from(key!));
-}
 
 // ---------- Marking an order paid without an Admin ----------
 
-/** Confirms payment detected by SePay or the blockchain, then tells the customer and every Admin. */
-export async function markPaidAutomatically(orderId: string, input: {amountVnd: number; reference: string; source: Source; amountLabel: string}, origin: string) {
+/** Confirms a Litecoin payment found on the blockchain, then tells the customer and every Admin. */
+export async function markPaidAutomatically(orderId: string, input: {amountVnd: number; reference: string; amountLabel: string}, origin: string) {
   const db = getPaymentDb();
   const order = await db.order.findUnique({where: {id: orderId}, include: {customer: {select: {id: true, name: true, email: true}}, slots: {orderBy: {startsAt: 'asc'}}}});
   if (!order || !PAYABLE.includes(order.status)) return false;
@@ -46,58 +25,21 @@ export async function markPaidAutomatically(orderId: string, input: {amountVnd: 
       if (order.status === 'expired') await reReserveItems(tx, orderId);
       const changed = await tx.order.updateMany({where: {id: orderId, status: order.status}, data: {
         status: 'paid', paidAt: new Date(), paidAmountVnd: input.amountVnd, paymentReference: input.reference.slice(0, 120),
-        paymentConfirmedBy: `auto:${input.source}`, paymentSource: input.source, cancelledAt: null, cancelReason: null
+        paymentConfirmedBy: 'auto:blockchain', paymentSource: 'blockchain', cancelledAt: null, cancelReason: null
       }});
       if (changed.count !== 1) throw new Error('Order changed');
-      await tx.orderEvent.create({data: {orderId, actor: 'system', action: 'payment_confirmed', note: `Detected automatically (${input.source === 'sepay' ? 'bank transfer via SePay' : 'Litecoin blockchain'}): ${input.amountLabel}`}});
+      await tx.orderEvent.create({data: {orderId, actor: 'system', action: 'payment_confirmed', note: `Detected automatically on the Litecoin blockchain: ${input.amountLabel}`}});
     }, {maxWait: 10000, timeout: 20000});
   } catch (error) {
     console.error('Automatic confirmation failed', error instanceof Error ? error.message : error);
     return false;
   }
-  await recordAudit({actorEmail: 'system', action: 'order.payment_detected', summary: `Payment for ${order.code} detected automatically (${input.source}): ${input.amountLabel}`, entityType: 'order', entityId: orderId, customerId: order.customerId});
+  await recordAudit({actorEmail: 'system', action: 'order.payment_detected', summary: `Payment for ${order.code} detected automatically on the Litecoin blockchain: ${input.amountLabel}`, entityType: 'order', entityId: orderId, customerId: order.customerId});
   const needsTimes = order.slots.length === 0 && !order.asap;
   await notifyCustomer({customerId: order.customerId, orderId, title: `Payment received · ${order.code}`, body: needsTimes ? 'Thank you! Your payment arrived. Tell us when you are free so we can book your appointment.' : 'Thank you! Your payment arrived. We will confirm your appointment shortly.', link: `/en/orders/${order.code}`});
   await sendMail({to: [order.customer.email], ...templates.customerPaymentConfirmed({code: order.code, name: order.customer.name, orderUrl: `${origin}/en/orders/${order.code}`}), kind: 'customer.payment_confirmed', orderId});
-  await sendMail({to: await allAdminEmails(), ...templates.adminPaymentDetected({code: order.code, customerName: order.customer.name, source: input.source, amountLabel: input.amountLabel, slots: order.slots.map(slot => ({start: slot.startsAt, end: slot.endsAt})), asap: order.asap, orderUrl: `${origin}/en/admin/orders/${orderId}`}), kind: 'admin.payment_detected', orderId});
+  await sendMail({to: await allAdminEmails(), ...templates.adminPaymentDetected({code: order.code, customerName: order.customer.name, amountLabel: input.amountLabel, slots: order.slots.map(slot => ({start: slot.startsAt, end: slot.endsAt})), asap: order.asap, orderUrl: `${origin}/en/admin/orders/${orderId}`}), kind: 'admin.payment_detected', orderId});
   return true;
-}
-
-// ---------- Bank transfers (SePay webhook) ----------
-
-export type SepayPayload = {id?: unknown; gateway?: unknown; accountNumber?: unknown; code?: unknown; content?: unknown; description?: unknown; transferType?: unknown; transferAmount?: unknown; referenceCode?: unknown};
-const text = (value: unknown) => typeof value === 'string' ? value : value == null ? '' : String(value);
-
-export async function handleSepayTransfer(payload: SepayPayload, origin: string) {
-  const db = getPaymentDb();
-  const id = `sepay:${text(payload.id)}`;
-  if (!text(payload.id)) return 'invalid';
-  if (await db.bankTransaction.findUnique({where: {id}})) return 'duplicate';
-  const amount = Math.round(Number(payload.transferAmount));
-  const record = (outcome: string, orderId?: string) => db.bankTransaction.create({data: {
-    id, provider: 'sepay', amountVnd: Number.isFinite(amount) ? amount : 0, content: text(payload.content).slice(0, 500), referenceCode: text(payload.referenceCode).slice(0, 120) || null,
-    accountNumber: text(payload.accountNumber).slice(0, 40) || null, gateway: text(payload.gateway).slice(0, 60) || null, orderId: orderId ?? null, outcome
-  }}).catch(() => undefined);
-
-  if (text(payload.transferType) !== 'in' || !(amount > 0)) { await record('ignored'); return 'ignored'; }
-  const code = extractOrderCode(text(payload.code), text(payload.content), text(payload.description));
-  if (!code) { await record('no_code'); return 'no_code'; }
-  const order = await db.order.findUnique({where: {code}, select: {id: true, code: true, status: true, totalVnd: true, paymentMethod: true, bankSnapshot: true}});
-  if (!order) { await record('unknown_order'); return 'unknown_order'; }
-  const account = (order.bankSnapshot as {accountNumber?: string}).accountNumber;
-  if (text(payload.accountNumber) && account && text(payload.accountNumber).replace(/\D/g, '') !== account.replace(/\D/g, '')) { await record('wrong_account', order.id); return 'wrong_account'; }
-  if (!PAYABLE.includes(order.status)) { await record('already_handled', order.id); return 'already_handled'; }
-  if (amount < order.totalVnd) {
-    await record('underpaid', order.id);
-    await db.orderEvent.create({data: {orderId: order.id, actor: 'system', action: 'payment_underpaid', note: `SePay: received ${formatVnd(amount)} of ${formatVnd(order.totalVnd)}`}});
-    await sendMail({to: await allAdminEmails(), ...templates.adminUnderpaid({code: order.code, receivedVnd: amount, totalVnd: order.totalVnd, orderUrl: `${origin}/en/admin/orders/${order.id}`}), kind: 'admin.underpaid', orderId: order.id});
-    return 'underpaid';
-  }
-  // Recording first claims this transfer, so a retry from SePay cannot pay the order twice.
-  await record('matched', order.id);
-  const done = await markPaidAutomatically(order.id, {amountVnd: amount, reference: text(payload.referenceCode) || id, source: 'sepay', amountLabel: formatVnd(amount)}, origin);
-  if (!done) await db.bankTransaction.update({where: {id}, data: {outcome: 'not_payable'}}).catch(() => undefined);
-  return done ? 'matched' : 'not_payable';
 }
 
 // ---------- Litecoin (public blockchain explorer) ----------
@@ -144,7 +86,7 @@ export async function checkLtcOrder(orderId: string, origin: string, {force = fa
     if (!found) return {seen: false};
     await db.order.update({where: {id: orderId}, data: {txConfirmations: found.confirmations, customerTxid: order.customerTxid ?? found.txid, ...(order.paymentSeenAt ? {} : {paymentSeenAt: new Date()})}});
     if (!order.paymentSeenAt) await db.orderEvent.create({data: {orderId, actor: 'system', action: 'payment_seen', note: `Litecoin transaction seen: ${found.txid.slice(0, 16)}…`}});
-    if (found.confirmations >= REQUIRED_LTC_CONFIRMATIONS) await markPaidAutomatically(orderId, {amountVnd: order.totalVnd, reference: found.txid, source: 'blockchain', amountLabel: `${order.cryptoAmount} LTC`}, origin);
+    if (found.confirmations >= REQUIRED_LTC_CONFIRMATIONS) await markPaidAutomatically(orderId, {amountVnd: order.totalVnd, reference: found.txid, amountLabel: `${order.cryptoAmount} LTC`}, origin);
     return {seen: true, confirmations: found.confirmations};
   } catch (error) {
     console.error('Litecoin check failed', error instanceof Error ? error.message : error);

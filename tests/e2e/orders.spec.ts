@@ -21,6 +21,11 @@ async function ensureBankAccount(request: APIRequestContext) {
   expect((await request.post('/api/admin/settings/payments', {data: {action: 'rate', vndPerUsd: 26000}})).ok()).toBe(true);
 }
 
+/** Skips the one-minute wait before "I've transferred" unlocks (E2E database only). */
+async function olderOrder(code: string) {
+  await db.order.update({where: {code}, data: {createdAt: new Date(Date.now() - 2 * 60_000)}});
+}
+
 async function stockOf(request: APIRequestContext, sku: string) {
   const body = await (await request.get('/api/catalog')).json() as {products: {sku: string; stock: number}[]};
   return body.products.find(product => product.sku === sku)?.stock ?? -1;
@@ -68,6 +73,13 @@ test('full order: checkout, VietQR, times, admin confirms and books, customer is
   await expect(page.locator('.pay-row', {hasText: 'Account holder'})).toContainText('NGUYEN VAN TEST');
   expect(await stockOf(page.request, 'SAMPLE_BASIC')).toBe(stockBefore - 1);
 
+  // The button stays locked for a minute so customers pay first; the server refuses early reports too.
+  await expect(page.getByRole('button', {name: 'I’ve transferred →'})).toBeDisabled();
+  await expect(page.getByText('The button unlocks one minute after you order.')).toBeVisible();
+  const early = await page.request.post(`/api/orders/${code}`, {data: {action: 'report', timeZone: 'Asia/Ho_Chi_Minh', slots: [{start: new Date(Date.now() + 86_400_000).toISOString(), end: new Date(Date.now() + 90_000_000).toISOString()}]}});
+  expect(early.status()).toBe(409);
+  await olderOrder(code);
+  await page.reload();
   await page.getByRole('button', {name: 'I’ve transferred →'}).click();
   await expect(page.getByRole('dialog', {name: 'When can you receive your order?'})).toBeVisible();
   await page.getByRole('button', {name: '+ Add another time'}).click();
@@ -203,6 +215,8 @@ test('Litecoin: wallet with checksum, unique amounts per order, litecoin: QR, TX
   await page.goto(`/en/orders/${first.code}`);
   await expect(page.getByRole('img', {name: `Litecoin QR code: ${one.order.cryptoAmount} LTC`})).toBeVisible();
   await expect(page.getByRole('link', {name: 'Open in wallet app'})).toHaveAttribute('href', one.paymentUri);
+  await olderOrder(first.code);
+  await page.reload();
   await page.getByRole('button', {name: 'I’ve sent the LTC →'}).click();
   await page.getByLabel('Litecoin transaction ID (optional)').fill('ab'.repeat(32));
   await page.getByRole('button', {name: 'Send my times'}).click();

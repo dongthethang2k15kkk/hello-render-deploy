@@ -1,19 +1,5 @@
 import {describe, expect, it} from 'vitest';
-import {extractOrderCode, findLtcPayment} from '../../src/lib/payment-match';
-
-describe('order code in bank transfer notes', () => {
-  it('finds the code among other words and in any case', () => {
-    expect(extractOrderCode('MBVCB.3278907687.JH7K3M9Q.CT tu 0123')).toBe('JH7K3M9Q');
-    expect(extractOrderCode('chuyen tien jh7k3m9q cam on')).toBe('JH7K3M9Q');
-    expect(extractOrderCode(null, 'NGUYEN VAN A chuyen khoan', 'JH7K3M9Q')).toBe('JH7K3M9Q');
-  });
-  it('ignores look-alikes and codes glued to other text', () => {
-    expect(extractOrderCode('JH7K3M9QX')).toBeNull();
-    expect(extractOrderCode('XJH7K3M9Q')).toBeNull();
-    expect(extractOrderCode('JH1K3M9Q')).toBeNull();
-    expect(extractOrderCode('no code here')).toBeNull();
-  });
-});
+import {findLtcPayment} from '../../src/lib/payment-match';
 
 describe('Litecoin payment matching', () => {
   const address = 'ltc1qshop';

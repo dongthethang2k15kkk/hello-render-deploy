@@ -7,7 +7,7 @@ import {orderCodePattern, reportSchema} from '@/lib/order-rules';
 import {cancelByCustomer, customerOrder, OrderError, reportTransfer, updateTimes} from '@/lib/order-store';
 import {litecoinUri} from '@/lib/ltc-format';
 import {vietQrPayload} from '@/lib/vietqr';
-import {checkLtcOrder, getSepayKey} from '@/lib/payment-detection';
+import {checkLtcOrder} from '@/lib/payment-detection';
 
 export const runtime = 'nodejs';
 const json = (data: unknown, status = 200) => Response.json(data, {status, headers: {'Cache-Control': 'no-store'}});
@@ -24,8 +24,8 @@ export async function GET(request: Request, {params}: {params: Promise<{code: st
       const check = await checkLtcOrder(order.id, appOrigin(request.url));
       if (check?.seen) order = (await customerOrder(account.id, code)) ?? order;
     }
-    // Tells the page whether it will update by itself when the money arrives.
-    const autoDetect = order.paymentMethod === 'ltc' || Boolean(await getSepayKey().catch(() => null));
+    // Litecoin payments are detected on the blockchain, so the page updates by itself when the money arrives.
+    const autoDetect = order.paymentMethod === 'ltc';
     let qrSvg: string | null = null;
     let paymentUri: string | null = null;
     if (order.status === 'awaiting_payment') {

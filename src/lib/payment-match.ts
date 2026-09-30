@@ -1,11 +1,5 @@
 // Pure matching rules for automatic payment detection (no Node.js or Prisma imports).
 
-/** Finds an order code (JH + 6 characters) in a bank transfer note; banks may add words, spaces or change case. */
-export function extractOrderCode(...texts: (string | null | undefined)[]) {
-  const text = texts.filter(Boolean).join(' ').toUpperCase();
-  return /(?:^|[^A-Z0-9])(JH[2-9A-HJ-NP-TV-Z]{6})(?![A-Z0-9])/.exec(text)?.[1] ?? null;
-}
-
 type ExplorerTx = {txid: string; status: {confirmed: boolean; block_height?: number; block_time?: number}; vout: {scriptpubkey_address?: string; value: number}[]};
 
 /**

@@ -90,22 +90,15 @@ export function adminTestEmail(input: {sender: string; adminUrl: string}): Email
 
 // ---------- Automatic payment detection, ASAP appointments and reminders ----------
 
-export function adminPaymentDetected(input: {code: string; customerName: string; source: 'sepay' | 'blockchain'; amountLabel: string; slots: Slot[]; asap: boolean; orderUrl: string}): EmailContent {
+export function adminPaymentDetected(input: {code: string; customerName: string; amountLabel: string; slots: Slot[]; asap: boolean; orderUrl: string}): EmailContent {
   const title = `Đơn ${input.code} đã thanh toán (tự động)`;
   const lines = [
-    `Hệ thống đã tự nhận ${input.source === 'sepay' ? 'chuyển khoản qua SePay' : 'giao dịch Litecoin trên blockchain'}: <strong>${escapeHtml(input.amountLabel)}</strong> từ khách <strong>${escapeHtml(input.customerName)}</strong>.`,
+    `Hệ thống đã tự nhận giao dịch Litecoin trên blockchain: <strong>${escapeHtml(input.amountLabel)}</strong> từ khách <strong>${escapeHtml(input.customerName)}</strong>.`,
     input.asap ? '<strong>Khách đang rảnh NGAY BÂY GIỜ.</strong> Nếu bạn rảnh, mở đơn và bấm "Start now".' : input.slots.length ? `Khung giờ khách rảnh (giờ Việt Nam):<br>${input.slots.map(slot => `• ${escapeHtml(formatRange(slot.start, slot.end, VN_TIME_ZONE))}`).join('<br>')}` : 'Khách chưa chọn giờ; web đã nhắc khách chọn.',
     'Hãy chốt lịch hẹn trong trang đơn.'
   ];
   const link = {label: 'Mở đơn', url: input.orderUrl};
   return {subject: `[Jewish Horse] ${title}${input.asap ? ' · khách rảnh ngay' : ''}`, html: layout(title, lines, link), text: plain(title, lines, [link])};
-}
-
-export function adminUnderpaid(input: {code: string; receivedVnd: number; totalVnd: number; orderUrl: string}): EmailContent {
-  const title = `Đơn ${input.code}: chuyển thiếu tiền`;
-  const lines = [`SePay báo nhận <strong>${formatVnd(input.receivedVnd)}</strong> với nội dung ${input.code}, nhưng đơn là <strong>${formatVnd(input.totalVnd)}</strong>.`, 'Đơn chưa được xác nhận tự động. Hãy liên hệ khách qua chat, rồi xác nhận thủ công nếu chấp nhận.'];
-  const link = {label: 'Mở đơn', url: input.orderUrl};
-  return {subject: `[Jewish Horse] ${title}`, html: layout(title, lines, link), text: plain(title, lines, [link])};
 }
 
 export function adminTimesAdded(input: {code: string; customerName: string; slots: Slot[]; asap: boolean; orderUrl: string}): EmailContent {

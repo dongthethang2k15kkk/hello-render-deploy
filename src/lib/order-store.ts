@@ -10,7 +10,7 @@ import {sendMail} from './mailer';
 import {formatVnd} from './money';
 import {notifyCustomer} from './notifications';
 import {allAdminEmails} from './admin-team';
-import {appointmentProblem, generateOrderCode, HOLD_MINUTES, NEEDS_ACTION, nextStatus, slotProblem, validTimeZone, VN_TIME_ZONE, type OrderStatus} from './order-rules';
+import {appointmentProblem, generateOrderCode, HOLD_MINUTES, NEEDS_ACTION, nextStatus, REPORT_DELAY_SECONDS, slotProblem, validTimeZone, VN_TIME_ZONE, type OrderStatus} from './order-rules';
 import {getPaymentDb} from './payment-db';
 import {alertAppointment} from './payment-detection';
 import {reReserveItems, restockItems, StockError} from './order-stock';
@@ -142,6 +142,8 @@ export async function reportTransfer(customer: {id: string; name: string; email:
     throw new OrderError(`The ${HOLD_MINUTES}-minute payment window has ended. Please place a new order; if you already transferred, message us in Chat.`, 410);
   }
   if (!nextStatus(order.status, 'report')) throw new OrderError('This order is not waiting for payment.', 409);
+  // A few seconds of slack for clock differences; the page itself waits the full delay.
+  if (Date.now() - order.createdAt.getTime() < (REPORT_DELAY_SECONDS - 5) * 1000) throw new OrderError('Please make the payment first. You can confirm it about a minute after placing the order.', 409);
   const problem = slotProblem(input.slots);
   if (problem) throw new OrderError(problem);
   const timeZone = validTimeZone(input.timeZone) ? input.timeZone : VN_TIME_ZONE;
