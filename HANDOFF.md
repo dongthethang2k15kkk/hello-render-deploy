@@ -1,6 +1,6 @@
 # Jewish Horse — Project Handoff
 
-> Updated: 2026-09-28
+> Updated: 2026-09-30
 > Path: `E:\Tai_lieu_E\DONGTHETHANG\04_Cá_nhân\hello`
 > This is a demo storefront UI, not a production commerce system.
 
@@ -380,3 +380,5 @@ Quyết định đã chốt trong hội thoại và trạng thái:
 - **Owner request (chat):** remove SePay; the "I've transferred" button should only become clickable about a minute after ordering. Also asked what publishing the Google OAuth app is for and whether web push works on iPhone.
 - **Answer given:** publishing moves the Google app from Testing to In production so any Google account (not only listed test users) can sign in, and the Gmail sending connection stops expiring every 7 days. Web push works on iPhone only for iOS/iPadOS 16.4+ when the site is added to the Home Screen and the customer allows notifications from inside it; not in a normal Safari tab.
 - **Built:** removed the SePay webhook route, key setting, transfer list, bank-note parsing and the underpaid email; migration `20260930170000_remove_sepay` drops the empty `BankTransaction` table (production had 0 rows and no key stored). Litecoin detection, "free right now", Start now and reminders stay. `REPORT_DELAY_SECONDS = 60` in `order-rules.ts`: the order page shows the countdown on the button ("I’ve transferred → (45s)") and a hint to pay first; `reportTransfer` refuses reports earlier than 55 s after `createdAt`. E2E: `appointments.spec.ts` replaces `auto-payments.spec.ts` (payment confirmed by the Admin API); order tests assert the locked button and the refused early report, then move `createdAt` back in the E2E database.
+- **Verification:** TypeScript passed; Vitest 89/89; Playwright 36/36 on the Neon `e2e` branch (15 min); production build created `BUILD_ID`. Production `BankTransaction` was checked again before deploy: 0 rows.
+- **Production (2026-09-30):** commit `0bf5111` live at about 11:01Z; `prisma migrate status`: 8 migrations, up to date. `POST /api/payments/sepay` now 404; `/en`, `/en/login`, `/en/orders` 200; `/en/admin/settings/payments` redirects to login with `next`; anonymous order API 401, Admin payments API 403; `/api/cron/tick` `{"ok":true,"ltcChecked":0,"reminders":0}`; `/api/payment-methods` shows bank and Litecoin (manual price 1,745,000 ₫/LTC set by the owner). "Docker checks" passed for `0bf5111`; the scheduled "Shop housekeeping" workflow has started running (a scheduled run on `6595448` succeeded).
