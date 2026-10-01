@@ -395,3 +395,8 @@ Quyết định đã chốt trong hội thoại và trạng thái:
 
 - **Owner report (screenshot):** on Admin → Settings the "Announcements" heading ran out of its card on a ~1560 px wide screen. Card headings in `.settings-grid` are now 24 px (cards keep the same width on every desktop size) with `overflow-wrap: break-word`; checked at 1560, 1440, 1280, 1024 and 390 px.
 - **Owner question:** publishing the Google OAuth app is done once by the owner of the Google Cloud project; the other Admins do not verify anything. Their Gmail addresses are only needed later, to add them in Settings → Admins.
+
+### Google OAuth client moved to project "hello"; Gmail connected — 2026-10-01
+
+- The owner published project **hello** (`hello-510108`, number `351045338738`), but the live site still used a client from another Google Cloud project (number `984018544527`, still in Testing, probably created with another Google account), so Connect Gmail failed with "Error 403: access_denied". The owner created a new Web client in `hello` (redirect URIs: production and `http://localhost:3000` callbacks), enabled the Gmail API there and replaced `GOOGLE_CLIENT_ID`/`GOOGLE_CLIENT_SECRET` on Render. This also replaces the first secret that had been pasted into chat. Verified: `/api/auth/google/start` now redirects with `client_id=351045338738-…`.
+- Gmail `mvua448@gmail.com` is connected as the shop sender; the test email to `dongthethang0210@gmail.com` was logged as `sent` at 09:41Z but landed in Gmail Spam (new sender, link to an `onrender.com` subdomain). The client secret JSON lives outside the repo in `E:\Tai_lieu_E\DONGTHETHANG\`; never commit it.
