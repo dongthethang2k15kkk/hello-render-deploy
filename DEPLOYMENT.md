@@ -92,7 +92,7 @@ sau 20 giây; chỉ đúng khi chạy **một instance** (đúng với Render Fr
 2. **Tài khoản ngân hàng**: Admin → Settings → Payments → Add an account. Bấm **Test QR**, quét bằng app ngân hàng:
    phải thấy đúng ngân hàng, chủ tài khoản, 10.000 ₫ và nội dung "JH TEST". Không có tài khoản active thì khách không đặt được.
 3. **Tỷ giá**: Settings → Payments → *USD rate* và *Litecoin price*. Mặc định **Automatic**: USD/VND lấy từ currency-api
-   (cập nhật hằng ngày), giá LTC từ CoinGecko (dự phòng Binance), làm mới mỗi phút. Chọn **Fixed** để ép theo số nhập tay; ở chế
+   (cập nhật hằng ngày), giá LTC từ Coinbase (dự phòng CoinGecko, Kraken, Binance), làm mới mỗi phút. Chọn **Fixed** để ép theo số nhập tay; ở chế
    độ Automatic số nhập tay chỉ dùng khi không lấy được giá thị trường. Giá gốc vẫn là VND do Admin nhập; khách chuyển khoản
    đúng số VND, còn USD và LTC là quy đổi (đơn LTC chốt giá lúc đặt).
 4. **Giá thật**: Settings → Products, nhập giá VND. Giá cũ đã được quy đổi tạm 26.000 ₫/USD.

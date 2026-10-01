@@ -1,7 +1,7 @@
 import 'server-only';
 import {DEFAULT_VND_PER_USD, validVndPerUsd} from './money';
 import {getPaymentDb} from './payment-db';
-import {isRateMode, parseCoingeckoVndPerLtc, parseCurrencyApiVnd, validVndPerLtc, vndPerLtcFromBinance, type LtcRateSource, type RateMode, type UsdRateSource} from './exchange-rate-rules';
+import {isRateMode, parseCoinbaseVndPerLtc, parseCoingeckoVndPerLtc, parseCurrencyApiVnd, validVndPerLtc, vndPerLtcFromBinance, vndPerLtcFromKraken, type LtcRateSource, type RateMode, type UsdRateSource} from './exchange-rate-rules';
 
 // Live VND/USD and VND/LTC rates with an Admin switch per rate: "auto" follows the market, "fixed" uses the Admin's number.
 // The fixed numbers keep their old setting keys and also stand in when no market rate can be fetched.
@@ -103,10 +103,16 @@ function marketUsd(needFresh = false) {
 
 function marketLtc(needFresh = false) {
   if (offline()) return Promise.resolve(null);
+  // Render runs in the US: Binance refuses US addresses and CoinGecko often rate-limits cloud servers, so Coinbase goes first.
   return market<LtcRateSource>('ltc', LTC_MAX_AGE_MS, needFresh, async () => {
+    const coinbase = parseCoinbaseVndPerLtc(await fetchJson('https://api.coinbase.com/v2/prices/LTC-VND/spot').catch(() => null));
+    if (coinbase) return {value: coinbase, source: 'coinbase'};
     const coingecko = parseCoingeckoVndPerLtc(await fetchJson('https://api.coingecko.com/api/v3/simple/price?ids=litecoin&vs_currencies=vnd').catch(() => null));
     if (coingecko) return {value: coingecko, source: 'coingecko'};
-    const binance = vndPerLtcFromBinance(await fetchJson('https://api.binance.com/api/v3/ticker/price?symbol=LTCUSDT').catch(() => null), (await getUsdRate()).vndPerUsd);
+    const vndPerUsd = (await getUsdRate()).vndPerUsd;
+    const kraken = vndPerLtcFromKraken(await fetchJson('https://api.kraken.com/0/public/Ticker?pair=LTCUSD').catch(() => null), vndPerUsd);
+    if (kraken) return {value: kraken, source: 'kraken'};
+    const binance = vndPerLtcFromBinance(await fetchJson('https://api.binance.com/api/v3/ticker/price?symbol=LTCUSDT').catch(() => null), vndPerUsd);
     return binance ? {value: binance, source: 'binance'} : null;
   });
 }

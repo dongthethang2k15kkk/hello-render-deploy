@@ -12,7 +12,7 @@ type LtcRate = {vndPerLtc: number; source: string; updatedAt: string | null};
 type Rates = {usdMode: Mode; usdFixed: number; ltcMode: Mode; ltcFixed: number | null; usdRate: UsdRate; ltcRate: LtcRate | null; market: {usd: UsdRate | null; ltc: LtcRate | null}};
 type State = {accounts: Account[]; banks: readonly {bin: string; name: string}[]; wallets: Wallet[]; rates: Rates};
 
-const providers: Record<string, string> = {'currency-api': 'currency-api (daily market rate)', coingecko: 'CoinGecko', binance: 'Binance'};
+const providers: Record<string, string> = {'currency-api': 'currency-api (daily market rate)', coinbase: 'Coinbase', coingecko: 'CoinGecko', kraken: 'Kraken', binance: 'Binance'};
 /** "live from CoinGecko, updated 16:42" / "fixed by an Admin" / "fixed rate, because no market rate could be fetched". */
 function rateSource(rate: {source: string; updatedAt: string | null}) {
   if (rate.source === 'fixed') return 'fixed by an Admin';
