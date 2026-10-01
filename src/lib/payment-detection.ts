@@ -1,7 +1,7 @@
 import 'server-only';
 import {allAdminEmails} from './admin-team';
 import {recordAudit} from './audit';
-import {addMessage} from './chat-store';
+import {addMessage, postPaymentMessage} from './chat-store';
 import * as templates from './email-templates';
 import {parseLtc} from './ltc-format';
 import {sendMail} from './mailer';
@@ -35,6 +35,7 @@ export async function markPaidAutomatically(orderId: string, input: {amountVnd: 
     return false;
   }
   await recordAudit({actorEmail: 'system', action: 'order.payment_detected', summary: `Payment for ${order.code} detected automatically on the Litecoin blockchain: ${input.amountLabel}`, entityType: 'order', entityId: orderId, customerId: order.customerId});
+  await postPaymentMessage({customerId: order.customerId, code: order.code, customerTimeZone: order.customerTimeZone});
   const needsTimes = order.slots.length === 0 && !order.asap;
   await notifyCustomer({customerId: order.customerId, orderId, title: `Payment received · ${order.code}`, body: needsTimes ? 'Thank you! Your payment arrived. Tell us when you are free so we can book your appointment.' : 'Thank you! Your payment arrived. We will confirm your appointment shortly.', link: `/en/orders/${order.code}`});
   await sendMail({to: [order.customer.email], ...templates.customerPaymentConfirmed({code: order.code, name: order.customer.name, orderUrl: `${origin}/en/orders/${order.code}`}), kind: 'customer.payment_confirmed', orderId});

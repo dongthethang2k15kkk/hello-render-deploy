@@ -10,6 +10,7 @@ import {sendMail} from './mailer';
 import {formatVnd} from './money';
 import {notifyCustomer} from './notifications';
 import {allAdminEmails} from './admin-team';
+import {postPaymentMessage} from './chat-store';
 import {appointmentProblem, generateOrderCode, HOLD_MINUTES, NEEDS_ACTION, nextStatus, REPORT_DELAY_SECONDS, slotProblem, validTimeZone, VN_TIME_ZONE, type OrderStatus} from './order-rules';
 import {getPaymentDb} from './payment-db';
 import {alertAppointment} from './payment-detection';
@@ -280,6 +281,7 @@ export async function confirmPayment(adminEmail: string, id: string, input: {amo
     if (input.appointment) await tx.orderEvent.create({data: {orderId: id, actor: adminEmail, action: 'scheduled', note: 'Appointment booked'}});
   }, txOptions);
   await recordAudit({actorEmail: adminEmail, action: 'order.payment_confirmed', summary: `Confirmed ${formatVnd(input.amountVnd)} for ${order.code}${input.appointment ? ' and booked the appointment' : ''}`, entityType: 'order', entityId: id, customerId: order.customerId});
+  await postPaymentMessage({customerId: order.customerId, code: order.code, customerTimeZone: order.customerTimeZone, appointmentStart: input.appointment?.start});
   if (input.appointment) {
     await notifyCustomer({customerId: order.customerId, orderId: id, title: `Appointment booked · ${order.code}`, body: 'Your payment is confirmed and your appointment is booked. Open the order for the time and calendar links.', link: customerLink(order.code)});
     await sendAppointment(order, input.appointment.start, input.appointment.end, adminEmail, origin, false);

@@ -830,6 +830,9 @@ input {border-color: #cfd8c6; padding: 12px; font-weight: 400;}
 .chat-room-info {min-width:0; flex:1;}
 .chat-room-info strong,.chat-room-info small {display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
 .chat-room-info small {font-weight:400; font-size:11px; color:#687461; margin-top:4px;}
+.chat-room-info small.room-booking,.chat-header .room-booking {display:inline-block; max-width:100%; margin-top:4px; padding:1px 8px; border-radius:999px; background:#e6f4dd; color:#22552f; font-size:11px; font-weight:700;}
+.chat-header .room-booking {margin:4px 0 0;}
+.chat-room-info small.room-booking {white-space:normal; overflow:visible; line-height:1.4; border-radius:8px;}
 .chat-room time {font-size:10px; color:#687461; white-space:nowrap; align-self:flex-start;}
 .chat-main .chat-messages {flex:1; min-height:300px;}
 .chat-empty {display:grid; place-content:center; text-align:center; min-height:220px; color:#607358;}
@@ -873,7 +876,7 @@ input {border-color: #cfd8c6; padding: 12px; font-weight: 400;}
 @media(max-width:480px) {
   .admin-inbox {display:block; min-height:0;}
   .admin-inbox .chat-main.show-room-list {display:none;}
-  .admin-inbox:has(.chat-main.show-room-list) .chat-sidebar {display:block;}
+  .admin-inbox:has(.chat-main.show-room-list) .chat-sidebar {display:block; max-height:none;}
   .admin-inbox:not(:has(.chat-main.show-room-list)) .chat-sidebar {display:none;}
   .admin-inbox:not(:has(.chat-main.show-room-list)) .inbox-back {display:inline-block;}
   .support-widget {right:0; bottom:0;}
@@ -1372,6 +1375,8 @@ html,body {max-width:100%; overflow-x:clip;}
 .asap-option span {display:grid; gap:2px;}
 .asap-option strong {color:#1f4f2b;}
 .asap-option small {font-size:12px; color:#4f6255;}
+.slots-final-note {margin:14px 0 0; padding:10px 12px; border-radius:10px; background:#fff5e6; border:1px solid #efc98f; color:#6b3a06; font-size:13px; line-height:1.5;}
+.slots-final-note strong {color:#5a2f03;}
 .payment-seen {margin:10px 0; padding:10px 12px; border-radius:10px; background:rgba(149,212,122,.18); border:1px solid rgba(149,212,122,.55); color:#e8f7dc;}
 .asap-badge {display:inline-block; margin-left:8px; padding:2px 9px; border-radius:999px; background:#e5484d; color:#fff; font-size:12px; font-weight:800; vertical-align:middle;}
 .start-now {display:flex; flex-wrap:wrap; gap:10px; align-items:end; margin-bottom:14px; padding:12px; border-radius:12px; background:rgba(229,72,77,.12); border:1px solid rgba(229,72,77,.4);}

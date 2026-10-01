@@ -65,6 +65,7 @@ export default function TimeSlotsDialog({open, title, submitLabel, askTxid = fal
         {rows.length > 1 && <button type="button" className="admin-remove-link" onClick={() => setRows(rows.filter((_, i) => i !== index))}>Remove</button>}
       </fieldset>)}</div>
       {rows.length < MAX_SLOTS - (asap ? 1 : 0) && <button type="button" className="secondary" onClick={() => setRows([...rows, defaultRow(rows.length + 1)])}>+ Add another time</button>}</>}
+      <p className="slots-final-note"><strong>Please choose carefully.</strong> After you pay and book, an Admin will pick a free time inside the windows you choose to complete the transaction. Once booked, it cannot be undone or changed.</p>
       {error && <p className="error-text" role="alert">{error}</p>}
       <div className="dialog-actions"><button type="button" className="secondary" onClick={onClose} disabled={busy}>Cancel</button><button type="submit" disabled={busy}>{busy ? 'Sending…' : submitLabel}</button></div>
     </form>

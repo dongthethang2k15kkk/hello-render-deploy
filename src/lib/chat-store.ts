@@ -27,16 +27,29 @@ export async function listMessages(customerId: string) {
   return rows.reverse().map(toMessage);
 }
 
+// Paid orders waiting for (or booked for) delivery: their customers get a conversation even before they write.
+const BOOKED_STATUSES = ['paid', 'scheduled'];
+
 /** Conversations for the Admin inbox, most recent first. */
 export async function listRooms() {
   const [unread, customers] = await Promise.all([adminUnreadByCustomer(), getPaymentDb().customer.findMany({
-    where: {chatMessages: {some: {}}}, take: 200,
-    select: {id: true, name: true, email: true, chatMessages: {orderBy: {createdAt: 'desc'}, take: 1, select: {body: true, imageId: true, authorRole: true, createdAt: true}}}
+    where: {OR: [{chatMessages: {some: {}}}, {orders: {some: {status: {in: BOOKED_STATUSES}}}}]}, take: 200,
+    select: {
+      id: true, name: true, email: true,
+      chatMessages: {orderBy: {createdAt: 'desc'}, take: 1, select: {body: true, imageId: true, authorRole: true, createdAt: true}},
+      orders: {where: {status: {in: BOOKED_STATUSES}}, orderBy: {paidAt: 'desc'}, take: 1, select: {code: true, appointmentStart: true, paidAt: true}}
+    }
   })]);
   return customers.map(customer => {
     const last = customer.chatMessages[0];
-    return {id: roomFor(customer.id), name: customer.name, email: customer.email, unread: unread.get(customer.id) ?? 0, lastMessage: last ? {body: last.imageId && !last.body ? '[Image]' : last.body, createdAt: last.createdAt.toISOString(), role: (last.authorRole === 'admin' ? 'admin' : 'user') as Role} : null};
-  }).sort((a, b) => (b.lastMessage?.createdAt ?? '').localeCompare(a.lastMessage?.createdAt ?? ''));
+    const order = customer.orders[0];
+    return {
+      id: roomFor(customer.id), name: customer.name, email: customer.email, unread: unread.get(customer.id) ?? 0,
+      lastMessage: last ? {body: last.imageId && !last.body ? '[Image]' : last.body, createdAt: last.createdAt.toISOString(), role: (last.authorRole === 'admin' ? 'admin' : 'user') as Role} : null,
+      booking: order ? {code: order.code, appointmentStart: order.appointmentStart?.toISOString() ?? null} : null,
+      sortAt: (last?.createdAt ?? order?.paidAt)?.toISOString() ?? ''
+    };
+  }).sort((a, b) => b.sortAt.localeCompare(a.sortAt)).map(({sortAt: _sortAt, ...room}) => room);
 }
 
 export async function roomImageCount(customerId: string) {
@@ -53,6 +66,15 @@ export async function addMessage(input: {customerId: string; role: Role; authorN
     select: messageSelect
   });
   return toMessage(row);
+}
+
+/** Opens the conversation after a payment, so the customer sees the Chat badge and the Admin can write first. */
+export async function postPaymentMessage(order: {customerId: string; code: string; customerTimeZone: string | null; appointmentStart?: Date | null}) {
+  const time = order.appointmentStart && new Intl.DateTimeFormat('en-GB', {weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', timeZone: order.customerTimeZone ?? 'Asia/Ho_Chi_Minh'}).format(order.appointmentStart);
+  const body = time
+    ? `Payment received for order ${order.code}. Your appointment is booked for ${time}. We will talk with you here in this chat; feel free to message us anytime.`
+    : `Payment received for order ${order.code}. We will pick a time inside the windows you chose and message you here in this chat.`;
+  await addMessage({customerId: order.customerId, role: 'admin', authorName: 'Jewish Horse', body}).catch(error => console.error('Payment chat message failed', error instanceof Error ? error.message.split('\n')[0] : error));
 }
 
 /** Image bytes plus the owning conversation, for the access check in the image route. */

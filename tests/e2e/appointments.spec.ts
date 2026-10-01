@@ -48,6 +48,7 @@ test('customer says "free right now" and a free Admin starts at once: Chat and I
   await expect(page.getByRole('heading', {name: 'Payment received! When are you free?'})).toBeVisible();
   await page.getByRole('button', {name: 'Choose my times'}).click();
   const dialog = page.getByRole('dialog', {name: 'When can you receive your order?'});
+  await expect(dialog.getByText('Please choose carefully.')).toBeVisible();
   await dialog.getByLabel(/I’m free right now/).check();
   await dialog.getByRole('button', {name: 'Send my times'}).click();
   await expect(page.getByText('You are free right now')).toBeVisible();
@@ -64,6 +65,30 @@ test('customer says "free right now" and a free Admin starts at once: Chat and I
   expect(chat.messages.at(-1)).toMatchObject({role: 'admin', body: expect.stringContaining(`We are ready for your order ${order.code} now`)});
   const inbox = await (await customer.request.get('/api/notifications')).json();
   expect(inbox.notifications[0].title).toBe(`We are ready now · ${order.code}`);
+  await cancel(adminContext.request, order.id);
+  await customer.close(); await adminContext.close();
+});
+
+test('confirming a payment opens the customer chat so an Admin can write first', async ({browser}) => {
+  test.setTimeout(120000);
+  const adminContext = await admin(browser);
+  const customer = await browser.newContext();
+  await registerCustomer(customer.request, 'Chat First Customer');
+  const order = await paidOrder(customer.request, adminContext.request);
+
+  // The customer never wrote, yet the conversation is listed with the paid order and the automatic message.
+  const inbox = await (await adminContext.request.get('/api/chat')).json();
+  const room = inbox.rooms.find((item: {booking?: {code: string} | null}) => item.booking?.code === order.code);
+  expect(room).toMatchObject({name: 'Chat First Customer', booking: {code: order.code, appointmentStart: null}, lastMessage: {role: 'admin', body: expect.stringContaining(`Payment received for order ${order.code}`)}});
+  const sent = await adminContext.request.post('/api/chat', {data: {room: room.id, body: 'Hi! We will deliver your order here.'}});
+  expect(sent.ok(), await sent.text()).toBe(true);
+
+  const chat = await (await customer.request.get('/api/chat')).json();
+  expect(chat.messages.map((message: {body: string}) => message.body)).toEqual([expect.stringContaining('Payment received'), 'Hi! We will deliver your order here.']);
+
+  const adminPage = await adminContext.newPage();
+  await adminPage.goto(`/en/admin/chat?room=${room.id}`);
+  await expect(adminPage.locator('.chat-header .room-booking')).toHaveText(`Paid · ${order.code} · time not set`);
   await cancel(adminContext.request, order.id);
   await customer.close(); await adminContext.close();
 });

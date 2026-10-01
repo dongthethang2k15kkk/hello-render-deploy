@@ -5,7 +5,10 @@ import type {ChatMessage} from '@/lib/chat-store';
 import type {Role} from '@/lib/admin-session';
 import {PresenceBadges, useAdminPresence} from './admin-presence';
 
-type Room = {id: string; name: string; unread?: number; lastMessage?: {body: string; createdAt: string; role: Role} | null};
+type Room = {id: string; name: string; unread?: number; lastMessage?: {body: string; createdAt: string; role: Role} | null; booking?: {code: string; appointmentStart: string | null} | null};
+
+/** "Paid · JH… · Fri 3 Oct, 19:00": the order this customer is waiting to receive. */
+const bookingLabel = (booking: NonNullable<Room['booking']>) => `${booking.appointmentStart ? 'Booked' : 'Paid'} · ${booking.code}${booking.appointmentStart ? ` · ${new Date(booking.appointmentStart).toLocaleString('en-GB', {weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit'})}` : ' · time not set'}`;
 
 export default function ChatPanel({role, compact = false, initialRoom = ''}: {role: Role; compact?: boolean; initialRoom?: string}) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -99,18 +102,18 @@ export default function ChatPanel({role, compact = false, initialRoom = ''}: {ro
       <label className="chat-search"><span className="sr-only">Search conversations</span><input type="search" placeholder="Search customers" value={roomQuery} onChange={event => setRoomQuery(event.target.value)}/></label>
       <div className="chat-filters" aria-label="Conversation filter"><button type="button" className={roomFilter === 'all' ? 'active' : ''} onClick={() => setRoomFilter('all')}>All</button><button type="button" className={roomFilter === 'needs-reply' ? 'active' : ''} onClick={() => setRoomFilter('needs-reply')}>Needs reply</button></div>
       {loading && <p className="muted" role="status">{'Loading…'}</p>}
-      {!loading && rooms.length === 0 && <p className="muted">{'No customer messages yet.'}</p>}
+      {!loading && rooms.length === 0 && <p className="muted">{'No conversations yet.'}</p>}
       {!loading && rooms.length > 0 && shownRooms.length === 0 && <p className="muted">No matching conversations.</p>}
       {shownRooms.map(item => {
         return <button type="button" className={`chat-room ${room === item.id ? 'active' : ''}`} aria-current={room === item.id ? 'true' : undefined} key={item.id} onClick={() => {roomRef.current = item.id; setRoom(item.id); setImage(null); if (imageInput.current) imageInput.current.value = ''; setShowRoomList(false);}}>
           <span className="chat-avatar" aria-hidden="true">{item.name.charAt(0).toUpperCase()}</span>
-          <span className="chat-room-info"><strong>{item.name}{item.unread ? <b className="room-unread" aria-label={`${item.unread} unread`}>{item.unread}</b> : null}</strong><small>{item.lastMessage?.body ?? ''}</small><PresenceBadges viewers={viewersOf(item.id)} context={`the chat with ${item.name}`}/></span>
+          <span className="chat-room-info"><strong>{item.name}{item.unread ? <b className="room-unread" aria-label={`${item.unread} unread`}>{item.unread}</b> : null}</strong>{item.booking && <small className="room-booking">{bookingLabel(item.booking)}</small>}<small>{item.lastMessage?.body ?? (item.booking ? 'No messages yet. Say hello!' : '')}</small><PresenceBadges viewers={viewersOf(item.id)} context={`the chat with ${item.name}`}/></span>
           <time dateTime={item.lastMessage?.createdAt}>{item.lastMessage ? new Date(item.lastMessage.createdAt).toLocaleTimeString('en-US', {hour: '2-digit', minute: '2-digit'}) : ''}</time>
         </button>;
       })}
     </aside>}
     <div className={`chat-main ${showRoomList ? 'show-room-list' : ''}`}>
-      <div className="chat-header"><div>{role === 'admin' && <button type="button" className="inbox-back secondary" onClick={() => setShowRoomList(true)}>← {'Conversations'}</button>}<span className="eyebrow">{role === 'admin' ? 'ADMIN INBOX' : 'DIRECT SUPPORT'}</span><h2>{role === 'admin' ? (selected?.name ?? ('Select a conversation')) : 'Chat with support'}</h2>{role === 'admin' && selected && <PresenceBadges viewers={viewersOf(selected.id)} context="this conversation"/>}</div><span className="live-dot">● {'Demo support'}</span></div>
+      <div className="chat-header"><div>{role === 'admin' && <button type="button" className="inbox-back secondary" onClick={() => setShowRoomList(true)}>← {'Conversations'}</button>}<span className="eyebrow">{role === 'admin' ? 'ADMIN INBOX' : 'DIRECT SUPPORT'}</span><h2>{role === 'admin' ? (selected?.name ?? ('Select a conversation')) : 'Chat with support'}</h2>{role === 'admin' && selected?.booking && <p className="room-booking">{bookingLabel(selected.booking)}</p>}{role === 'admin' && selected && <PresenceBadges viewers={viewersOf(selected.id)} context="this conversation"/>}</div><span className="live-dot">● {'Demo support'}</span></div>
       <div className="chat-messages" ref={messageArea} role="log" aria-label={'Message history'}>
         {loading && <p className="muted" role="status">{'Loading messages…'}</p>}
         {!loading && !visible.length && <div className="chat-empty"><span aria-hidden="true">✦</span><p>{role === 'admin' ? 'Select a customer to get started.' : 'Hello! Send a question and our team will reply here.'}</p></div>}
