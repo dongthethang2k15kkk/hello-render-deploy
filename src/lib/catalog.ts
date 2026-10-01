@@ -29,7 +29,7 @@ export const catalogProductSchema = z.object({
 
 export type CatalogProduct = z.infer<typeof catalogProductSchema>;
 export type CatalogSource = 'database' | 'demo' | 'fallback';
-export const catalogResponseSchema = z.object({products: z.array(catalogProductSchema), source: z.enum(['database', 'demo', 'fallback']), vndPerUsd: z.number().int().positive()});
+export const catalogResponseSchema = z.object({products: z.array(catalogProductSchema), source: z.enum(['database', 'demo', 'fallback']), vndPerUsd: z.number().int().positive(), vndPerLtc: z.number().int().positive().nullable().default(null)});
 
 export const fallbackProducts: CatalogProduct[] = [
   {

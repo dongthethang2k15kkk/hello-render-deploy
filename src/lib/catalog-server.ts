@@ -1,12 +1,22 @@
 import 'server-only';
 import {getPaymentDb} from './payment-db';
 import {deliveryFieldSchema, fallbackProducts, fallbackVndPerUsd, type CatalogProduct, type CatalogSource} from './catalog';
-import {getVndPerUsd} from './store-settings';
+import {getLtcRate, getVndPerUsd} from './exchange-rates';
 
-export type PublicCatalog = {products: CatalogProduct[]; source: CatalogSource; vndPerUsd: number};
+// vndPerLtc is set only while Litecoin checkout is on (an active wallet), so the store can show an LTC estimate.
+export type PublicCatalog = {products: CatalogProduct[]; source: CatalogSource; vndPerUsd: number; vndPerLtc: number | null};
 
 function fallback(source: 'demo' | 'fallback'): PublicCatalog {
-  return {products: fallbackProducts, source, vndPerUsd: fallbackVndPerUsd};
+  return {products: fallbackProducts, source, vndPerUsd: fallbackVndPerUsd, vndPerLtc: null};
+}
+
+async function storeLtcRate() {
+  try {
+    const wallets = await getPaymentDb().cryptoWallet.count({where: {active: true, network: 'LTC'}});
+    return wallets ? (await getLtcRate())?.vndPerLtc ?? null : null;
+  } catch {
+    return null;
+  }
 }
 
 async function readDatabaseCatalog(): Promise<CatalogProduct[]> {
@@ -49,8 +59,8 @@ export async function getPublicCatalog(timeoutMs = 10000): Promise<PublicCatalog
   let timer: ReturnType<typeof setTimeout> | undefined;
   try {
     const timeout = new Promise<never>((_, reject) => {timer = setTimeout(() => reject(new Error('Catalog database timeout')), timeoutMs);});
-    const [products, vndPerUsd] = await Promise.race([Promise.all([readDatabaseCatalog(), getVndPerUsd()]), timeout]);
-    return {products, source: 'database', vndPerUsd};
+    const [products, vndPerUsd, vndPerLtc] = await Promise.race([Promise.all([readDatabaseCatalog(), getVndPerUsd(), storeLtcRate()]), timeout]);
+    return {products, source: 'database', vndPerUsd, vndPerLtc};
   } catch {
     return fallback('fallback');
   } finally {

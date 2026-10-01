@@ -73,7 +73,7 @@ export default function Cart() {
       </div><aside className="card order-summary">
         <h2>Order summary</h2>
         <div className="summary-line"><span>Items</span><strong>{lines.reduce((sum, line) => sum + line.quantity, 0)}</strong></div>
-        <div className="summary-total"><small>{t('total')}</small><Price vnd={totalVnd(lines, products)} vndPerUsd={catalog.vndPerUsd}/></div>
+        <div className="summary-total"><small>{t('total')}</small><Price vnd={totalVnd(lines, products)} vndPerUsd={catalog.vndPerUsd} vndPerLtc={catalog.vndPerLtc}/></div>
         <p className="notice">You pay the VND amount by bank transfer. USD is shown for reference.</p>
         <Link className="button full-width" href={`/${locale}/checkout`}>Continue to checkout →</Link>
       </aside></div>}

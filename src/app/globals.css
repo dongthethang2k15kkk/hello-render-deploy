@@ -1188,6 +1188,8 @@ html,body {max-width:100%; overflow-x:clip;}
 .price-pair.inline-price {display:inline-flex; flex-direction:row; align-items:baseline; gap:8px;}
 .price-pair.inline-price .price-usd {font-size:inherit;}
 .price-pair.inline-price .price-vnd {font-size:12px;}
+.price-pair .price-ltc {font-size:13px; font-weight:600; color:#c9e3b5; opacity:.85;}
+.price-pair.inline-price .price-ltc {font-size:12px;}
 .pay-amount {font-size:30px; font-weight:800; color:#f0fae8; margin:4px 0;}
 .checkout-flow {margin:8px 0 0; padding-left:20px; display:grid; gap:10px; line-height:1.6; color:#e8f4e0;}
 .account-menu .inbox-link {position:relative;}
@@ -1292,6 +1294,15 @@ html,body {max-width:100%; overflow-x:clip;}
 .test-qr img {width:180px; background:#fff; padding:6px; border-radius:8px;}
 .rate-form {display:flex; gap:12px; align-items:end; flex-wrap:wrap;}
 .rate-form label {display:grid; gap:4px;}
+.rate-settings {display:grid; gap:12px;}
+.rate-settings .rate-form label small {font-weight:400; color:#4f6255;}
+.rate-settings .rate-mode {display:flex; flex-wrap:wrap; gap:10px; margin:0; padding:0; border:0; min-width:0;}
+.rate-settings .rate-mode legend {margin-bottom:6px; font-size:14px; font-weight:700;}
+.rate-settings .rate-mode label {display:flex; flex:1 1 220px; gap:10px; align-items:flex-start; margin:0; padding:10px 12px; border:1px solid #d7e0d4; border-radius:10px; cursor:pointer;}
+.rate-settings .rate-mode label:has(input:checked) {border-color:#2f7a3d; background:#f1f9ec;}
+.rate-settings .rate-mode label input {display:inline-block; width:18px; min-width:18px; max-width:18px; height:18px; margin:2px 0 0; flex:none;}
+.rate-settings .rate-mode span {display:grid; gap:2px;}
+.rate-settings .rate-mode small {font-size:12px; font-weight:400; color:#4f6255;}
 .setup-steps {line-height:1.8; padding-left:20px;}
 .settings-grid {grid-template-columns:repeat(auto-fit,minmax(240px,1fr));}
 .settings-grid .card {min-width:0;}

@@ -18,7 +18,7 @@ async function ensureBankAccount(request: APIRequestContext) {
     const saved = await request.post('/api/admin/settings/payments', {data: {action: 'save-account', bankBin: '970436', accountNumber: '0123456789', accountHolder: 'Nguyễn Văn Test', active: true}});
     expect(saved.ok(), await saved.text()).toBe(true);
   }
-  expect((await request.post('/api/admin/settings/payments', {data: {action: 'rate', vndPerUsd: 26000}})).ok()).toBe(true);
+  expect((await request.post('/api/admin/settings/payments', {data: {action: 'rate', mode: 'fixed', vndPerUsd: 26000}})).ok()).toBe(true);
 }
 
 /** Skips the one-minute wait before "I've transferred" unlocks (E2E database only). */
@@ -190,7 +190,8 @@ test('Litecoin: wallet with checksum, unique amounts per order, litecoin: QR, TX
   const added = await adminContext.request.post(settings, {data: {action: 'save-wallet', address, label: 'E2E wallet', active: true}});
   expect(added.ok(), await added.text()).toBe(true);
   const walletId = (await added.json()).wallets.find((wallet: {address: string}) => wallet.address === address).id as string;
-  expect((await adminContext.request.post(settings, {data: {action: 'ltc-override', vndPerLtc: 2000000}})).ok()).toBe(true);
+  expect((await adminContext.request.post(settings, {data: {action: 'ltc-rate', mode: 'fixed', vndPerLtc: null}})).status()).toBe(400);
+  expect((await adminContext.request.post(settings, {data: {action: 'ltc-rate', mode: 'fixed', vndPerLtc: 2000000}})).ok()).toBe(true);
   // Only the E2E wallet is active while this test runs.
   const state = await (await adminContext.request.get(settings)).json();
   for (const wallet of state.wallets) if (wallet.id !== walletId && wallet.active) await adminContext.request.post(settings, {data: {action: 'save-wallet', id: wallet.id, address: wallet.address, label: wallet.label, active: false}});
@@ -198,7 +199,19 @@ test('Litecoin: wallet with checksum, unique amounts per order, litecoin: QR, TX
   const customerContext = await browser.newContext();
   await registerCustomer(customerContext.request, 'LTC Customer');
   const methods = await (await customerContext.request.get('/api/payment-methods')).json();
-  expect(methods.ltc).toMatchObject({vndPerLtc: 2000000, source: 'manual'});
+  expect(methods.ltc).toMatchObject({vndPerLtc: 2000000, source: 'fixed'});
+  // While Litecoin checkout is on, the store shows an LTC estimate next to USD and VND.
+  expect((await (await customerContext.request.get('/api/catalog')).json()).vndPerLtc).toBe(2000000);
+  const storePage = await customerContext.newPage();
+  await storePage.goto('/en');
+  await expect(storePage.locator('.product-card', {hasText: '650.000 ₫'}).first().locator('.price-ltc')).toHaveText('≈ 0.325 LTC');
+  await storePage.close();
+  const settingsPage = await adminContext.newPage();
+  await settingsPage.goto('/en/admin/settings/payments');
+  const ltcCard = settingsPage.locator('section', {has: settingsPage.getByRole('heading', {name: 'Litecoin price'})});
+  await expect(ltcCard.getByText('2.000.000 ₫ per LTC')).toBeVisible();
+  await expect(ltcCard.getByRole('radio', {name: /^Fixed/})).toBeChecked();
+  await settingsPage.close();
   const lines = [{productId: await catalogId(customerContext.request, 'SAMPLE_PLUS'), quantity: 1, delivery: {recipient: 'LTC buyer', note: ''}}];
   const first = await (await customerContext.request.post('/api/orders', {data: {lines, method: 'ltc'}})).json();
   const second = await (await customerContext.request.post('/api/orders', {data: {lines, method: 'ltc'}})).json();
@@ -233,6 +246,6 @@ test('Litecoin: wallet with checksum, unique amounts per order, litecoin: QR, TX
 
   // Leave no active test wallet or manual price behind for the other tests.
   await adminContext.request.post(settings, {data: {action: 'save-wallet', id: walletId, address, label: 'E2E wallet', active: false}});
-  await adminContext.request.post(settings, {data: {action: 'ltc-override', vndPerLtc: null}});
+  await adminContext.request.post(settings, {data: {action: 'ltc-rate', mode: 'auto', vndPerLtc: null}});
   await customerContext.close(); await adminContext.close();
 });

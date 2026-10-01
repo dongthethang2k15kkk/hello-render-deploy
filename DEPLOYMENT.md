@@ -91,7 +91,10 @@ sau 20 giây; chỉ đúng khi chạy **một instance** (đúng với Render Fr
    danh sách nhận thư báo đơn mới. Nếu OAuth app còn ở Testing, thêm cả 3 vào Test users.
 2. **Tài khoản ngân hàng**: Admin → Settings → Payments → Add an account. Bấm **Test QR**, quét bằng app ngân hàng:
    phải thấy đúng ngân hàng, chủ tài khoản, 10.000 ₫ và nội dung "JH TEST". Không có tài khoản active thì khách không đặt được.
-3. **Tỷ giá hiển thị**: Settings → Payments → VND per 1 USD (mặc định 26.000). Chỉ dùng để hiện USD; khách trả VND.
+3. **Tỷ giá**: Settings → Payments → *USD rate* và *Litecoin price*. Mặc định **Automatic**: USD/VND lấy từ currency-api
+   (cập nhật hằng ngày), giá LTC từ CoinGecko (dự phòng Binance), làm mới mỗi phút. Chọn **Fixed** để ép theo số nhập tay; ở chế
+   độ Automatic số nhập tay chỉ dùng khi không lấy được giá thị trường. Giá gốc vẫn là VND do Admin nhập; khách chuyển khoản
+   đúng số VND, còn USD và LTC là quy đổi (đơn LTC chốt giá lúc đặt).
 4. **Giá thật**: Settings → Products, nhập giá VND. Giá cũ đã được quy đổi tạm 26.000 ₫/USD.
 5. **Gmail**: Google Cloud Console → APIs & Services → Library → bật **Gmail API** trong project đang dùng cho đăng nhập.
    Sau đó Admin → Settings → Email → **Connect Gmail** bằng Gmail gửi thư của shop, cho phép "Send email on your behalf",
@@ -109,7 +112,7 @@ sau 20 giây; chỉ đúng khi chạy **một instance** (đúng với Render Fr
 - **Thông báo trang chủ**: Settings → Announcements, tải 1–10 ảnh (nên 4:3), chú thích/link tùy chọn, chọn số giây tự
   chuyển, bấm Save. Không có ảnh thì trang chủ hiện hình minh họa mặc định.
 - **Litecoin**: Settings → Payments → Litecoin wallets → Add wallet (địa chỉ nhận LTC từ ví, web kiểm tra checksum) →
-  **Test QR** bằng app ví. Giá LTC tự lấy từ thị trường (CoinGecko, dự phòng Binance), có thể đặt giá tay. Mỗi đơn LTC có
+  **Test QR** bằng app ví. Khi có ví đang bật, cửa hàng hiện thêm giá ước tính bằng LTC cạnh USD và VND. Mỗi đơn LTC có
   số lẻ riêng để nhận ra đơn nào đã trả; khách có thể dán TXID. Kiểm tra tiền về trên litecoinspace.org.
 - **Liên hệ**: Discord `https://discord.gg/pD4MdsJB` (`src/lib/contact.ts`, ảnh `public/contact/discord-qr.png`).
 

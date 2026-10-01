@@ -15,7 +15,8 @@ export default defineConfig({
   webServer: {
     command: 'npm run dev -- --hostname 127.0.0.1 --port 3001',
     url: 'http://127.0.0.1:3001/en',
-    env: {DATABASE_URL: process.env.E2E_DATABASE_URL ?? '', ALLOW_DEV_ADMIN_LOGIN: '1', NEXT_BUILD_DIR: '.next-e2e'},
+    // Exchange rates come from the fixed numbers only, so prices are the same on every run.
+    env: {DATABASE_URL: process.env.E2E_DATABASE_URL ?? '', ALLOW_DEV_ADMIN_LOGIN: '1', NEXT_BUILD_DIR: '.next-e2e', EXCHANGE_RATES_OFFLINE: '1'},
     reuseExistingServer: false,
     timeout: 120000
   }

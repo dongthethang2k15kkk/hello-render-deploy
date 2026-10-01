@@ -5,7 +5,7 @@ export const messages = {
     catalog: 'Packages', cart: 'Cart', add: 'Add to cart',
     empty: 'Your cart is empty.', remove: 'Remove', quantity: 'Quantity',
     total: 'Total', checkout: 'Checkout',
-    currency: 'Currency', rate: 'Prices are shown in USD for reference; you pay the VND amount by bank transfer.',
+    currency: 'Currency', rate: 'USD and LTC prices follow live market rates and are shown for reference. A bank transfer pays the VND amount; a Litecoin order locks its LTC amount when you place it.',
     detail: 'Package details', back: 'Back to store', recipient: 'Recipient name',
     note: 'Delivery note (no sensitive information)',
     invalid: 'Check the information and the quantity limit of 1–5.',

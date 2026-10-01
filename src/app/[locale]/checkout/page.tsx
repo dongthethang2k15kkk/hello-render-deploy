@@ -9,6 +9,7 @@ import {useCatalog} from '@/components/catalog-provider';
 import {totalVnd} from '@/lib/cart';
 import {Locale} from '@/lib/catalog';
 import {formatUsdFromVnd, formatVnd} from '@/lib/money';
+import {formatLtcEstimate} from '@/lib/exchange-rate-rules';
 import {HOLD_MINUTES} from '@/lib/order-rules';
 
 export default function Checkout() {
@@ -61,7 +62,7 @@ export default function Checkout() {
         <section className="card" style={{marginTop: 20}}><span className="eyebrow">02 / PAYMENT METHOD</span><h2>How do you want to pay?</h2>
           {!methods ? <p aria-busy="true">Checking payment options…</p> : <div className="payment-options">
             {methods.bank && <label className="payment-option"><input type="radio" name="method" value="bank" checked={method === 'bank'} onChange={() => setMethod('bank')}/><span>Bank transfer · VietQR<small>Pay {formatVnd(total)} from any Vietnamese banking app</small></span></label>}
-            {methods.ltc && <label className="payment-option"><input type="radio" name="method" value="ltc" checked={method === 'ltc'} onChange={() => setMethod('ltc')}/><span>Litecoin (LTC)<small>About {(total / methods.ltc.vndPerLtc).toFixed(5)} LTC · exact amount shown after you place the order</small></span></label>}
+            {methods.ltc && <label className="payment-option"><input type="radio" name="method" value="ltc" checked={method === 'ltc'} onChange={() => setMethod('ltc')}/><span>Litecoin (LTC)<small>About {formatLtcEstimate(total, methods.ltc.vndPerLtc)} · exact amount shown after you place the order</small></span></label>}
             {!methods.bank && !methods.ltc && <p className="error-text">Payments are not set up yet. Please contact the shop on Discord.</p>}
           </div>}
         </section>
@@ -74,7 +75,7 @@ export default function Checkout() {
           if (!product) return null;
           return <div className="summary-line" key={`${line.productId}-${index}`}><span>{product.title[locale]} × {line.quantity}</span><strong>{formatVnd(product.priceVnd * line.quantity)}</strong></div>;
         })}
-        <div className="summary-total"><small>{method === 'ltc' ? 'Order value (paid in LTC)' : 'You pay by bank transfer'}</small><p className="pay-amount">{formatVnd(total)}</p><small>≈ {formatUsdFromVnd(total, catalog.vndPerUsd)}</small></div>
+        <div className="summary-total"><small>{method === 'ltc' ? 'Order value (paid in LTC)' : 'You pay by bank transfer'}</small><p className="pay-amount">{formatVnd(total)}</p><small>≈ {formatUsdFromVnd(total, catalog.vndPerUsd)}{methods?.ltc ? ` · ≈ ${formatLtcEstimate(total, methods.ltc.vndPerLtc)}` : ''}</small></div>
         {error && <p className="error-text" role="alert">{error}</p>}
         <button className="full-width" type="button" disabled={busy || !methods || (!methods.bank && !methods.ltc)} onClick={() => void placeOrder()}>{busy ? 'Placing order…' : 'Place order →'}</button>
         <p className="field-caption">You will see the {method === 'ltc' ? 'wallet address' : 'bank details'} and QR code on the next page.</p>

@@ -6,7 +6,19 @@ import {formatUsdFromVnd} from '@/lib/money';
 
 type Account = {id: string; bankBin: string; bankName: string; accountNumber: string; accountHolder: string; active: boolean};
 type Wallet = {id: string; address: string; label: string; active: boolean};
-type State = {vndPerUsd: number; accounts: Account[]; banks: readonly {bin: string; name: string}[]; wallets: Wallet[]; ltcOverride: number | null; ltcRate: {vndPerLtc: number; source: string} | null};
+type Mode = 'auto' | 'fixed';
+type UsdRate = {vndPerUsd: number; source: string; updatedAt: string | null};
+type LtcRate = {vndPerLtc: number; source: string; updatedAt: string | null};
+type Rates = {usdMode: Mode; usdFixed: number; ltcMode: Mode; ltcFixed: number | null; usdRate: UsdRate; ltcRate: LtcRate | null; market: {usd: UsdRate | null; ltc: LtcRate | null}};
+type State = {accounts: Account[]; banks: readonly {bin: string; name: string}[]; wallets: Wallet[]; rates: Rates};
+
+const providers: Record<string, string> = {'currency-api': 'currency-api (daily market rate)', coingecko: 'CoinGecko', binance: 'Binance'};
+/** "live from CoinGecko, updated 16:42" / "fixed by an Admin" / "fixed rate, because no market rate could be fetched". */
+function rateSource(rate: {source: string; updatedAt: string | null}) {
+  if (rate.source === 'fixed') return 'fixed by an Admin';
+  if (rate.source === 'fallback') return 'the fixed rate below, because no market rate could be fetched right now';
+  return `live from ${providers[rate.source] ?? rate.source}${rate.updatedAt ? `, checked ${new Date(rate.updatedAt).toLocaleTimeString('en-GB', {hour: '2-digit', minute: '2-digit'})}` : ''}`;
+}
 type WalletDraft = {id?: string; address: string; label: string; active: boolean};
 const emptyWallet: WalletDraft = {address: '', label: '', active: true};
 type Draft = {id?: string; bankBin: string; customBin: string; accountNumber: string; accountHolder: string; active: boolean};
@@ -15,17 +27,19 @@ const emptyDraft: Draft = {bankBin: '970436', customBin: '', accountNumber: '', 
 export default function PaymentSettings() {
   const locale = useLocale();
   const [state, setState] = useState<State | null>(null);
+  const [usdMode, setUsdMode] = useState<Mode>('auto');
   const [rate, setRate] = useState('');
   const [draft, setDraft] = useState<Draft>(emptyDraft);
   const [wallet, setWallet] = useState<WalletDraft>(emptyWallet);
-  const [override, setOverride] = useState('');
+  const [ltcMode, setLtcMode] = useState<Mode>('auto');
+  const [ltcFixed, setLtcFixed] = useState('');
   const [qr, setQr] = useState<{id: string; svg: string} | null>(null);
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
-    fetch('/api/admin/settings/payments', {cache: 'no-store'}).then(async response => { const body = await response.json(); if (!response.ok) throw new Error(body.error); setState(body); setRate(String(body.vndPerUsd)); setOverride(body.ltcOverride ? String(body.ltcOverride) : ''); })
+    fetch('/api/admin/settings/payments', {cache: 'no-store'}).then(async response => { const body = await response.json(); if (!response.ok) throw new Error(body.error); setState(body); setUsdMode(body.rates.usdMode); setRate(String(body.rates.usdFixed)); setLtcMode(body.rates.ltcMode); setLtcFixed(body.rates.ltcFixed ? String(body.rates.ltcFixed) : ''); })
       .catch(cause => setError(cause instanceof Error ? cause.message : 'Payment settings could not be loaded.'));
   }, []);
 
@@ -90,18 +104,32 @@ export default function PaymentSettings() {
     </section>
 
     <section className="card admin-panel"><h2>Litecoin price</h2>
-      <p className="field-caption">Current price used for new orders: <strong>{state.ltcRate ? `${state.ltcRate.vndPerLtc.toLocaleString('vi-VN')} ₫ per LTC` : 'unavailable'}</strong>{state.ltcRate ? ` (${state.ltcRate.source === 'manual' ? 'set manually' : `market price from ${state.ltcRate.source === 'coingecko' ? 'CoinGecko' : 'Binance'}`})` : ''}. The price is locked for each order during its 30-minute payment window.</p>
-      <form className="rate-form" onSubmit={event => {event.preventDefault(); void post({action: 'ltc-override', vndPerLtc: override.trim() ? Number(override) : null}, override.trim() ? 'Manual Litecoin price saved.' : 'Litecoin price is automatic again.');}}>
-        <label>Manual price (VND per 1 LTC)<input type="number" min="1000" step="1" value={override} onChange={event => setOverride(event.target.value)} placeholder="Leave empty for automatic"/></label>
-        <button type="submit" disabled={busy}>Save price</button>
+      <p className="field-caption">Used for new orders and the LTC estimates in the store: <strong>{state.rates.ltcRate ? `${state.rates.ltcRate.vndPerLtc.toLocaleString('vi-VN')} ₫ per LTC` : 'unavailable'}</strong>{state.rates.ltcRate ? ` (${rateSource(state.rates.ltcRate)})` : ' (no market price and no fixed price, so Litecoin checkout is paused)'}. Each order locks the price for its 30-minute payment window.</p>
+      {state.rates.ltcMode === 'fixed' && state.rates.market.ltc && <p className="field-caption">Market price now: {state.rates.market.ltc.vndPerLtc.toLocaleString('vi-VN')} ₫ per LTC ({providers[state.rates.market.ltc.source] ?? state.rates.market.ltc.source}).</p>}
+      <form className="rate-settings" onSubmit={event => {event.preventDefault(); void post({action: 'ltc-rate', mode: ltcMode, vndPerLtc: ltcFixed.trim() ? Number(ltcFixed) : null}, ltcMode === 'auto' ? 'Litecoin price follows the market.' : 'Fixed Litecoin price saved.');}}>
+        <fieldset className="rate-mode"><legend>Price source</legend>
+          <label><input type="radio" name="ltc-mode" checked={ltcMode === 'auto'} onChange={() => setLtcMode('auto')}/><span><strong>Automatic</strong><small>Follow the live market price (recommended)</small></span></label>
+          <label><input type="radio" name="ltc-mode" checked={ltcMode === 'fixed'} onChange={() => setLtcMode('fixed')}/><span><strong>Fixed</strong><small>Always use the price below</small></span></label>
+        </fieldset>
+        <div className="rate-form">
+          <label>{ltcMode === 'fixed' ? 'Fixed price' : 'Fallback price'} (VND per 1 LTC)<input type="number" min="1000" step="1" value={ltcFixed} onChange={event => setLtcFixed(event.target.value)} required={ltcMode === 'fixed'} placeholder={ltcMode === 'fixed' ? '' : 'Optional'}/><small className="field-caption">{ltcMode === 'fixed' ? 'Customers pay at exactly this price.' : 'Only used if no market price can be fetched.'}</small></label>
+          <button type="submit" disabled={busy}>Save</button>
+        </div>
       </form>
     </section>
 
-    <section className="card admin-panel"><h2>USD display rate</h2>
-      <p className="field-caption">Prices are charged in VND. The store also shows USD using this rate. Example: 50.000 ₫ ≈ {formatUsdFromVnd(50000, Number(rate) || state.vndPerUsd)}.</p>
-      <form className="rate-form" onSubmit={event => {event.preventDefault(); void post({action: 'rate', vndPerUsd: Number(rate)}, 'Rate saved. The store shows new USD prices within a minute.');}}>
-        <label>VND per 1 USD<input type="number" min="1000" max="1000000" step="1" value={rate} onChange={event => setRate(event.target.value)} required/></label>
-        <button type="submit" disabled={busy}>Save rate</button>
+    <section className="card admin-panel"><h2>USD rate</h2>
+      <p className="field-caption">Prices are charged in VND; the store also shows USD. Now: <strong>{state.rates.usdRate.vndPerUsd.toLocaleString('vi-VN')} ₫ per USD</strong> ({rateSource(state.rates.usdRate)}). Example: 50.000 ₫ ≈ {formatUsdFromVnd(50000, usdMode === 'fixed' ? Number(rate) || state.rates.usdRate.vndPerUsd : state.rates.usdRate.vndPerUsd)}.</p>
+      {state.rates.usdMode === 'fixed' && state.rates.market.usd && <p className="field-caption">Market rate now: {state.rates.market.usd.vndPerUsd.toLocaleString('vi-VN')} ₫ per USD.</p>}
+      <form className="rate-settings" onSubmit={event => {event.preventDefault(); void post({action: 'rate', mode: usdMode, vndPerUsd: Number(rate)}, usdMode === 'auto' ? 'USD rate follows the market.' : 'Fixed USD rate saved.');}}>
+        <fieldset className="rate-mode"><legend>Rate source</legend>
+          <label><input type="radio" name="usd-mode" checked={usdMode === 'auto'} onChange={() => setUsdMode('auto')}/><span><strong>Automatic</strong><small>Follow the market rate, updated daily (recommended)</small></span></label>
+          <label><input type="radio" name="usd-mode" checked={usdMode === 'fixed'} onChange={() => setUsdMode('fixed')}/><span><strong>Fixed</strong><small>Always use the rate below</small></span></label>
+        </fieldset>
+        <div className="rate-form">
+          <label>{usdMode === 'fixed' ? 'Fixed rate' : 'Fallback rate'} (VND per 1 USD)<input type="number" min="1000" max="1000000" step="1" value={rate} onChange={event => setRate(event.target.value)} required/><small className="field-caption">{usdMode === 'fixed' ? 'The store converts USD with exactly this rate.' : 'Only used if no market rate can be fetched.'}</small></label>
+          <button type="submit" disabled={busy}>Save</button>
+        </div>
       </form>
     </section>
   </div>;

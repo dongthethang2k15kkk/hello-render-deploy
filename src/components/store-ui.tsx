@@ -56,10 +56,10 @@ const comparison: Record<string, string[]> = {
   'sample-plus': ['Higher sample price', 'Recipient name plus an optional delivery note']
 };
 
-export function Catalog({products, source, vndPerUsd}: {products: CatalogProduct[]; source: CatalogSource; vndPerUsd: number}) {
+export function Catalog({products, source, vndPerUsd, vndPerLtc = null}: {products: CatalogProduct[]; source: CatalogSource; vndPerUsd: number; vndPerLtc?: number | null}) {
   const locale = useLocale() as Locale; const t = useTranslations();
   return <section id="catalog" className="section">
-    <div className="section-heading"><div><p className="eyebrow">THE COLLECTION</p><h2>Choose a package</h2><p className="muted">{products.length ? `${products.length} package${products.length === 1 ? '' : 's'} available. Review the details before continuing.` : 'No packages are currently available.'}</p></div><span className="pill">Prices in USD · paid in VND</span></div>
+    <div className="section-heading"><div><p className="eyebrow">THE COLLECTION</p><h2>Choose a package</h2><p className="muted">{products.length ? `${products.length} package${products.length === 1 ? '' : 's'} available. Review the details before continuing.` : 'No packages are currently available.'}</p></div><span className="pill">{vndPerLtc ? 'Prices in USD · paid in VND or LTC' : 'Prices in USD · paid in VND'}</span></div>
     {source === 'fallback' && <p className="catalog-status" role="status">The catalog is temporarily unavailable. Please refresh in a moment.</p>}
     {!products.length && <div className="empty-state"><div className="empty-icon">◇</div><h3>Catalog coming soon</h3><p className="muted">The store has no active packages right now. Please check again later or ask support.</p></div>}
     <div className="product-grid">{products.map(p => <article className="product-card" key={p.id}>
@@ -69,7 +69,7 @@ export function Catalog({products, source, vndPerUsd}: {products: CatalogProduct
         <h3>{p.title[locale]}</h3>
         <p className="muted">{p.description[locale]}</p>
         <ul className="compare-list">{(comparison[p.id] ?? [p.stock ? `${p.stock} currently available` : 'Currently out of stock', p.fields.length ? `${p.fields.filter(field => field.required).length} required delivery field${p.fields.filter(field => field.required).length === 1 ? '' : 's'}` : 'No delivery details required']).map(item => <li key={item}>{item}</li>)}</ul>
-        <div className="product-bottom"><div><small>{p.salePriceVnd ? 'Sale price' : 'Price'}</small>{p.salePriceVnd && <del>{formatUsdFromVnd(p.basePriceVnd, vndPerUsd)}</del>}<Price vnd={p.priceVnd} vndPerUsd={vndPerUsd}/></div><Link className={`button ${!p.stock ? 'disabled-link' : ''}`} aria-disabled={!p.stock} tabIndex={p.stock ? undefined : -1} href={p.stock ? `/${locale}/products/${p.id}` : '#catalog'}>{p.stock ? t('detail') : 'Out of stock'} <span aria-hidden="true">→</span></Link></div>
+        <div className="product-bottom"><div><small>{p.salePriceVnd ? 'Sale price' : 'Price'}</small>{p.salePriceVnd && <del>{formatUsdFromVnd(p.basePriceVnd, vndPerUsd)}</del>}<Price vnd={p.priceVnd} vndPerUsd={vndPerUsd} vndPerLtc={vndPerLtc}/></div><Link className={`button ${!p.stock ? 'disabled-link' : ''}`} aria-disabled={!p.stock} tabIndex={p.stock ? undefined : -1} href={p.stock ? `/${locale}/products/${p.id}` : '#catalog'}>{p.stock ? t('detail') : 'Out of stock'} <span aria-hidden="true">→</span></Link></div>
       </div>
     </article>)}</div>
     <div className="after-purchase card"><p className="eyebrow">WHAT YOU GET AFTER PURCHASE</p><h3>Pay by bank transfer, then pick a time</h3><p className="muted">Place your order and transfer the VND amount within 30 minutes using the QR code. Then choose the times you are free. We confirm your payment, book one of your times and send the details to your email and Inbox. At the appointment we deliver through the site chat.</p></div>

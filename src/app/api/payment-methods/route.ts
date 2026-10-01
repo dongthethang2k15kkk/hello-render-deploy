@@ -1,4 +1,4 @@
-import {getLtcRate} from '@/lib/ltc-rate';
+import {getLtcRate} from '@/lib/exchange-rates';
 import {getPaymentDb} from '@/lib/payment-db';
 
 export const runtime = 'nodejs';

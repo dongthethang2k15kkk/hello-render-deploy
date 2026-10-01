@@ -17,7 +17,7 @@ import {alertAppointment} from './payment-detection';
 import {reReserveItems, restockItems, StockError} from './order-stock';
 import {uniqueLitoshi} from './ltc';
 import {formatLtc, parseLtc} from './ltc-format';
-import {getLtcRate} from './ltc-rate';
+import {getLtcRate} from './exchange-rates';
 
 export class OrderError extends Error {
   constructor(message: string, readonly status = 400) { super(message); }
@@ -69,8 +69,8 @@ export async function createOrder(customer: {id: string}, lines: CartLine[], met
   const totalVnd = items.reduce((sum, item) => sum + item.unitPriceVnd * item.quantity, 0);
   const quantities = new Map<string, number>();
   for (const item of items) quantities.set(item.packageId, (quantities.get(item.packageId) ?? 0) + item.quantity);
-  // The Litecoin price is locked when the order is placed and holds for the 30-minute payment window.
-  const ltcRate = method === 'ltc' ? await getLtcRate() : null;
+  // A Litecoin price at most a minute old is locked when the order is placed and holds for the 30-minute payment window.
+  const ltcRate = method === 'ltc' ? await getLtcRate({fresh: true}) : null;
   if (method === 'ltc' && !ltcRate) throw new OrderError('Litecoin payments are temporarily unavailable. Choose bank transfer or try again shortly.', 503);
 
   return getPaymentDb().$transaction(async tx => {

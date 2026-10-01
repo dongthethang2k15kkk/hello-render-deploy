@@ -4,10 +4,9 @@ import {recordAudit} from '@/lib/audit';
 import {getSession} from '@/lib/auth';
 import {sameOrigin} from '@/lib/customer-rules';
 import {getPaymentDb} from '@/lib/payment-db';
-import {getVndPerUsd, setVndPerUsd} from '@/lib/store-settings';
+import {getLtcRate, getMarketRates, getRateSettings, getUsdRate, saveLtcRateSettings, saveUsdRateSettings} from '@/lib/exchange-rates';
 import {validLitecoinAddress} from '@/lib/ltc';
 import {litecoinUri} from '@/lib/ltc-format';
-import {getLtcOverride, getLtcRate, setLtcOverride} from '@/lib/ltc-rate';
 import {vietQrPayload} from '@/lib/vietqr';
 import {bankName, vnBanks} from '@/lib/vn-banks';
 
@@ -17,12 +16,14 @@ const accountSelect = {id: true, bankBin: true, bankName: true, accountNumber: t
 
 async function state() {
   const db = getPaymentDb();
-  const [vndPerUsd, accounts, wallets, ltcOverride, ltcRate] = await Promise.all([
-    getVndPerUsd(), db.bankAccount.findMany({orderBy: {createdAt: 'asc'}, select: accountSelect}),
+  const [accounts, wallets, rateSettings, market] = await Promise.all([
+    db.bankAccount.findMany({orderBy: {createdAt: 'asc'}, select: accountSelect}),
     db.cryptoWallet.findMany({orderBy: {createdAt: 'asc'}, select: {id: true, network: true, address: true, label: true, active: true}}),
-    getLtcOverride(), getLtcRate()
+    getRateSettings(), getMarketRates()
   ]);
-  return {vndPerUsd, accounts, banks: vnBanks, wallets, ltcOverride, ltcRate};
+  // The rates in use come after the market lookup, so they reuse its fresh cache.
+  const [usdRate, ltcRate] = await Promise.all([getUsdRate(), getLtcRate()]);
+  return {accounts, banks: vnBanks, wallets, rates: {...rateSettings, usdRate, ltcRate, market}};
 }
 
 export async function GET() {
@@ -35,14 +36,14 @@ export async function GET() {
 const holderName = (value: string) => value.normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[đĐ]/g, 'D').toUpperCase().replace(/[^A-Z ]/g, '').replace(/\s+/g, ' ').trim();
 
 const action = z.discriminatedUnion('action', [
-  z.object({action: z.literal('rate'), vndPerUsd: z.number().int().min(1000).max(1_000_000)}).strict(),
+  z.object({action: z.literal('rate'), mode: z.enum(['auto', 'fixed']), vndPerUsd: z.number().int().min(1000).max(1_000_000)}).strict(),
   z.object({action: z.literal('save-account'), id: z.string().max(40).optional(), bankBin: z.string().regex(/^\d{6}$/, 'Bank BIN must be 6 digits.'), accountNumber: z.string().trim().regex(/^[0-9A-Za-z]{4,19}$/, 'Account number: 4–19 letters or digits, no spaces.'), accountHolder: z.string().max(80), active: z.boolean()}).strict(),
   z.object({action: z.literal('delete-account'), id: z.string().max(40)}).strict(),
   z.object({action: z.literal('test-qr'), id: z.string().max(40)}).strict(),
   z.object({action: z.literal('save-wallet'), id: z.string().max(40).optional(), address: z.string().trim().max(100), label: z.string().trim().max(60).default(''), active: z.boolean()}).strict(),
   z.object({action: z.literal('delete-wallet'), id: z.string().max(40)}).strict(),
   z.object({action: z.literal('test-wallet-qr'), id: z.string().max(40)}).strict(),
-  z.object({action: z.literal('ltc-override'), vndPerLtc: z.number().int().min(1000).max(1_000_000_000).nullable()}).strict()
+  z.object({action: z.literal('ltc-rate'), mode: z.enum(['auto', 'fixed']), vndPerLtc: z.number().int().min(1000).max(1_000_000_000).nullable()}).strict()
 ]);
 
 export async function POST(request: Request) {
@@ -56,8 +57,8 @@ export async function POST(request: Request) {
   const db = getPaymentDb();
   try {
     if (input.action === 'rate') {
-      await setVndPerUsd(input.vndPerUsd, admin.email);
-      await recordAudit({actorEmail: admin.email, action: 'settings.rate', summary: `Set the display rate to ${input.vndPerUsd.toLocaleString('vi-VN')} VND/USD`, entityType: 'settings'});
+      await saveUsdRateSettings({mode: input.mode, vndPerUsd: input.vndPerUsd}, admin.email);
+      await recordAudit({actorEmail: admin.email, action: 'settings.rate', summary: input.mode === 'auto' ? `USD rate follows the market (fallback ${input.vndPerUsd.toLocaleString('vi-VN')} VND/USD)` : `Fixed the USD rate at ${input.vndPerUsd.toLocaleString('vi-VN')} VND/USD`, entityType: 'settings'});
     } else if (input.action === 'save-account') {
       const holder = holderName(input.accountHolder);
       if (holder.length < 3) return json({error: 'Enter the account holder name as printed by the bank.'}, 400);
@@ -82,9 +83,10 @@ export async function POST(request: Request) {
       const wallet = await db.cryptoWallet.findUnique({where: {id: input.id}});
       if (!wallet) return json({error: 'Wallet not found.'}, 404);
       return json({qrSvg: await QRCode.toString(litecoinUri(wallet.address, '0.00100000', 'TEST'), {type: 'svg', margin: 1, errorCorrectionLevel: 'M'})});
-    } else if (input.action === 'ltc-override') {
-      await setLtcOverride(input.vndPerLtc, admin.email);
-      await recordAudit({actorEmail: admin.email, action: 'settings.ltc_rate', summary: input.vndPerLtc ? `Set a manual Litecoin price of ${input.vndPerLtc.toLocaleString('vi-VN')} VND/LTC` : 'Switched the Litecoin price back to automatic', entityType: 'settings'});
+    } else if (input.action === 'ltc-rate') {
+      if (input.mode === 'fixed' && !input.vndPerLtc) return json({error: 'Enter the fixed Litecoin price in VND.'}, 400);
+      await saveLtcRateSettings({mode: input.mode, vndPerLtc: input.vndPerLtc}, admin.email);
+      await recordAudit({actorEmail: admin.email, action: 'settings.ltc_rate', summary: input.mode === 'fixed' ? `Fixed the Litecoin price at ${input.vndPerLtc!.toLocaleString('vi-VN')} VND/LTC` : `Litecoin price follows the market${input.vndPerLtc ? ` (fallback ${input.vndPerLtc.toLocaleString('vi-VN')} VND/LTC)` : ''}`, entityType: 'settings'});
     } else {
       const account = await db.bankAccount.findUnique({where: {id: input.id}});
       if (!account) return json({error: 'Bank account not found.'}, 404);

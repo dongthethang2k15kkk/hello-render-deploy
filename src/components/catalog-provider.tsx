@@ -3,8 +3,8 @@
 import {createContext, useContext, useEffect, useState} from 'react';
 import {catalogResponseSchema, fallbackProducts, fallbackVndPerUsd, type CatalogProduct, type CatalogSource} from '@/lib/catalog';
 
-type CatalogState = {products: CatalogProduct[]; ready: boolean; source: CatalogSource; vndPerUsd: number};
-const initial: CatalogState = {products: fallbackProducts, ready: false, source: 'demo', vndPerUsd: fallbackVndPerUsd};
+type CatalogState = {products: CatalogProduct[]; ready: boolean; source: CatalogSource; vndPerUsd: number; vndPerLtc: number | null};
+const initial: CatalogState = {products: fallbackProducts, ready: false, source: 'demo', vndPerUsd: fallbackVndPerUsd, vndPerLtc: null};
 const CatalogContext = createContext<CatalogState>(initial);
 
 export function CatalogProvider({children}: {children: React.ReactNode}) {

@@ -2,7 +2,7 @@ import {getSession} from '@/lib/auth';
 import {mailStatus} from '@/lib/mailer';
 import {overview} from '@/lib/order-store';
 import {getPaymentDb} from '@/lib/payment-db';
-import {getVndPerUsd} from '@/lib/store-settings';
+import {getVndPerUsd} from '@/lib/exchange-rates';
 
 export const runtime = 'nodejs';
 const json = (data: unknown, status = 200) => Response.json(data, {status, headers: {'Cache-Control': 'no-store'}});
