@@ -135,8 +135,8 @@ export default function OrderPage({params}: {params: Promise<{locale: string; co
       </div>
       <aside className="card order-summary">
         <h2>Items</h2>
-        {order.items.map((item, index) => <div className="summary-item" key={index}><div className="summary-line"><span>{item.title} × {item.quantity}</span><strong>{formatVnd(item.unitPriceVnd * item.quantity)}</strong></div>{Object.entries(item.delivery).filter(([, value]) => value).map(([key, value]) => <small key={key}>{key}: {value}</small>)}</div>)}
-        <div className="summary-total"><small>Total</small><p className="pay-amount">{formatVnd(order.totalVnd)}</p><small>≈ {formatUsdFromVnd(order.totalVnd, order.vndPerUsd)}{order.cryptoAmount ? ` · paid as ${order.cryptoAmount} LTC` : ''}</small></div>
+        {order.items.map((item, index) => <div className="summary-item" key={index}><div className="summary-line"><span>{item.title} × {item.quantity}</span><span className="summary-amount"><strong>{formatUsdFromVnd(item.unitPriceVnd * item.quantity, order.vndPerUsd)}</strong><small>{formatVnd(item.unitPriceVnd * item.quantity)}</small></span></div>{Object.entries(item.delivery).filter(([, value]) => value).map(([key, value]) => <small key={key}>{key}: {value}</small>)}</div>)}
+        <div className="summary-total"><small>Total</small><p className="pay-amount">{formatUsdFromVnd(order.totalVnd, order.vndPerUsd)}</p><small className="pay-secondary">{formatVnd(order.totalVnd)}{order.cryptoAmount ? ` · paid as ${order.cryptoAmount} LTC` : ''}</small></div>
         <p className="field-caption">Placed {new Date(order.createdAt).toLocaleString('en-GB')}</p>
       </aside>
     </div>

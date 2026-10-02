@@ -3,7 +3,8 @@ import {useEffect, useState} from 'react';
 import Link from 'next/link';
 import {useLocale} from 'next-intl';
 import {useRouter} from 'next/navigation';
-import {formatVnd} from '@/lib/money';
+import {formatUsdFromVnd, formatVnd} from '@/lib/money';
+import {useCatalog} from '@/components/catalog-provider';
 import {formatRange, statusLabels, statusTone, type OrderStatus} from '@/lib/order-rules';
 import {LoadingRows} from '@/components/loading-state';
 
@@ -12,6 +13,7 @@ type OrderRow = {code: string; status: OrderStatus; totalVnd: number; createdAt:
 export default function MyOrders() {
   const locale = useLocale();
   const router = useRouter();
+  const {vndPerUsd} = useCatalog();
   const [orders, setOrders] = useState<OrderRow[] | null>(null);
   const [error, setError] = useState('');
   const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
@@ -31,7 +33,7 @@ export default function MyOrders() {
     {orders && orders.length === 0 && <div className="empty-state"><h2>No orders yet</h2><Link className="button" href={`/${locale}#catalog`}>Explore packages →</Link></div>}
     {orders && orders.length > 0 && <div className="order-list">{orders.map(order => <Link className="card order-row" key={order.code} href={`/${locale}/orders/${order.code}`}>
       <div><strong>{order.code}</strong><small>{order.items.map(item => `${item.title} × ${item.quantity}`).join(', ')}</small>{order.appointmentStart && order.appointmentEnd && order.status === 'scheduled' && <small>Appointment: {formatRange(order.appointmentStart, order.appointmentEnd, timeZone)}</small>}</div>
-      <div className="order-row-side"><span className={`badge ${statusTone[order.status]}`}>{statusLabels[order.status]}</span><strong>{formatVnd(order.totalVnd)}</strong><small>{new Date(order.createdAt).toLocaleDateString('en-GB')}</small></div>
+      <div className="order-row-side"><span className={`badge ${statusTone[order.status]}`}>{statusLabels[order.status]}</span><strong>{formatUsdFromVnd(order.totalVnd, vndPerUsd)}</strong><small>{formatVnd(order.totalVnd)}</small><small>{new Date(order.createdAt).toLocaleDateString('en-GB')}</small></div>
     </Link>)}</div>}
   </div>;
 }

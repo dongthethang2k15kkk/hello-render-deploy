@@ -1509,3 +1509,42 @@ a, .header-pill, .text-link {-webkit-tap-highlight-color:transparent;}
 
 /* Skeleton placeholders keep their space so content does not jump in. */
 .loading-rows {padding:6px 0;}
+
+/* ---------- Product cards: the photo fills the card, details sit on frosted glass ---------- */
+.product-card {display:flex; flex-direction:column; justify-content:flex-end; min-height:clamp(500px, 44vw, 620px);}
+.product-card .preview-slot {position:absolute; inset:0; z-index:0; height:auto; border-bottom:0;}
+.product-card .preview-slot:not(.product-photo) {place-content:start center; padding-top:22%;}
+.product-card.has-photo::before {display:none;}
+/* A soft shade under the glass keeps light photos (sky, snow) readable without hiding them. */
+.product-card.has-photo::after {content:''; position:absolute; inset:0; z-index:0; pointer-events:none; background:linear-gradient(180deg, transparent 45%, rgba(10,12,16,.35) 100%);}
+.product-card .product-content {
+  position:relative; z-index:1; margin:12px; padding:18px 20px;
+  border-radius:16px; color:#fff;
+  background:linear-gradient(160deg, rgba(255,255,255,.16), rgba(255,255,255,.05) 55%), rgba(18,20,26,.42);
+  -webkit-backdrop-filter:blur(18px) saturate(170%); backdrop-filter:blur(18px) saturate(170%);
+  border:1px solid rgba(255,255,255,.22);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.35), inset 0 -1px 0 rgba(255,255,255,.06), 0 12px 32px rgba(0,0,0,.35);
+}
+@supports not ((backdrop-filter:blur(1px)) or (-webkit-backdrop-filter:blur(1px))) {.product-card .product-content {background:rgba(18,20,26,.82);}}
+.product-card .product-content h3 {margin:8px 0 4px; font-size:20px; color:#fff; text-shadow:0 1px 2px rgba(0,0,0,.35);}
+.product-card .product-content .muted {margin:0; color:rgba(255,255,255,.8); font-size:13.5px; line-height:1.55; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden;}
+.product-card .product-content .eyebrow {color:#d5ccff;}
+.product-card .sample-tag {color:#fff; border-color:rgba(255,255,255,.3); background:rgba(255,255,255,.1);}
+.product-card .compare-list {display:flex; flex-wrap:wrap; gap:6px; margin:10px 0 0; padding:0; list-style:none;}
+.product-card .compare-list li {padding:3px 10px; border-radius:999px; font-size:12px; line-height:1.5; color:#fff; background:rgba(255,255,255,.12); border:1px solid rgba(255,255,255,.18);}
+.product-card .product-bottom {margin-top:14px; padding-top:14px; border-top-color:rgba(255,255,255,.18);}
+.product-card .product-bottom small {color:rgba(255,255,255,.75);}
+.product-card .price-pair .price-vnd, .product-card .price-pair .price-ltc {color:#dff3cf;}
+.product-card:hover {border-color:rgba(182,163,255,.65);}
+@media (max-width:640px) {
+  .product-card {min-height:540px;}
+  .product-card .preview-slot {height:auto;}
+  .product-card .product-content {margin:10px; padding:16px;}
+}
+
+/* Customer prices: USD first, the VND charge and LTC estimate in small type. */
+.summary-amount {display:grid; justify-items:end; gap:1px; text-align:right;}
+.summary-amount small {font-size:11px; font-weight:500; color:var(--text-muted);}
+.pay-secondary {display:block; margin:2px 0 16px; color:var(--text-muted); font-size:13px;}
+.checkout-layout .payment-option:has(:checked) small {color:#d6ebc8;}
+.checkout-layout .payment-option input {accent-color:#95d47a;}

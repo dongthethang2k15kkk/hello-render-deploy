@@ -63,6 +63,9 @@ test('full order: checkout, VietQR, times, admin confirms and books, customer is
   await expect(page).toHaveURL(/\/en\/cart$/);
   await page.goto('/en/checkout');
   await expect(page.getByText('You pay by bank transfer')).toBeVisible();
+  // Customers see USD first; the VND charge stays in small type.
+  await expect(page.locator('.summary-total .pay-amount')).toHaveText('$10.00');
+  await expect(page.locator('.summary-total .pay-secondary')).toContainText('260.000 ₫');
   await page.getByRole('button', {name: 'Place order →'}).click();
   await expect(page).toHaveURL(/\/en\/orders\/JH[2-9A-Z]{6}$/);
   const code = page.url().split('/').pop()!;

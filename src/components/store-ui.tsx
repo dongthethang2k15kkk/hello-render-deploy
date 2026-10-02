@@ -96,7 +96,7 @@ export function Catalog({products, source, vndPerUsd, vndPerLtc = null}: {produc
       <span className="package-count muted" role="status">{shown.length} of {products.length} packages</span>
     </div>}
     {products.length > 0 && !shown.length && <div className="empty-state"><h3>No matching packages</h3><p className="muted">Try another search or clear your filters.</p><button type="button" className="secondary" onClick={reset}>Clear filters</button></div>}
-    <div className="product-grid" aria-busy={query !== deferredQuery}>{shown.map(p => <article className="product-card" key={p.id}>
+    <div className="product-grid" aria-busy={query !== deferredQuery}>{shown.map(p => <article className={`product-card ${p.imagePath ? 'has-photo' : ''}`} key={p.id}>
       {p.imagePath ? <div className="preview-slot product-photo"><img loading="lazy" decoding="async" src={p.imagePath} alt={`Preview of ${p.title[locale]}`}/></div> : <div className="preview-slot" role="img" aria-label={p.title[locale]}><span>{p.title[locale]}</span></div>}
       <div className="product-content">
         <div className="row"><span className="eyebrow">DIGITAL PACKAGE</span><span className="sample-tag">{p.stock ? 'Available' : 'Out of stock'}</span></div>

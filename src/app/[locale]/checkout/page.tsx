@@ -55,14 +55,14 @@ export default function Checkout() {
         <section className="card"><span className="eyebrow">01 / HOW IT WORKS</span><h2>Pay, then pick a time</h2>
           <ol className="checkout-flow">
             <li><strong>Place the order.</strong> We hold your items for {HOLD_MINUTES} minutes.</li>
-            <li><strong>Pay {method === 'ltc' ? 'in Litecoin' : formatVnd(total)}</strong> by scanning the QR code in your {method === 'ltc' ? 'Litecoin wallet' : 'banking app'}. The amount is filled in for you.</li>
+            <li><strong>Pay {method === 'ltc' ? 'in Litecoin' : formatUsdFromVnd(total, catalog.vndPerUsd)}</strong>{method !== 'ltc' && <> ({formatVnd(total)})</>} by scanning the QR code in your {method === 'ltc' ? 'Litecoin wallet' : 'banking app'}. The amount is filled in for you.</li>
             <li><strong>Tap “I’ve transferred”</strong> and choose a few times you are free.</li>
             <li><strong>We confirm</strong> your payment and one of your times by email and in your Inbox, then deliver with you in the site chat.</li>
           </ol>
         </section>
         <section className="card" style={{marginTop: 20}}><span className="eyebrow">02 / PAYMENT METHOD</span><h2>How do you want to pay?</h2>
           {!methods ? <p aria-busy="true">Checking payment options…</p> : <div className="payment-options">
-            {methods.bank && <label className="payment-option"><input type="radio" name="method" value="bank" checked={method === 'bank'} onChange={() => setMethod('bank')}/><span>Bank transfer · VietQR<small>Pay {formatVnd(total)} from any Vietnamese banking app</small></span></label>}
+            {methods.bank && <label className="payment-option"><input type="radio" name="method" value="bank" checked={method === 'bank'} onChange={() => setMethod('bank')}/><span>Bank transfer · VietQR<small>Charged as {formatVnd(total)} in any Vietnamese banking app</small></span></label>}
             {methods.ltc && <label className="payment-option"><input type="radio" name="method" value="ltc" checked={method === 'ltc'} onChange={() => setMethod('ltc')}/><span>Litecoin (LTC)<small>About {formatLtcEstimate(total, methods.ltc.vndPerLtc)} · exact amount shown after you place the order</small></span></label>}
             {!methods.bank && !methods.ltc && <p className="error-text">Payments are not set up yet. Please contact the shop on Discord.</p>}
           </div>}
@@ -74,9 +74,9 @@ export default function Checkout() {
         {lines.map((line, index) => {
           const product = products.find(item => item.id === line.productId);
           if (!product) return null;
-          return <div className="summary-line" key={`${line.productId}-${index}`}><span>{product.title[locale]} × {line.quantity}</span><strong>{formatVnd(product.priceVnd * line.quantity)}</strong></div>;
+          return <div className="summary-line" key={`${line.productId}-${index}`}><span>{product.title[locale]} × {line.quantity}</span><span className="summary-amount"><strong>{formatUsdFromVnd(product.priceVnd * line.quantity, catalog.vndPerUsd)}</strong><small>{formatVnd(product.priceVnd * line.quantity)}</small></span></div>;
         })}
-        <div className="summary-total"><small>{method === 'ltc' ? 'Order value (paid in LTC)' : 'You pay by bank transfer'}</small><p className="pay-amount">{formatVnd(total)}</p><small>≈ {formatUsdFromVnd(total, catalog.vndPerUsd)}{methods?.ltc ? ` · ≈ ${formatLtcEstimate(total, methods.ltc.vndPerLtc)}` : ''}</small></div>
+        <div className="summary-total"><small>{method === 'ltc' ? 'Order value (paid in LTC)' : 'You pay by bank transfer'}</small><p className="pay-amount">{formatUsdFromVnd(total, catalog.vndPerUsd)}</p><small className="pay-secondary">{formatVnd(total)}{methods?.ltc ? ` · ≈ ${formatLtcEstimate(total, methods.ltc.vndPerLtc)}` : ''}</small></div>
         {error && <p className="error-text" role="alert">{error}</p>}
         <button className="full-width" type="button" disabled={busy || !methods || (!methods.bank && !methods.ltc)} onClick={() => void placeOrder()}>{busy ? 'Placing order…' : 'Place order →'}</button>
         <p className="field-caption">You will see the {method === 'ltc' ? 'wallet address' : 'bank details'} and QR code on the next page.</p>
