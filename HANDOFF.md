@@ -449,3 +449,4 @@ Quyết định đã chốt trong hội thoại và trạng thái:
 ### No duplicate "Chat support" link — 2026-10-03
 
 - **Owner question (screenshot):** why both a Chat pill and a "Chat support" link in the header? Both opened `/en/workspace`; the link predates the pills. The nav link is now shown only when no customer is signed in (guests and Admins); signed-in customers use the Chat pill with its unread count. Verified: TypeScript, Playwright store/badges specs 11/11, production build.
+- **Production (2026-10-03):** `72367f0` live as `dep-davvi0lg1s2s73874uj0` at 18:35:31Z; `/en` 200.
