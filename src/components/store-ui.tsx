@@ -2,9 +2,12 @@
 import Link from 'next/link';
 import {usePathname} from 'next/navigation';
 import {useLocale, useTranslations} from 'next-intl';
-import {useEffect, useState} from 'react';
+import {useDeferredValue, useEffect, useMemo, useState} from 'react';
 import {type CatalogProduct, type CatalogSource, Locale} from '@/lib/catalog';
 import Price from './price';
+import {filterCatalog, type CatalogSort} from '@/lib/catalog-view';
+import {clearChatDrafts} from '@/lib/chat-drafts';
+import {watchChat} from '@/lib/chat-client';
 import {formatUsdFromVnd} from '@/lib/money';
 import {useCart} from './cart-provider';
 
@@ -30,7 +33,16 @@ export function StoreHeader() {
     const timer = window.setInterval(() => { if (document.visibilityState === 'visible') void load(); }, 30000);
     return () => window.clearInterval(timer);
   }, [path]);
-  async function logout() {await fetch('/api/auth/logout', {method: 'POST'}); setAccount(null); window.location.reload();}
+  useEffect(() => {
+    if (!account) return;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const stop = watchChat(event => {
+      if (event.kind === 'disconnected') return;
+      if (!timer) timer = setTimeout(() => {timer = undefined; void fetch('/api/auth/session', {cache: 'no-store'}).then(r => r.json()).then(data => setAccount(data.account)).catch(() => {});}, 250);
+    });
+    return () => {stop(); clearTimeout(timer);};
+  }, [account?.role]);
+  async function logout() {await fetch('/api/auth/logout', {method: 'POST'}); clearChatDrafts(); setAccount(null); window.location.reload();}
   const cartCount = lines.reduce((sum, line) => sum + line.quantity, 0);
   return <header className="site-header"><div className="shell header"><Link href={`/${locale}`} className="brand"><span className="brand-name">Jewish Horse</span><small className="brand-tagline">Digital package shop</small></Link><button className="mobile-nav-toggle secondary" type="button" aria-expanded={menuOpen} aria-controls="store-navigation" onClick={() => setMenuOpen(value => !value)}><span aria-hidden="true">{menuOpen ? '×' : '☰'}</span><span>{menuOpen ? 'Close' : 'Menu'}</span></button><nav id="store-navigation" className={menuOpen ? 'open' : ''} aria-label="Navigation"><Link onClick={() => setMenuOpen(false)} href={`/${locale}#catalog`}>Packages</Link><Link onClick={() => setMenuOpen(false)} href={`/${locale}#how-it-works`}>How it works</Link><Link onClick={() => setMenuOpen(false)} href={`/${locale}/workspace`}>Chat support</Link><Link onClick={() => setMenuOpen(false)} href={`/${locale}#faq`}>Help</Link></nav>
     <div className="header-actions">
@@ -58,12 +70,25 @@ const comparison: Record<string, string[]> = {
 
 export function Catalog({products, source, vndPerUsd, vndPerLtc = null}: {products: CatalogProduct[]; source: CatalogSource; vndPerUsd: number; vndPerLtc?: number | null}) {
   const locale = useLocale() as Locale; const t = useTranslations();
+  const [query, setQuery] = useState('');
+  const [inStock, setInStock] = useState(false);
+  const [sort, setSort] = useState<CatalogSort>('featured');
+  const deferredQuery = useDeferredValue(query);
+  const shown = useMemo(() => filterCatalog(products, deferredQuery, inStock, sort), [products, deferredQuery, inStock, sort]);
+  const reset = () => {setQuery(''); setInStock(false); setSort('featured');};
   return <section id="catalog" className="section">
     <div className="section-heading"><div><p className="eyebrow">THE COLLECTION</p><h2>Choose a package</h2><p className="muted">{products.length ? `${products.length} package${products.length === 1 ? '' : 's'} available. Review the details before continuing.` : 'No packages are currently available.'}</p></div><span className="pill">{vndPerLtc ? 'Prices in USD · paid in VND or LTC' : 'Prices in USD · paid in VND'}</span></div>
     {source === 'fallback' && <p className="catalog-status" role="status">The catalog is temporarily unavailable. Please refresh in a moment.</p>}
     {!products.length && <div className="empty-state"><div className="empty-icon">◇</div><h3>Catalog coming soon</h3><p className="muted">The store has no active packages right now. Please check again later or ask support.</p></div>}
-    <div className="product-grid">{products.map(p => <article className="product-card" key={p.id}>
-      {p.imagePath ? <div className="preview-slot product-photo"><img src={p.imagePath} alt={`Preview of ${p.title[locale]}`}/></div> : <div className="preview-slot" role="img" aria-label={p.title[locale]}><span>{p.title[locale]}</span></div>}
+    {products.length > 0 && <div className="package-tools">
+      <label className="package-search"><span className="sr-only">Search packages</span><input type="search" value={query} onChange={event => setQuery(event.target.value)} placeholder="Search packages..."/></label>
+      <label className="package-sort"><span className="sr-only">Sort packages</span><select aria-label="Sort packages" value={sort} onChange={event => setSort(event.target.value as CatalogSort)}><option value="featured">Featured</option><option value="price-low">Price: low to high</option><option value="price-high">Price: high to low</option><option value="name">Name: A to Z</option></select></label>
+      <label className="stock-filter"><input type="checkbox" checked={inStock} onChange={event => setInStock(event.target.checked)}/>In stock only</label>
+      <span className="package-count muted" role="status">{shown.length} of {products.length} packages</span>
+    </div>}
+    {products.length > 0 && !shown.length && <div className="empty-state"><h3>No matching packages</h3><p className="muted">Try another search or clear your filters.</p><button type="button" className="secondary" onClick={reset}>Clear filters</button></div>}
+    <div className="product-grid" aria-busy={query !== deferredQuery}>{shown.map(p => <article className="product-card" key={p.id}>
+      {p.imagePath ? <div className="preview-slot product-photo"><img loading="lazy" decoding="async" src={p.imagePath} alt={`Preview of ${p.title[locale]}`}/></div> : <div className="preview-slot" role="img" aria-label={p.title[locale]}><span>{p.title[locale]}</span></div>}
       <div className="product-content">
         <div className="row"><span className="eyebrow">DIGITAL PACKAGE</span><span className="sample-tag">{p.stock ? 'Available' : 'Out of stock'}</span></div>
         <h3>{p.title[locale]}</h3>

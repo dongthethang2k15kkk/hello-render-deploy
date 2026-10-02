@@ -1,30 +1,59 @@
 import 'server-only';
 import type {Role} from './admin-session';
 import {getPaymentDb} from './payment-db';
+import {publishChat} from './chat-events';
 
 export const MAX_CHAT_IMAGE_BYTES = 1024 * 1024;
 export const MAX_CHAT_IMAGES_PER_ROOM = 30;
 
-export type ChatMessage = {id: string; room: string; author: string; role: Role; body: string; createdAt: string; image?: {url: string; name: string} | null; imageExpired?: boolean};
+export type ChatMessage = {id: string; room: string; author: string; role: Role; body: string; createdAt: string; clientMessageId?: string | null; image?: {url: string; name: string} | null; imageExpired?: boolean};
 
 export const roomFor = (customerId: string) => `user:${customerId}`;
 export const customerIdFromRoom = (room: string) => /^user:[a-z0-9]{10,40}$/.test(room) ? room.slice(5) : null;
 
-type Row = {id: string; customerId: string; authorRole: string; authorName: string; body: string; imageId: string | null; createdAt: Date; image: {name: string} | null};
+type Row = {id: string; clientMessageId: string | null; customerId: string; authorRole: string; authorName: string; body: string; imageId: string | null; createdAt: Date; image: {name: string} | null};
 function toMessage(row: Row): ChatMessage {
   return {
-    id: row.id, room: roomFor(row.customerId), author: row.authorName, role: row.authorRole === 'admin' ? 'admin' : 'user', body: row.body, createdAt: row.createdAt.toISOString(),
+    id: row.id, clientMessageId: row.clientMessageId, room: roomFor(row.customerId), author: row.authorName, role: row.authorRole === 'admin' ? 'admin' : 'user', body: row.body, createdAt: row.createdAt.toISOString(),
     ...(row.image && row.imageId ? {image: {url: `/api/chat/images/${row.imageId}`, name: row.image.name}} : {}),
     ...(!row.imageId && row.body === '' ? {imageExpired: true} : {})
   };
 }
 
-const messageSelect = {id: true, customerId: true, authorRole: true, authorName: true, body: true, imageId: true, createdAt: true, image: {select: {name: true}}} as const;
+const messageSelect = {id: true, clientMessageId: true, customerId: true, authorRole: true, authorName: true, body: true, imageId: true, createdAt: true, image: {select: {name: true}}} as const;
 
-/** Latest 200 messages of one conversation, oldest first. */
+/** Stable pagination, including messages sharing the same timestamp. */
+export async function messagePage(customerId: string, after?: string | null, before?: string | null) {
+  const db = getPaymentDb();
+  const cursorId = after || before;
+  const cursor = cursorId ? await db.chatMessage.findFirst({where: {id: cursorId, customerId}, select: {id: true, createdAt: true}}) : null;
+  const forward = Boolean(after && cursor);
+  const direction = forward ? 'asc' : 'desc';
+  const rows = await db.chatMessage.findMany({
+    where: {customerId, ...(cursor ? {OR: forward
+      ? [{createdAt: {gt: cursor.createdAt}}, {createdAt: cursor.createdAt, id: {gt: cursor.id}}]
+      : [{createdAt: {lt: cursor.createdAt}}, {createdAt: cursor.createdAt, id: {lt: cursor.id}}]} : {})},
+    orderBy: [{createdAt: direction}, {id: direction}], take: 61, select: messageSelect
+  });
+  const more = rows.length > 60;
+  const page = rows.slice(0, 60);
+  const messages = (forward ? page : page.reverse()).map(toMessage);
+  return {messages, hasMore: forward && more, hasOlder: !forward && more, cursor: messages.at(-1)?.id ?? after ?? null, oldest: messages[0]?.id ?? null};
+}
+
 export async function listMessages(customerId: string) {
-  const rows = await getPaymentDb().chatMessage.findMany({where: {customerId}, orderBy: {createdAt: 'desc'}, take: 200, select: messageSelect});
-  return rows.reverse().map(toMessage);
+  return (await messagePage(customerId)).messages;
+}
+
+/** Same eligibility as the inbox, without loading every conversation and unread count. */
+export async function validChatCustomer(customerId: string) {
+  return Boolean(await getPaymentDb().customer.findFirst({where: {id: customerId,
+    OR: [{chatMessages: {some: {}}}, {orders: {some: {status: {in: BOOKED_STATUSES}}}}]}, select: {id: true}}));
+}
+
+export async function messageForRequest(requestKey: string) {
+  const row = await getPaymentDb().chatMessage.findUnique({where: {requestKey}, select: messageSelect});
+  return row ? toMessage(row) : null;
 }
 
 // Paid orders waiting for (or booked for) delivery: their customers get a conversation even before they write.
@@ -56,16 +85,28 @@ export async function roomImageCount(customerId: string) {
   return getPaymentDb().chatMessage.count({where: {customerId, imageId: {not: null}}});
 }
 
-export async function addMessage(input: {customerId: string; role: Role; authorName: string; body: string; image?: {bytes: Uint8Array<ArrayBuffer>; mimeType: string; name: string}}) {
+export async function addMessage(input: {customerId: string; role: Role; authorName: string; body: string; requestKey?: string; clientMessageId?: string; image?: {bytes: Uint8Array<ArrayBuffer>; mimeType: string; name: string}}) {
   const db = getPaymentDb();
-  const row = await db.chatMessage.create({
+  let row: Row;
+  try { row = await db.chatMessage.create({
     data: {
+      requestKey: input.requestKey, clientMessageId: input.clientMessageId,
       customer: {connect: {id: input.customerId}}, authorRole: input.role === 'admin' ? 'admin' : 'customer', authorName: input.authorName.slice(0, 80), body: input.body,
       ...(input.image ? {image: {create: {data: input.image.bytes, mimeType: input.image.mimeType, name: input.image.name, sizeBytes: input.image.bytes.byteLength}}} : {})
     },
     select: messageSelect
   });
-  return toMessage(row);
+  } catch (error) {
+    // Concurrent retries can race the first insert, including nested image creation.
+    if (input.requestKey && (error as {code?: string}).code === 'P2002') {
+      const existing = await messageForRequest(input.requestKey);
+      if (existing) return existing;
+    }
+    throw error;
+  }
+  const message = toMessage(row);
+  publishChat({room: message.room, kind: 'message', message});
+  return message;
 }
 
 /** Opens the conversation after a payment, so the customer sees the Chat badge and the Admin can write first. */
@@ -91,9 +132,9 @@ export async function customerUnreadCount(customerId: string) {
   return db.chatMessage.count({where: {customerId, authorRole: 'admin', ...(customer?.chatReadAt ? {createdAt: {gt: customer.chatReadAt}} : {})}});
 }
 
-/** Marks replies up to `latest` as seen; writes only when something new arrived (the panel polls every 5 s). */
+/** Marks replies up to `latest` as seen; writes only when something new arrived. */
 export async function markCustomerRead(customerId: string, latest: Date) {
-  await getPaymentDb().customer.updateMany({where: {id: customerId, OR: [{chatReadAt: null}, {chatReadAt: {lt: latest}}]}, data: {chatReadAt: new Date()}});
+  await getPaymentDb().customer.updateMany({where: {id: customerId, OR: [{chatReadAt: null}, {chatReadAt: {lt: latest}}]}, data: {chatReadAt: latest}});
 }
 
 /** Unread customer messages per conversation for the Admin inbox. */
@@ -106,6 +147,16 @@ export async function adminUnreadByCustomer() {
   return new Map(rows.map(row => [row.customerId, Number(row.unread)]));
 }
 
-export async function markAdminRead(customerId: string) {
-  await getPaymentDb().customer.update({where: {id: customerId}, data: {adminChatReadAt: new Date()}});
+export async function markAdminRead(customerId: string, latest: Date) {
+  await getPaymentDb().customer.updateMany({where: {id: customerId, OR: [{adminChatReadAt: null}, {adminChatReadAt: {lt: latest}}]}, data: {adminChatReadAt: latest}});
+}
+
+/** Clients acknowledge only an opposite-side message that was actually rendered. */
+export async function acknowledgeMessage(customerId: string, role: Role, id: string) {
+  const row = await getPaymentDb().chatMessage.findFirst({where: {id, customerId, authorRole: role === 'admin' ? 'customer' : 'admin'}, select: {createdAt: true}});
+  if (!row) return false;
+  if (role === 'admin') await markAdminRead(customerId, row.createdAt);
+  else await markCustomerRead(customerId, row.createdAt);
+  publishChat({room: roomFor(customerId), kind: 'read'});
+  return true;
 }

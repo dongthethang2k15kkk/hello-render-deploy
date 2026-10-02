@@ -1,3 +1,5 @@
+Product refresh and realtime chat: [implementation, references, verification and deployment notes](docs/PRODUCT-POLISH.md).
+
 Docker / Render deployment: see [DEPLOYMENT.md](./DEPLOYMENT.md). Database: [DATABASE.md](./DATABASE.md). Decision log: [HANDOFF.md](./HANDOFF.md).
 
 # Jewish Horse — cửa hàng gói số

@@ -186,6 +186,8 @@ model LoginEvent {
 
 model ChatMessage {
   id         String     @id @default(cuid())
+  requestKey String?    @unique
+  clientMessageId String?
   customerId String
   customer   Customer   @relation(fields: [customerId], references: [id], onDelete: Cascade)
   authorRole String

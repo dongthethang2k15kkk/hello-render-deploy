@@ -11,7 +11,7 @@ export const customerCookie = 'shop_session';
 const CACHE_MS = 60_000;
 const TOUCH_MS = 10 * 60_000;
 
-type CachedSession = {account: Account; sessionId: string; customerId: string; cachedAt: number; lastSeenAt: number};
+type CachedSession = {account: Account; sessionId: string; customerId: string; cachedAt: number; lastSeenAt: number; expiresAt: number};
 // One Render instance serves all traffic, so an in-process cache can be invalidated directly.
 const store = globalThis as unknown as {customerSessionCache?: Map<string, CachedSession>};
 const cache = store.customerSessionCache ??= new Map();
@@ -47,7 +47,7 @@ async function readCustomerSession(token: string) {
   const tokenHash = hashToken(token);
   const now = Date.now();
   const hit = cache.get(tokenHash);
-  if (hit && now - hit.cachedAt < CACHE_MS) return hit;
+  if (hit && now < hit.expiresAt && now - hit.cachedAt < CACHE_MS) return hit;
   try {
     const db = getPaymentDb();
     const session = await db.customerSession.findUnique({where: {tokenHash}, include: {customer: true}});
@@ -55,7 +55,7 @@ async function readCustomerSession(token: string) {
       cache.delete(tokenHash);
       return null;
     }
-    const entry: CachedSession = {account: customerAccount(session.customer), sessionId: session.id, customerId: session.customerId, cachedAt: now, lastSeenAt: session.lastSeenAt.getTime()};
+    const entry: CachedSession = {account: customerAccount(session.customer), sessionId: session.id, customerId: session.customerId, cachedAt: now, lastSeenAt: session.lastSeenAt.getTime(), expiresAt: session.expiresAt.getTime()};
     if (now - entry.lastSeenAt > TOUCH_MS) {
       entry.lastSeenAt = now;
       void db.customerSession.update({where: {id: session.id}, data: {lastSeenAt: new Date(now)}}).catch(() => undefined);

@@ -3,6 +3,8 @@ import {useEffect, useState} from 'react';
 import Link from 'next/link';
 import {usePathname} from 'next/navigation';
 
+import {watchChat} from '@/lib/chat-client';
+
 const POLL_MS = 20000;
 
 /** Admin navigation with live badges (orders needing action, unread customer messages). */
@@ -22,7 +24,9 @@ export default function AdminNav({locale, initialOrders}: {locale: string; initi
       .catch(() => undefined);
     void load();
     const timer = window.setInterval(() => { if (document.visibilityState === 'visible') void load(); }, POLL_MS);
-    return () => { controller.abort(); window.clearInterval(timer); };
+    let refresh: ReturnType<typeof setTimeout> | undefined;
+    const stop = watchChat(event => {if (event.kind !== 'disconnected' && !refresh) refresh = setTimeout(() => {refresh = undefined; void load();}, 250);});
+    return () => { stop(); clearTimeout(refresh); controller.abort(); window.clearInterval(timer); };
   }, [locale, pathname]);
 
   const links: [string, string, number][] = [['overview', 'Overview', 0], ['orders', 'Orders', counts.orders], ['chat', 'Chat', counts.chat], ['customers', 'Customers', 0], ['activity', 'Activity', 0], ['settings', 'Settings', 0]];
