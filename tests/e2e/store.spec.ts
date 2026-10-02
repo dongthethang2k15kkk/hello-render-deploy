@@ -6,9 +6,8 @@ test('English catalog, delivery form, persisted cart and checkout link', async (
   await expect(page.locator('html')).toHaveAttribute('lang', 'en');
   await page.getByRole('link', {name: 'Package details'}).first().click();
   await page.getByLabel('Recipient name (test data)').fill('Demo recipient');
+  // Adding an item opens the cart straight away.
   await page.getByRole('button', {name: 'Add to cart'}).click();
-  await expect(page.getByRole('status')).toContainText('Added to cart.');
-  await page.getByRole('link', {name: 'Cart', exact: true}).click();
   await expect(page).toHaveURL(/\/en\/cart$/);
   await expect(page.getByRole('heading', {name: 'Basic sample package'})).toBeVisible();
   await page.reload();
@@ -36,7 +35,7 @@ test('mobile catalog, quantity controls and checkout review', async ({page}) => 
   await page.getByRole('link', {name: 'Package details'}).first().click();
   await page.getByLabel('Recipient name (test data)').fill('Demo mobile');
   await page.getByRole('button', {name: 'Add to cart'}).click();
-  await page.getByRole('link', {name: 'Cart', exact: true}).click();
+  await expect(page).toHaveURL(/\/en\/cart$/);
   await page.getByRole('button', {name: 'Increase item 1'}).click();
   await expect(page.locator('output')).toHaveText('2');
   await page.request.post('/api/auth/logout');
@@ -78,14 +77,13 @@ test('guest keeps a configured item and can edit it before signing in', async ({
   await page.goto(`/en/products/${await catalogId(page.request, 'SAMPLE_BASIC')}`);
   await page.getByLabel('Recipient name (test data)').fill('First recipient');
   await page.getByRole('button', {name: 'Add to cart'}).click();
-  await expect(page.getByRole('status')).toContainText('Added to cart.');
-  await page.getByRole('status').getByRole('link', {name: 'View cart'}).click();
+  await expect(page).toHaveURL(/\/en\/cart$/);
   await expect(page.getByText('Recipient name (test data): First recipient')).toBeVisible();
   await page.getByRole('link', {name: 'Edit details'}).click();
   await expect(page.getByLabel('Recipient name (test data)')).toHaveValue('First recipient');
   await page.getByLabel('Recipient name (test data)').fill('Updated recipient');
   await page.getByRole('button', {name: 'Update cart'}).click();
-  await page.getByRole('status').getByRole('link', {name: 'View cart'}).click();
+  await expect(page).toHaveURL(/\/en\/cart$/);
   await expect(page.getByText('Recipient name (test data): Updated recipient')).toBeVisible();
 });
 

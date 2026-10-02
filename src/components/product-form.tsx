@@ -1,7 +1,6 @@
 'use client';
-import Link from 'next/link';
 import {useLocale} from 'next-intl';
-import {useSearchParams} from 'next/navigation';
+import {useRouter, useSearchParams} from 'next/navigation';
 import {useState} from 'react';
 import type {CatalogProduct} from '@/lib/catalog';
 import {cartLineSchema, createCartSchema} from '@/lib/cart';
@@ -13,6 +12,7 @@ export function ProductForm({product}: {product: CatalogProduct}) {
   const {lines, save, ready} = useCart();
   const catalog = useCatalog();
   const [status, setStatus] = useState('');
+  const router = useRouter();
   const searchParams = useSearchParams();
   const productId = product.id;
   const requestedIndex = Number(searchParams.get('edit'));
@@ -28,13 +28,16 @@ export function ProductForm({product}: {product: CatalogProduct}) {
     const next = parsed.success ? (editing ? lines.map((line, index) => index === editIndex ? parsed.data : line) : [...lines, parsed.data]) : null;
     const validationCatalog = catalog.products.some(item => item.id === product.id) ? catalog.products : [...catalog.products, product];
     if (!parsed.success || !next || !createCartSchema(validationCatalog).safeParse(next).success) {setStatus('Check the information and available stock.'); return;}
-    setStatus(save(next) ? (editing ? 'Cart updated.' : 'Added to cart.') : 'Unable to save the cart on this device.');
+    if (!save(next)) {setStatus('Unable to save the cart on this device.'); return;}
+    // The shop has few packages, so buying one goes straight to the cart.
+    setStatus(editing ? 'Cart updated. Opening your cart…' : 'Added to cart. Opening your cart…');
+    router.push(`/${locale}/cart`);
   }}>
     {product.fields.map(field => <label key={field.key}>{field.labelEn}
       <input name={field.key} required={field.required} maxLength={field.maxLength} autoComplete="off" defaultValue={editing?.delivery[field.key] ?? ''}/>
     </label>)}
     <label>Quantity<input name="quantity" type="number" min="1" max={product.stock} defaultValue={editing?.quantity ?? 1} required /></label>
     <button className="full-width" disabled={!ready || !product.stock} type="submit">{product.stock ? (editing ? 'Update cart' : 'Add to cart') : 'Out of stock'} <span aria-hidden="true">→</span></button>
-    <p className="form-status" role="status" aria-live="polite">{status} {(status === 'Added to cart.' || status === 'Cart updated.') && <Link href={`/${locale}/cart`}>View cart →</Link>}</p>
+    <p className="form-status" role="status" aria-live="polite">{status}</p>
   </form>;
 }

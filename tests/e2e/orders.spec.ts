@@ -60,7 +60,7 @@ test('full order: checkout, VietQR, times, admin confirms and books, customer is
   await page.goto(`/en/products/${await catalogId(page.request, 'SAMPLE_BASIC')}`);
   await page.getByLabel('Recipient name (test data)').fill('Khánh Vy');
   await page.getByRole('button', {name: 'Add to cart'}).click();
-  await expect(page.getByRole('status')).toContainText('Added to cart.');
+  await expect(page).toHaveURL(/\/en\/cart$/);
   await page.goto('/en/checkout');
   await expect(page.getByText('You pay by bank transfer')).toBeVisible();
   await page.getByRole('button', {name: 'Place order →'}).click();
