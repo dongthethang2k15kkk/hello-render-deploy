@@ -422,3 +422,4 @@ Quyết định đã chốt trong hội thoại và trạng thái:
 ### "Add to cart" opens the cart — 2026-10-03
 
 - **Owner request (screenshot):** after "Add to cart" the product page only said "Added to cart. View cart →"; with just two packages the customer should go straight to the cart. `ProductForm` now saves the line and calls `router.push('/en/cart')` (also after "Update cart" when editing a line); the status text stays for screen readers and save failures. E2E steps that waited for the status/"View cart" link now expect the cart URL. Verified: TypeScript, Vitest 101/101, Playwright store/orders/badges specs 17/17, production build.
+- **Production (2026-10-03):** `354bd71` live as `dep-davub6dg1s2s7385c61g` at 17:12:44Z. On the live site (guest, cart kept in the browser only, no order created): opening a product, filling its field and pressing "Add to cart" landed on `/en/cart` with the item listed, no page errors.
