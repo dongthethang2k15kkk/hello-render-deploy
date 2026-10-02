@@ -1,7 +1,7 @@
 import {createHash} from 'node:crypto';
 import {NextResponse} from 'next/server';
 import {getSession} from '@/lib/auth';
-import {acknowledgeMessage, addMessage, customerIdFromRoom, messagePage, messageForRequest, validChatCustomer, listRooms, markAdminRead, markCustomerRead, MAX_CHAT_IMAGE_BYTES, MAX_CHAT_IMAGES_PER_ROOM, roomFor, roomImageCount} from '@/lib/chat-store';
+import {acknowledgeMessage, addMessage, customerIdFromRoom, forCustomer, messagePage, messageForRequest, validChatCustomer, listRooms, markAdminRead, markCustomerRead, MAX_CHAT_IMAGE_BYTES, MAX_CHAT_IMAGES_PER_ROOM, roomFor, roomImageCount} from '@/lib/chat-store';
 import {sameOrigin} from '@/lib/customer-rules';
 import {validProductImageSignature} from '@/lib/product-image';
 
@@ -21,7 +21,8 @@ export async function GET(request: Request) {
     const room = account.role === 'user' ? roomFor(account.id) : query.get('room') || rooms?.[0]?.id || '';
     const customerId = customerIdFromRoom(room);
     if (account.role === 'admin' && customerId && !(await validChatCustomer(customerId))) return NextResponse.json({error: 'Conversation not found.'}, {status: 404});
-    const page = customerId ? await messagePage(customerId, query.get('after'), query.get('before')) : {messages: [], hasMore: false, hasOlder: false, cursor: null, oldest: null};
+    const loaded = customerId ? await messagePage(customerId, query.get('after'), query.get('before')) : {messages: [], hasMore: false, hasOlder: false, cursor: null, oldest: null};
+    const page = account.role === 'user' ? {...loaded, messages: loaded.messages.map(forCustomer)} : loaded;
     // Older clients retain their read-on-open contract; the new panel explicitly acknowledges rendered messages.
     if (query.get('read') !== '0' && customerId) {
       const latest = page.messages.filter(message => message.role !== account.role).at(-1);

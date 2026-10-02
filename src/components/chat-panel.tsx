@@ -3,7 +3,7 @@
 import {useCallback, useEffect, useRef, useState} from 'react';
 import type {Role} from '@/lib/admin-session';
 import {mergeMessages, watchChat, type LocalMessage} from '@/lib/chat-client';
-import {readDrafts, saveDrafts} from '@/lib/chat-drafts';
+import {readChatCache, readDrafts, saveChatCache, saveDrafts} from '@/lib/chat-drafts';
 import {LoadingRows} from './loading-state';
 import {PresenceBadges, useAdminPresence} from './admin-presence';
 
@@ -11,6 +11,21 @@ type Room = {id: string; name: string; unread?: number; lastMessage?: {body: str
 
 /** "Paid · JH… · Fri 3 Oct, 19:00": the order this customer is waiting to receive. */
 const bookingLabel = (booking: NonNullable<Room['booking']>) => `${booking.appointmentStart ? 'Booked' : 'Paid'} · ${booking.code}${booking.appointmentStart ? ` · ${new Date(booking.appointmentStart).toLocaleString('en-GB', {weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit'})}` : ' · time not set'}`;
+
+const CACHED_ROOMS = 12;
+const CACHED_MESSAGES_PER_ROOM = 60;
+const PREFETCHED_ROOMS = 8;
+
+/** Confirmed messages of the most recent conversations; pending sends and local image previews are never cached. */
+function cacheSnapshot(rooms: Room[], messages: LocalMessage[], role: Role, current: string) {
+  const keep = new Set([current, ...rooms.slice(0, CACHED_ROOMS).map(item => item.id)]);
+  const byRoom = new Map<string, LocalMessage[]>();
+  for (const message of messages) {
+    if (message.status || message.image?.url.startsWith('blob:') || (role === 'admin' && !keep.has(message.room))) continue;
+    byRoom.set(message.room, [...(byRoom.get(message.room) ?? []), message]);
+  }
+  return {rooms: rooms.slice(0, 50), messages: [...byRoom.values()].flatMap(list => list.slice(-CACHED_MESSAGES_PER_ROOM))};
+}
 
 export default function ChatPanel({role, accountId, compact = false, initialRoom = ''}: {role: Role; accountId: string; compact?: boolean; initialRoom?: string}) {
   const [messages, setMessages] = useState<LocalMessage[]>([]);
@@ -21,7 +36,17 @@ export default function ChatPanel({role, accountId, compact = false, initialRoom
   const draftsRef = useRef<Record<string, string>>({});
   const composer = useRef<HTMLTextAreaElement>(null);
   const roomSearch = useRef<HTMLInputElement>(null);
-  useEffect(() => {draftsRef.current = readDrafts(accountId); setDrafts(draftsRef.current);}, [accountId]);
+  useEffect(() => {
+    draftsRef.current = readDrafts(accountId); setDrafts(draftsRef.current);
+    // Show the conversations this tab already loaded at once; the server copy refreshes them right after.
+    const cached = readChatCache<Room, LocalMessage>(accountId);
+    if (!cached) return;
+    if (cached.rooms.length) setRooms(current => current.length ? current : cached.rooms);
+    if (cached.messages.length) {
+      setMessages(current => mergeMessages(current, cached.messages));
+      if (role === 'user' && !roomRef.current) {roomRef.current = cached.messages[0].room; setRoom(cached.messages[0].room);}
+    }
+  }, [accountId, role]);
   function updateDraft(key: string, value: string) {
     draftsRef.current = {...draftsRef.current, [key]: value};
     setDrafts(draftsRef.current); saveDrafts(accountId, draftsRef.current);
@@ -37,6 +62,7 @@ export default function ChatPanel({role, accountId, compact = false, initialRoom
   const [roomQuery, setRoomQuery] = useState('');
   const [roomFilter, setRoomFilter] = useState<'all' | 'needs-reply'>('all');
   const [loading, setLoading] = useState(true);
+  const [roomsReady, setRoomsReady] = useState(false);
   const [error, setError] = useState('');
   const [connected, setConnected] = useState(false);
   const [hasOlder, setHasOlder] = useState(false);
@@ -61,6 +87,22 @@ export default function ChatPanel({role, accountId, compact = false, initialRoom
   const inFlight = useRef(new Set<string>());
   const sendControllers = useRef(new Set<AbortController>());
   const objectUrls = useRef(new Set<string>());
+  const prefetched = useRef(false);
+  const panel = useRef<HTMLElement>(null);
+
+  /** Loads the latest page of a conversation in the background so opening it later is instant. */
+  async function prefetchRoom(id: string) {
+    try {
+      const response = await fetch(`/api/chat?${new URLSearchParams({rooms: '0', read: '0', room: id})}`, {cache: 'no-store', signal: AbortSignal.timeout(15000)});
+      if (!response.ok || !mounted.current) return;
+      const data = await response.json();
+      if (!mounted.current || cursors.current.has(id)) return;
+      setMessages(current => mergeMessages(current, data.messages));
+      if (data.cursor) cursors.current.set(id, data.cursor);
+      olderAvailable.current.set(id, data.hasOlder);
+      if (data.oldest) oldest.current.set(id, data.oldest);
+    } catch { /* Opening the conversation loads it normally. */ }
+  }
 
   const loadRooms = useCallback(async () => {
     if (role !== 'admin') return;
@@ -73,10 +115,15 @@ export default function ChatPanel({role, accountId, compact = false, initialRoom
       if (!mounted.current) return;
       setRooms(data.rooms);
       if (!roomRef.current && data.rooms[0]) {roomRef.current = data.rooms[0].id; setRoom(data.rooms[0].id);}
+      if (!prefetched.current) {
+        prefetched.current = true;
+        void (async () => { for (const item of data.rooms.slice(0, PREFETCHED_ROOMS) as Room[]) { if (!mounted.current) return; if (item.id !== roomRef.current && !cursors.current.has(item.id)) await prefetchRoom(item.id); } })();
+      }
       if (!data.rooms.length) setLoading(false);
     } catch (cause) {if (mounted.current) setError(cause instanceof Error ? cause.message : 'Connection lost.');}
     finally {
       roomsLoading.current = false;
+      if (mounted.current) setRoomsReady(true);
       if (roomsRefreshAgain.current && mounted.current) {roomsRefreshAgain.current = false; void loadRooms();}
     }
   }, [role]);
@@ -138,10 +185,11 @@ export default function ChatPanel({role, accountId, compact = false, initialRoom
       if (event.kind === 'connected') {setConnected(true); void load(true); void loadRooms(); return;}
       if (document.visibilityState !== 'visible') return;
       if (event.kind === 'message') {
-        if (event.message && event.room === roomRef.current) {
+        // Keep every loaded conversation current, not only the open one, so switching shows the latest at once.
+        if (event.message && event.room && (event.room === roomRef.current || cursors.current.has(event.room))) {
           const message = event.message;
           setMessages(current => mergeMessages(current, [message]));
-          if (!nearBottom.current) setNewMessages(true);
+          if (event.room === roomRef.current && !nearBottom.current) setNewMessages(true);
         } else if (!event.message) messagesChanged = true;
       }
       if (!refreshTimer) refreshTimer = setTimeout(() => {
@@ -169,6 +217,31 @@ export default function ChatPanel({role, accountId, compact = false, initialRoom
     activeLoad.current?.controller.abort(); activeLoad.current = null;
     void load(true);
   }, [load, room]);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => saveChatCache(accountId, cacheSnapshot(rooms, messages, role, roomRef.current)), 400);
+    return () => window.clearTimeout(timer);
+  }, [accountId, rooms, messages, role]);
+
+  // The full-page chat fills the window below the header, so the reply box is always on screen without scrolling.
+  useEffect(() => {
+    if (compact) return;
+    const fit = () => {
+      const element = panel.current;
+      if (!element) return;
+      const top = element.getBoundingClientRect().top + window.scrollY;
+      element.style.setProperty('--chat-fit-height', `${Math.max(420, Math.round(window.innerHeight - top - 16))}px`);
+    };
+    fit();
+    // The header can grow after load (account pills, fonts), which moves the chat down: measure again whenever it does.
+    const observer = new ResizeObserver(() => fit());
+    const header = document.querySelector('.site-header, .admin-header');
+    if (header) observer.observe(header);
+    observer.observe(document.body);
+    void document.fonts?.ready.then(fit);
+    window.addEventListener('resize', fit);
+    return () => { observer.disconnect(); window.removeEventListener('resize', fit); };
+  }, [compact]);
 
   const visible = messages.filter(message => message.room === room);
   const draftKey = room;
@@ -260,14 +333,14 @@ export default function ChatPanel({role, accountId, compact = false, initialRoom
   const {admins, self, setResource} = useAdminPresence();
   useEffect(() => { if (role === 'admin') setResource(room ? `chat:${room}` : 'chat'); }, [role, room, setResource]);
   const viewersOf = (id: string) => admins.filter(admin => admin.id !== self && admin.resource === `chat:${id}`);
-  return <section className={`chat-card card ${role === 'admin' ? 'admin-inbox' : ''} ${compact ? 'chat-compact' : ''}`} aria-label={role === 'admin' ? 'Customer inbox' : 'Consultation'}>
+  return <section ref={panel} className={`chat-card card ${role === 'admin' ? 'admin-inbox' : ''} ${compact ? 'chat-compact' : ''}`} aria-label={role === 'admin' ? 'Customer inbox' : 'Consultation'}>
     {role === 'admin' && <aside className="chat-sidebar">
       <div className="chat-sidebar-tools"><h2>{'Conversations'}</h2>
       <label className="chat-search"><span className="sr-only">Search conversations</span><input ref={roomSearch} type="search" placeholder="Search customers (/ to focus)" value={roomQuery} onChange={event => setRoomQuery(event.target.value)}/></label>
       <div className="chat-filters" aria-label="Conversation filter"><button type="button" className={roomFilter === 'all' ? 'active' : ''} onClick={() => setRoomFilter('all')}>All</button><button type="button" className={roomFilter === 'needs-reply' ? 'active' : ''} onClick={() => setRoomFilter('needs-reply')}>Needs reply</button></div></div>
-      {loading && <LoadingRows label="Loading conversations" rows={4}/>}
-      {!loading && rooms.length === 0 && <p className="muted">{'No conversations yet.'}</p>}
-      {!loading && rooms.length > 0 && shownRooms.length === 0 && <p className="muted">No matching conversations.</p>}
+      {!roomsReady && !rooms.length && <LoadingRows label="Loading conversations" rows={4}/>}
+      {roomsReady && rooms.length === 0 && <p className="muted">{'No conversations yet.'}</p>}
+      {rooms.length > 0 && shownRooms.length === 0 && <p className="muted">No matching conversations.</p>}
       {shownRooms.map(item => {
         return <button type="button" className={`chat-room ${room === item.id ? 'active' : ''}`} aria-current={room === item.id ? 'true' : undefined} key={item.id} onClick={() => {roomRef.current = item.id; setRoom(item.id); setImage(null); if (imageInput.current) imageInput.current.value = ''; setShowRoomList(false);}}>
           <span className="chat-avatar" aria-hidden="true">{item.name.charAt(0).toUpperCase()}</span>

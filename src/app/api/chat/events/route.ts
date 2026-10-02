@@ -1,5 +1,5 @@
 import {getSession} from '@/lib/auth';
-import {roomFor} from '@/lib/chat-store';
+import {forCustomer, roomFor} from '@/lib/chat-store';
 import {subscribeChat, type ChatChange} from '@/lib/chat-events';
 
 export const runtime = 'nodejs';
@@ -24,7 +24,8 @@ export async function GET(request: Request) {
       const unsubscribe = subscribeChat(change => {
         if (account.role === 'user' && change.room !== roomFor(account.id)) return;
         if (pending.size >= 256) {dispose(); return;}
-        pending.set(change.message?.id ?? `${change.room}:${change.kind}`, change);
+        const visible = account.role === 'user' && change.message ? {...change, message: forCustomer(change.message)} : change;
+        pending.set(change.message?.id ?? `${change.room}:${change.kind}`, visible);
         void flush();
       });
       // Recheck the session before emitting; room filtering is enforced above for customers.

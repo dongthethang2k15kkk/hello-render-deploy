@@ -8,6 +8,8 @@ import {SHOP_DISCORD_URL} from '@/lib/contact';
 import {StoreHeader} from '@/components/store-ui';
 import ChatWidget from '@/components/chat-widget';
 import {headers} from 'next/headers';
+import BackgroundSceneLayers from '@/components/background-scene';
+import {getBackgroundScene} from '@/lib/background-scene';
 
 export default async function LocaleLayout({children, params}: {
   children: React.ReactNode; params: Promise<{locale: string}>;
@@ -19,6 +21,7 @@ export default async function LocaleLayout({children, params}: {
     return <NextIntlClientProvider locale={locale} messages={t}>{children}</NextIntlClientProvider>;
   }
   return <NextIntlClientProvider locale={locale} messages={t}>
+      <BackgroundSceneLayers scene={await getBackgroundScene()}/>
       <CatalogProvider><CartProvider>
         <StoreHeader/>
         <main className="shell">{children}</main>

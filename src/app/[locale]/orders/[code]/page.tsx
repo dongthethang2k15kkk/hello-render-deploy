@@ -34,6 +34,7 @@ export default function OrderPage({params}: {params: Promise<{locale: string; co
   const [qr, setQr] = useState<string | null>(null);
   const [paymentUri, setPaymentUri] = useState<string | null>(null);
   const [autoDetect, setAutoDetect] = useState(false);
+  const [mailFrom, setMailFrom] = useState<string | null>(null);
   const [offset, setOffset] = useState(0);
   const [now, setNow] = useState(Date.now());
   const [error, setError] = useState('');
@@ -46,7 +47,7 @@ export default function OrderPage({params}: {params: Promise<{locale: string; co
     if (response?.status === 401) { router.replace(`/${locale}/login?next=account`); return; }
     const data = await response?.json().catch(() => null);
     if (!response?.ok || !data?.order) { setError(data?.error ?? 'This order could not be loaded.'); return; }
-    setOrder(data.order); setQr(data.qrSvg); setPaymentUri(data.paymentUri ?? null); setAutoDetect(Boolean(data.autoDetect)); setOffset(Date.parse(data.serverTime) - Date.now()); setError('');
+    setOrder(data.order); setQr(data.qrSvg); setPaymentUri(data.paymentUri ?? null); setAutoDetect(Boolean(data.autoDetect)); setMailFrom(data.mailFrom ?? null); setOffset(Date.parse(data.serverTime) - Date.now()); setError('');
   }, [code, locale, router]);
 
   useEffect(() => {void load();}, [load]);
@@ -131,6 +132,7 @@ export default function OrderPage({params}: {params: Promise<{locale: string; co
 
         {(order.status === 'cancelled' || order.status === 'expired') && <section className="card"><span className="eyebrow">{order.status === 'expired' ? 'EXPIRED' : 'CANCELLED'}</span><h2>{order.status === 'expired' ? 'The payment window ended' : 'This order was cancelled'}</h2>{order.cancelReason && <p className="muted">{order.cancelReason}</p>}<Link className="button" href={`/${locale}#catalog`}>Back to packages</Link></section>}
 
+        {mailFrom && <p className="notice mail-notice" role="note"><strong>Watch for our emails.</strong> They come from <strong>{mailFrom}</strong>. If you do not see them, check your Spam folder and mark them “Not spam” so the next ones arrive in your inbox.</p>}
         <section className="card" style={{marginTop: 20}}><h2>Timeline</h2><ol className="timeline">{order.events.map(event => <li key={event.createdAt + event.action}><strong>{eventLabels[event.action] ?? event.action}</strong><span>{new Date(event.createdAt).toLocaleString('en-GB')}</span>{event.note && <small>{event.note}</small>}</li>)}</ol></section>
       </div>
       <aside className="card order-summary">

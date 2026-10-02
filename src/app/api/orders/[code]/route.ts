@@ -8,6 +8,7 @@ import {cancelByCustomer, customerOrder, OrderError, reportTransfer, updateTimes
 import {litecoinUri} from '@/lib/ltc-format';
 import {vietQrPayload} from '@/lib/vietqr';
 import {checkLtcOrder} from '@/lib/payment-detection';
+import {mailStatus} from '@/lib/mailer';
 
 export const runtime = 'nodejs';
 const json = (data: unknown, status = 200) => Response.json(data, {status, headers: {'Cache-Control': 'no-store'}});
@@ -34,7 +35,9 @@ export async function GET(request: Request, {params}: {params: Promise<{code: st
       const payload = 'address' in snapshot ? paymentUri! : vietQrPayload({bankBin: snapshot.bankBin, accountNumber: snapshot.accountNumber, amountVnd: order.totalVnd, note: order.code});
       qrSvg = await QRCode.toString(payload, {type: 'svg', margin: 1, errorCorrectionLevel: 'M'});
     }
-    return json({order, qrSvg, paymentUri, autoDetect, serverTime: new Date().toISOString()});
+    // The shop's sending address, so the order page can tell customers which emails to look for in Spam.
+    const mailFrom = (await mailStatus().catch(() => null))?.email ?? null;
+    return json({order, qrSvg, paymentUri, autoDetect, mailFrom, serverTime: new Date().toISOString()});
   } catch (error) {
     console.error('Order load failed', error instanceof Error ? error.message.split('\n')[0] : error);
     return json({error: 'This order is unavailable right now.'}, 503);

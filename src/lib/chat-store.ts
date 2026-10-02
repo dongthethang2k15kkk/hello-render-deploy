@@ -9,6 +9,9 @@ export const MAX_CHAT_IMAGES_PER_ROOM = 30;
 export type ChatMessage = {id: string; room: string; author: string; role: Role; body: string; createdAt: string; clientMessageId?: string | null; image?: {url: string; name: string} | null; imageExpired?: boolean};
 
 export const roomFor = (customerId: string) => `user:${customerId}`;
+/** Customers see every team reply as "Admin"; only the Admin inbox shows which Admin wrote it. */
+export const CUSTOMER_FACING_ADMIN_NAME = 'Admin';
+export const forCustomer = (message: ChatMessage): ChatMessage => message.role === 'admin' ? {...message, author: CUSTOMER_FACING_ADMIN_NAME} : message;
 export const customerIdFromRoom = (room: string) => /^user:[a-z0-9]{10,40}$/.test(room) ? room.slice(5) : null;
 
 type Row = {id: string; clientMessageId: string | null; customerId: string; authorRole: string; authorName: string; body: string; imageId: string | null; createdAt: Date; image: {name: string} | null};

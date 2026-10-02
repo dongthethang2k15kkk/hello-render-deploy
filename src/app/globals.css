@@ -39,21 +39,6 @@ body {
   font-size: 16px;
   line-height: 1.7;
 }
-body::before {
-  content: '';
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background-image: url('/minecraft-bg.jpg');
-  background-size: cover;
-  background-position: center;
-  opacity: 0.04;
-  z-index: -1;
-  /* Its own compositor layer: scrolling never repaints the full-screen backdrop. */
-  will-change: transform;
-}
 a {color: inherit; text-decoration: none;}
 a:hover {text-decoration: underline;}
 .shell {max-width: 1120px; margin: auto; padding: 24px;}
@@ -79,45 +64,16 @@ nav a:hover {
   text-shadow: none;
 }
 
-/* Floating decorative horses */
-.floating-horse-1, .floating-horse-2 {
-  position: fixed;
-  z-index: 1;
-  pointer-events: none;
-  background-size: cover;
-  background-position: center;
-  border-radius: 20px;
-  will-change: transform;
-  box-shadow: 0 8px 32px rgba(0,0,0,0.4);
-}
-.floating-horse-1 {
-  top: 15%;
-  right: 5%;
-  width: 180px;
-  height: 180px;
-  background-image: url('/horse2.jpg');
-  opacity: 0.07;
-  animation: float-1 8s ease-in-out infinite;
-}
-.floating-horse-2 {
-  bottom: 15%;
-  left: 3%;
-  width: 160px;
-  height: 160px;
-  background-image: url('/horse5.jpg');
-  opacity: 0.06;
-  animation: float-2 10s ease-in-out infinite;
-}
-@keyframes float-1 {
-  0%, 100% { transform: translate(0, 0) rotate(-2deg); }
-  50% { transform: translate(15px, -20px) rotate(2deg); }
-}
-@keyframes float-2 {
-  0%, 100% { transform: translate(0, 0) rotate(3deg); }
-  50% { transform: translate(-20px, 15px) rotate(-3deg); }
-}
+/* Background images (Admin → Settings → Background): fixed behind the page on their own layers. */
+.bg-scene {position:fixed; inset:0; z-index:-1; pointer-events:none; overflow:hidden;}
+.bg-layer {position:absolute; will-change:transform;}
+.bg-floating img {display:block; width:100%; height:auto; border-radius:20px; box-shadow:0 8px 32px rgba(0,0,0,.4); will-change:transform;}
+.bg-drift-0 {animation:bg-drift-a 8s ease-in-out infinite;}
+.bg-drift-1 {animation:bg-drift-b 10s ease-in-out infinite;}
+@keyframes bg-drift-a {0%, 100% {transform:translate(0, 0) rotate(-2deg);} 50% {transform:translate(15px, -20px) rotate(2deg);}}
+@keyframes bg-drift-b {0%, 100% {transform:translate(0, 0) rotate(3deg);} 50% {transform:translate(-20px, 15px) rotate(-3deg);}}
 @media(max-width: 768px) {
-  .floating-horse-1, .floating-horse-2 { display: none; }
+  .bg-hide-mobile {display:none;}
 }
 
 .hero {padding: 56px 0 32px; max-width: 780px; position: relative; z-index: 2;}
@@ -932,7 +888,6 @@ input {border-color: #cfd8c6; padding: 12px; font-weight: 400;}
 .skeleton-heading {width:min(70%,340px); height:38px; margin-bottom:26px;}
 @keyframes skeleton-pulse {to {opacity:.22;}}
 @media (prefers-reduced-motion: reduce) {
-  .floating-horse-1,.floating-horse-2 {animation:none;}
   .product-card,nav a,.hero-actions .button {transition:none;}
 }
 
@@ -1468,8 +1423,9 @@ a, .header-pill, .text-link {-webkit-tap-highlight-color:transparent;}
 .site-header {background:var(--page);}
 .site-header .brand-name, .site-header .brand-tagline, .site-header .account-menu button, .site-header .cart-link {white-space:nowrap;}
 .site-header .account-menu a {display:inline-block; max-width:150px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; vertical-align:middle;}
-@media (min-width:901px) and (max-width:1500px) {
-  /* Signed in, the header holds three more pills: keep it on one line by showing their icons and counts only. */
+@media (min-width:901px) {
+  /* Signed in, the header holds three more pills: keep it on one line by showing their icons and counts only
+     (the header content is at most 1240px wide on every desktop; titles and aria-labels name them). */
   .site-header .header:has(.header-pills) {gap:16px;}
   .site-header .header:has(.header-pills) nav {gap:14px;}
   .site-header .header-pills .header-pill {padding:9px 11px;}
@@ -1611,6 +1567,87 @@ body::after {
 :root {background: radial-gradient(ellipse at 85% 0%, #29233e 0%, transparent 900px) no-repeat, var(--page);}
 body {background: transparent;}
 
-/* The floating decorations give the glass something to reflect on large screens (hidden on phones already). */
-.floating-horse-1 {opacity:.18;}
-.floating-horse-2 {opacity:.15;}
+
+/* ---------- Chat pages fit the window: the reply box is always visible ---------- */
+.chat-page h1 {font-size:clamp(26px, 3vw, 36px); margin:4px 0 6px;}
+.chat-page .page-heading {margin-bottom:12px;}
+.chat-page > .muted {margin:0 0 12px;}
+/* ChatPanel measures its top and sets --chat-fit-height; messages scroll inside, the composer stays at the bottom. */
+.chat-card:not(.chat-compact) {height:var(--chat-fit-height, auto); max-width:none;}
+.chat-card:not(.chat-compact):not(.admin-inbox) {display:flex; flex-direction:column;}
+.chat-card:not(.chat-compact) .chat-main {flex:1; min-height:0;}
+.chat-card:not(.chat-compact) .chat-main .chat-messages {flex:1; min-height:0; max-height:none;}
+.chat-card.admin-inbox {height:var(--chat-fit-height, clamp(570px, calc(100dvh - 240px), 820px)); min-height:0; max-width:none;}
+.chat-card.admin-inbox .chat-sidebar {overflow-y:auto; min-height:0;}
+@media (max-width:700px) {
+  .chat-card.admin-inbox {grid-template-rows:auto minmax(0, 1fr);}
+}
+@media (max-width:480px) {
+  .chat-card.admin-inbox:has(.chat-main.show-room-list) .chat-sidebar {height:100%;}
+  .chat-card.admin-inbox .chat-main {height:100%;}
+}
+.mail-notice {margin-top:20px; font-size:14px;}
+
+/* ---------- Admin → Settings → Background editor ---------- */
+.bg-editor {display:grid; grid-template-columns:minmax(0, 1.35fr) minmax(330px, 1fr); gap:22px; align-items:start; margin-top:18px;}
+.bg-preview-wrap {position:sticky; top:118px;}
+.bg-preview {position:relative; width:100%; aspect-ratio:16/10; overflow:hidden; border-radius:14px; touch-action:none; isolation:isolate;
+  background:radial-gradient(38% 60% at 4% 24%, rgba(149,212,122,.26), transparent 70%), radial-gradient(44% 70% at 96% 8%, rgba(182,163,255,.32), transparent 70%), radial-gradient(40% 64% at 72% 92%, rgba(242,191,107,.2), transparent 70%), #111318;
+  box-shadow:0 10px 30px rgba(20,24,40,.25);}
+.bg-preview.drag-over {outline:3px dashed #8b78e6; outline-offset:3px;}
+.bg-preview .bg-floating {cursor:grab; z-index:1;}
+.bg-preview .bg-floating:active {cursor:grabbing;}
+.bg-preview .bg-floating img {display:block; width:100%; height:auto; border-radius:8px; box-shadow:0 4px 14px rgba(0,0,0,.4); user-select:none; -webkit-user-drag:none;}
+.bg-preview .bg-floating.selected img, .bg-preview .bg-floating:focus-visible img {outline:2px solid #b6a3ff; outline-offset:3px;}
+.bg-preview .bg-floating:focus-visible {outline:none;}
+.bg-preview-mock {position:absolute; inset:0; z-index:2; pointer-events:none; padding:3% 6%; display:grid; grid-template-rows:auto auto 1fr; gap:5%;}
+.bg-preview-mock > div, .bg-preview-mock span {border:1px solid rgba(255,255,255,.14); border-radius:8px; background:linear-gradient(160deg, rgba(255,255,255,.12), rgba(255,255,255,.03)), rgba(22,25,33,.5); -webkit-backdrop-filter:blur(8px) saturate(170%); backdrop-filter:blur(8px) saturate(170%);}
+.bg-preview-mock .mock-header {height:9%; min-height:16px; border-radius:6px;}
+.bg-preview-mock .mock-hero {height:0; min-height:0; border:0; background:none; backdrop-filter:none;}
+.bg-preview-mock .mock-cards {display:grid; grid-template-columns:1fr 1fr; gap:4%; border:0; background:none; backdrop-filter:none; align-self:end; height:45%;}
+.bg-drop-hint {position:absolute; inset:0; z-index:3; display:grid; place-items:center; color:#fff; font-weight:700; background:rgba(111,91,214,.25);}
+.bg-drop {display:flex; align-items:center; gap:12px; flex-wrap:wrap; margin-top:12px; padding:12px 14px; border:2px dashed #c9cfdb; border-radius:12px;}
+.bg-drop label.button {margin:0; cursor:pointer;}
+.bg-builtins {display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin-top:12px;}
+.bg-builtins button {width:52px; height:52px; padding:0; overflow:hidden; border-radius:8px; border:1px solid #d6dae3; background:#fff; box-shadow:none;}
+.bg-builtins button img {display:block; width:100%; height:100%; object-fit:cover;}
+.bg-layer-list {display:grid; gap:10px; margin:0; padding:0; list-style:none;}
+.bg-layer-item {display:grid; grid-template-columns:68px minmax(0, 1fr); gap:12px; padding:12px; border:1px solid #dfe3eb; border-radius:12px; background:#fff; cursor:pointer;}
+.bg-layer-item.selected {border-color:#8b78e6; box-shadow:0 0 0 3px rgba(139,120,230,.16);}
+.bg-thumb {width:68px; height:68px; object-fit:cover; border-radius:8px; background:#111318;}
+.bg-layer-head {display:flex; align-items:center; gap:8px; margin-bottom:4px;}
+.bg-layer-head select {width:auto; margin:0; padding:5px 8px; font-size:13px;}
+.admin-surface .bg-range {display:grid; grid-template-columns:62px minmax(0, 1fr) 48px; align-items:center; gap:8px; margin:3px 0; font-size:13px; font-weight:600;}
+.admin-surface .bg-range input[type=range] {width:100%; margin:0; padding:0; border:0; background:transparent; box-shadow:none; accent-color:#6f5bd6;}
+.bg-range output {font-size:12px; color:#5c6577; text-align:right; font-variant-numeric:tabular-nums;}
+.bg-checks {display:flex; gap:14px; flex-wrap:wrap; margin:4px 0;}
+.bg-checks .admin-compact-check {min-height:0; margin:0; font-size:13px;}
+.bg-layer-actions {display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin-top:6px;}
+.bg-layer-actions button {padding:6px 10px; font-size:12px;}
+.bg-footer {display:flex; align-items:center; justify-content:flex-end; gap:10px; margin-top:14px;}
+.bg-footer span {margin-right:auto;}
+@media (max-width:980px) {
+  .bg-editor {grid-template-columns:1fr;}
+  .bg-preview-wrap {position:static;}
+}
+
+/* Chat pages: a slimmer conversation header leaves more room for messages. */
+.chat-page .chat-card .chat-header {padding:12px 18px;}
+.chat-page .chat-card .chat-header h2 {font-size:20px; margin:2px 0;}
+/* The customer page title already says "Chat with support". */
+.chat-page .chat-card:not(.admin-inbox) .chat-header .eyebrow, .chat-page .chat-card:not(.admin-inbox) .chat-header h2 {display:none;}
+.chat-page .chat-card:not(.admin-inbox) .chat-header {justify-content:flex-end; padding:8px 18px;}
+@media (max-width:700px) {
+  .chat-page h1 {font-size:22px;}
+  .chat-page > .muted {display:none;}
+  .chat-page .chat-card .chat-header {flex-direction:row; align-items:center; gap:8px; padding:8px 12px;}
+  .chat-page .chat-card .chat-header > div {display:flex; align-items:center; gap:8px; flex-wrap:wrap; min-width:0;}
+  .chat-page .chat-card .chat-header .eyebrow {display:none;}
+  .chat-page .chat-card .chat-header h2 {font-size:17px;}
+  .chat-page .chat-card .inbox-back {margin:0;}
+  .chat-page .chat-messages {padding:14px;}
+  .chat-page .chat-compose {flex-direction:row; gap:8px; padding:10px 12px;}
+  .chat-page .chat-compose button[type=submit] {align-self:flex-end;}
+  .chat-page .chat-caption, .chat-page .chat-card > .field-caption {display:none;}
+}
+.bg-footer button {white-space:nowrap; padding:10px 14px;}

@@ -179,6 +179,26 @@ Dự phòng: trình duyệt không hỗ trợ `backdrop-filter` hoặc người 
 
 **Xác minh:** TypeScript; Playwright store/product-polish/badges/accounts 22/22; build production; ảnh trang chủ, giỏ hàng, checkout, đăng nhập, sản phẩm ở 1440/390 px trong `.local-cache/glass-preview/`.
 
+## Chat gọn một màn hình, tên "Admin", ảnh nền tùy chỉnh — 2026-10-03
+
+**Tên người trả lời.** Khách luôn thấy tin của đội ngũ với tên **Admin** (cả khi tải lịch sử lẫn khi nhận realtime qua SSE); trang Admin vẫn thấy tên thật. Tên thật vẫn được lưu trong database; việc thay tên chỉ làm ở đầu ra cho khách (`forCustomer` trong `chat-store.ts`, dùng ở `GET /api/chat` và `/api/chat/events`).
+
+**Chat vừa một màn hình.** Trang chat của khách (`/en/workspace`) và hộp thư Admin tự đo vị trí của mình và cao vừa tới đáy cửa sổ (`--chat-fit-height`), đo lại khi header/trang đổi kích thước (header có thể cao lên sau khi tải tài khoản hoặc font). Tin nhắn cuộn bên trong, ô soạn và nút Send luôn ở đáy. Trên điện thoại: đầu khung chat gọn một hàng, nút Send cùng hàng với ô soạn, ẩn dòng chú thích. Cửa sổ chat nổi (widget) vẫn như cũ.
+
+**Chuyển hội thoại nhanh hơn.** Sửa lỗi khung xám (skeleton) hiện ở danh sách hội thoại mỗi lần đổi người: nó dựa nhầm vào trạng thái tải tin nhắn. Thêm:
+- Tải sẵn trang tin mới nhất của 8 hội thoại đầu danh sách ngay sau khi mở hộp thư; tin realtime của các hội thoại đã tải được cập nhật luôn, nên đổi người là thấy ngay.
+- Bộ nhớ tạm theo tab (`sessionStorage`, tối đa 12 hội thoại × 60 tin, không lưu tin đang gửi hay ảnh xem trước): mở lại trang là hiện ngay rồi mới làm mới từ server. Xóa khi đăng xuất.
+
+*Vì sao không đợi tắt web mới lưu vào database* (đề xuất của chủ shop): bên kia sẽ không nhận được tin cho tới khi người gửi đóng tab; tắt máy, hết pin hay trình duyệt lỗi là mất tin; cookie chỉ chứa khoảng 4 KB và bị gửi kèm mọi request. Lưu ngay mỗi tin chỉ mất vài trăm mili giây và khách đã thấy tin của mình hiện tức thì, nên chỗ chậm thật sự là phần đọc, và phần đó đã được tải sẵn và nhớ tạm như trên.
+
+**Ảnh nền tùy chỉnh (Admin → Settings → Background).** Thay ảnh nền cố định trong CSS (ảnh Minecraft 4% và hai ảnh ngựa trôi) bằng "cảnh nền" lưu trong `StoreSetting.backgroundScene`:
+- Mỗi ảnh là một lớp: *Floating picture* (đặt theo tâm x/y % của cửa sổ, kích thước theo cửa sổ rộng 1440 px, xoay, mờ, trôi nhẹ, ẩn trên điện thoại) hoặc *Full-screen backdrop* (phủ kín). Tối đa 8 lớp, thứ tự trong danh sách là thứ tự vẽ (Send back / Bring front).
+- Trình chỉnh có khung xem trước 16:10 với phác thảo trang bằng kính: kéo thả file ảnh vào khung để tải lên đúng chỗ thả, kéo ảnh để đổi vị trí (hoặc phím mũi tên, Shift = 5%), thanh trượt cho kích thước/độ mờ/xoay/blur, nút thêm nhanh 6 ảnh có sẵn của web, *Reset to default*, cảnh báo khi rời trang chưa lưu.
+- Ảnh tải lên dùng chung kho ảnh với sản phẩm/announcement; bộ dọn ảnh và nút xóa ảnh không xóa ảnh đang dùng cho nền (`backgroundImagePaths`).
+- Cửa hàng vẽ cảnh nền trong layout (`BackgroundSceneLayers`), cố định phía sau trang trên lớp riêng; mặc định giống hệt nền cũ. Lưu xong cửa hàng cập nhật trong 30 giây.
+
+**Khác:** dòng nhắc trên trang đơn hàng của khách: thư của shop gửi từ địa chỉ Gmail đang kết nối, nếu không thấy thì xem Thư rác và đánh dấu "Không phải thư rác" (`mailFrom` trong `GET /api/orders/[code]`). Header khi đăng nhập luôn một dòng trên mọi màn hình desktop (nội dung header rộng tối đa 1240 px): Orders/Inbox/Chat chỉ hiện biểu tượng và số, có tooltip.
+
 Lệnh thông thường: `npm run db:generate`, `npm run typecheck`, `npm test`, `npm run build`, `npm run test:e2e`. E2E dùng database riêng theo `DATABASE.md`. Sau khi chạy app/container, `SMOKE_URL=http://localhost:3000 node scripts/smoke-container.mjs` kiểm tra static assets, đăng ký, phân quyền, SSE và idempotency.
 
 ## Tệp chính để bảo trì

@@ -114,6 +114,8 @@ sau 20 giây; chỉ đúng khi chạy **một instance** (đúng với Render Fr
 - **Litecoin**: Settings → Payments → Litecoin wallets → Add wallet (địa chỉ nhận LTC từ ví, web kiểm tra checksum) →
   **Test QR** bằng app ví. Khi có ví đang bật, cửa hàng hiện thêm giá ước tính bằng LTC cạnh USD và VND. Mỗi đơn LTC có
   số lẻ riêng để nhận ra đơn nào đã trả; khách có thể dán TXID. Kiểm tra tiền về trên litecoinspace.org.
+- **Ảnh nền**: Settings → Background → kéo thả ảnh vào khung xem trước, kéo ảnh tới vị trí muốn đặt, chỉnh kích thước/độ mờ/xoay/blur
+  → **Save background**. *Reset to default* về lại nền ban đầu. Cửa hàng cập nhật trong khoảng 30 giây.
 - **Liên hệ**: Discord `https://discord.gg/pD4MdsJB` (`src/lib/contact.ts`, ảnh `public/contact/discord-qr.png`).
 
 ## Thanh toán, "rảnh ngay" và nhắc hẹn (2026-09-30)
