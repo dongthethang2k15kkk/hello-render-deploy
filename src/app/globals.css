@@ -1651,3 +1651,61 @@ body {background: transparent;}
   .chat-page .chat-caption, .chat-page .chat-card > .field-caption {display:none;}
 }
 .bg-footer button {white-space:nowrap; padding:10px 14px;}
+
+/* How it works: each step on its own pane inside the glass section. */
+.how-section .steps-grid {gap:18px;}
+.how-section .steps-grid article {padding:22px; border-radius:14px; background:linear-gradient(160deg, rgba(255,255,255,.07), rgba(255,255,255,.02)); border:1px solid rgba(255,255,255,.09); box-shadow:inset 0 1px 0 rgba(255,255,255,.08);}
+.how-section .step-number {display:inline-grid; place-items:center; min-width:46px; height:46px; padding:0 10px; border-radius:12px; font-size:20px; background:rgba(182,163,255,.14); border:1px solid rgba(182,163,255,.3);}
+.how-section .steps-grid h3 {margin-top:16px;}
+
+/* Floating Chat button in liquid glass (it carries the unread count). */
+.support-widget .support-launcher {
+  color:#fff; border:1px solid rgba(255,255,255,.28);
+  background:linear-gradient(160deg, rgba(255,255,255,.24), rgba(255,255,255,.06) 60%), rgba(30, 34, 44, .42);
+  -webkit-backdrop-filter:blur(18px) saturate(180%); backdrop-filter:blur(18px) saturate(180%);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.4), inset 0 -1px 0 rgba(255,255,255,.08), 0 12px 30px rgba(0,0,0,.35), 0 0 0 1px rgba(149,212,122,.12);
+}
+.support-widget .support-launcher:hover:not(:disabled) {background:linear-gradient(160deg, rgba(255,255,255,.3), rgba(255,255,255,.1) 60%), rgba(40, 46, 60, .5); transform:translateY(-2px);}
+.support-widget .support-launcher[aria-expanded=true] {background:linear-gradient(160deg, rgba(255,255,255,.18), rgba(255,255,255,.05)), rgba(56, 48, 77, .6);}
+
+/* Header pills that open a window: pressed look while open. */
+.header-pill.open {border-color:var(--accent); background:linear-gradient(160deg, rgba(182,163,255,.28), rgba(182,163,255,.08)), rgba(40, 36, 60, .6);}
+button.header-pill {cursor:pointer; font-family:var(--body-font);}
+button.header-pill:hover:not(:disabled) {transform:translateY(-1px); background:linear-gradient(160deg, rgba(255,255,255,.2), rgba(255,255,255,.06)), rgba(40, 44, 58, .55); box-shadow:inset 0 1px 0 rgba(255,255,255,.18);}
+.header-panel-link:hover:not(:disabled) {background:none; color:#fff; transform:none; box-shadow:none; text-decoration:underline;}
+
+/* Orders / Inbox windows: small, non-modal glass panels under their pill. */
+.header-panel {
+  position:fixed; z-index:60; max-height:min(72vh, 540px); overflow:auto; overscroll-behavior:contain;
+  padding:14px; border-radius:18px; color:var(--text);
+  background:linear-gradient(160deg, rgba(255,255,255,.14), rgba(255,255,255,.04) 55%), rgba(20, 22, 30, .72);
+  -webkit-backdrop-filter:blur(22px) saturate(170%); backdrop-filter:blur(22px) saturate(170%);
+  border:1px solid rgba(255,255,255,.18);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.25), 0 24px 60px rgba(0,0,0,.45);
+  animation:drop-in .16s ease-out;
+}
+@supports not ((backdrop-filter:blur(1px)) or (-webkit-backdrop-filter:blur(1px))) {.header-panel {background:#1b2028;}}
+.header-panel-head {display:flex; align-items:center; justify-content:space-between; gap:10px; padding:2px 4px 10px; border-bottom:1px solid rgba(255,255,255,.1); margin-bottom:8px;}
+.header-panel-head strong {font-size:16px;}
+.header-panel-head a, .header-panel-link {font-size:13px; font-weight:600; color:#d5ccff; background:none; border:0; box-shadow:none; padding:0;}
+.header-panel-head .muted {font-size:12px;}
+.header-panel-cart {display:flex; justify-content:space-between; align-items:center; gap:10px; margin:4px 0 8px; padding:10px 12px; border-radius:12px; background:rgba(149,212,122,.14); border:1px solid rgba(149,212,122,.3); font-size:14px; text-decoration:none;}
+.header-panel-cart strong {color:#c8eeb2;}
+.header-panel-list {list-style:none; margin:0; padding:0; display:grid; gap:4px;}
+.header-panel-list a, .header-panel-item {display:grid; gap:3px; width:100%; padding:10px 12px; border-radius:12px; color:var(--text); text-align:left; text-decoration:none; background:transparent; border:1px solid transparent; box-shadow:none; font-weight:400;}
+.header-panel-list a:hover, .header-panel-item:hover:not(:disabled), .header-panel-list a:focus-visible, .header-panel-item:focus-visible {background:rgba(255,255,255,.08); border-color:rgba(255,255,255,.12); transform:none; text-decoration:none;}
+.header-panel-row {display:flex; justify-content:space-between; align-items:baseline; gap:10px; min-width:0;}
+.header-panel-row strong {font-size:14px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+.header-panel-row small {min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:var(--text-muted);}
+.header-panel-row b {font-size:14px; white-space:nowrap;}
+.header-panel-row .badge {font-size:11px; white-space:nowrap;}
+.header-panel-time {font-size:11px; color:var(--text-muted); white-space:nowrap;}
+.header-panel-body {font-size:13px; color:var(--text-muted); display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden;}
+.header-panel-list li.unread .header-panel-item {background:rgba(182,163,255,.1);}
+.header-panel-list li.unread .header-panel-row strong::before {content:''; display:inline-block; width:7px; height:7px; margin-right:7px; border-radius:50%; background:#b6a3ff; vertical-align:middle;}
+.header-panel-appointments {display:grid; gap:6px; margin-bottom:8px;}
+.header-panel-appointments a {display:grid; gap:2px; padding:10px 12px; border-radius:12px; background:rgba(242,191,107,.12); border:1px solid rgba(242,191,107,.3); text-decoration:none; font-size:13px;}
+.header-panel-appointments small {color:#f2d39b;}
+.header-panel-empty {margin:8px 4px; font-size:13px;}
+.header-panel-foot {display:block; margin-top:8px; padding:10px 12px; border-radius:12px; text-align:center; font-size:13px; font-weight:600; background:rgba(255,255,255,.06); text-decoration:none;}
+.header-panel .loading-rows {padding:4px;}

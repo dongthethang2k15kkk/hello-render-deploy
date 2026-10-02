@@ -199,6 +199,15 @@ Dự phòng: trình duyệt không hỗ trợ `backdrop-filter` hoặc người 
 
 **Khác:** dòng nhắc trên trang đơn hàng của khách: thư của shop gửi từ địa chỉ Gmail đang kết nối, nếu không thấy thì xem Thư rác và đánh dấu "Không phải thư rác" (`mailFrom` trong `GET /api/orders/[code]`). Header khi đăng nhập luôn một dòng trên mọi màn hình desktop (nội dung header rộng tối đa 1240 px): Orders/Inbox/Chat chỉ hiện biểu tượng và số, có tooltip.
 
+## Cửa sổ Orders/Inbox, nút Chat kính, "How it works" mới — 2026-10-03
+
+- **Bỏ nút chat nhỏ trên header:** trùng với nút "Chat" nổi ở góc dưới phải (nút này giữ số tin chưa đọc). Nút nổi chuyển sang kính mờ cùng công thức với phần còn lại. Chữ "Chat support" trên menu chỉ hiện khi chưa đăng nhập.
+- **Orders và Inbox mở cửa sổ nhỏ** (`src/components/header-popover.tsx`): cửa sổ kính không chặn trang (non-modal, không có lớp phủ, trang vẫn cuộn và bấm được), đóng khi bấm ra ngoài, nhấn Esc hoặc chuyển trang; mở cái này thì cái kia đóng. Vẽ trong `<body>` qua portal vì header kính (backdrop-filter) giữ chặt vị trí `fixed` của phần tử con; vị trí tính từ nút, không tràn mép màn hình.
+  - *Orders:* số món trong giỏ (→ giỏ hàng), 5 đơn gần nhất với mã, trạng thái, món, tổng USD, thời gian; "See all →".
+  - *Inbox:* lịch hẹn sắp tới, 6 thông báo gần nhất (chấm tím = chưa đọc), "Mark all read", "Open Inbox →".
+  - Bấm vào một đơn/thông báo mới mở trang đầy đủ; bấm thông báo đánh dấu đã đọc và cập nhật số trên chuông ngay.
+- **How it works** viết lại theo cách shop chạy hiện tại: "Three steps. No guesswork." — chọn gói (giữ 30 phút, giá USD), trả bằng VietQR hoặc Litecoin (chỉ nhắc Litecoin khi đang bật) rồi chọn giờ, nhận hàng trong chat. Mỗi bước nằm trên một ô kính nhỏ.
+
 Lệnh thông thường: `npm run db:generate`, `npm run typecheck`, `npm test`, `npm run build`, `npm run test:e2e`. E2E dùng database riêng theo `DATABASE.md`. Sau khi chạy app/container, `SMOKE_URL=http://localhost:3000 node scripts/smoke-container.mjs` kiểm tra static assets, đăng ký, phân quyền, SSE và idempotency.
 
 ## Tệp chính để bảo trì

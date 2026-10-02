@@ -16,7 +16,7 @@ test('header pills count cart items, unread Inbox messages and unread chat repli
   await page.goto(`/en/products/${await catalogId(page.request, 'SAMPLE_BASIC')}`);
   await page.getByLabel('Recipient name (test data)').fill('Badge');
   await page.getByRole('button', {name: 'Add to cart'}).click();
-  await expect(page.getByRole('link', {name: 'Orders, 1 item in cart'})).toBeVisible();
+  await expect(page.getByRole('button', {name: 'Orders, 1 item in cart'})).toBeVisible();
 
   // The customer writes first, then Admin replies: each side sees the other's unread count.
   expect((await customerContext.request.post('/api/chat', {data: {body: 'Hello shop'}})).ok()).toBe(true);
@@ -28,7 +28,8 @@ test('header pills count cart items, unread Inbox messages and unread chat repli
   expect((await adminContext.request.post('/api/chat', {data: {body: 'Hi! How can we help?', room: `user:${customerId}`}})).ok()).toBe(true);
 
   await page.goto('/en');
-  await expect(page.getByRole('link', {name: 'Chat, 1 unread'})).toBeVisible();
+  // The unread chat count lives on the floating Chat button (the header has no separate chat pill).
+  await expect(page.locator('.header-pills').getByRole('link', {name: /Chat/})).toHaveCount(0);
   await expect(page.locator('.support-launcher .launcher-badge')).toHaveText('1');
   await page.goto('/en/workspace');
   await expect(page.getByText('Hi! How can we help?')).toBeVisible();

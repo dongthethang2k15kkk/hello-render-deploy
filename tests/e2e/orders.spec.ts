@@ -117,7 +117,22 @@ test('full order: checkout, VietQR, times, admin confirms and books, customer is
   expect(inbox.unread).toBeGreaterThanOrEqual(2);
   expect(inbox.notifications[0].title).toContain(`Appointment booked · ${code}`);
   await page.goto('/en');
-  await expect(page.getByRole('link', {name: /^Inbox, [1-9]\d* unread$/})).toBeVisible();
+  // Inbox and Orders open small windows over the page; a click on an entry opens its full page.
+  const inboxPill = page.getByRole('button', {name: /^Inbox, [1-9]\d* unread$/});
+  await inboxPill.click();
+  const inboxPanel = page.getByRole('dialog', {name: 'Inbox'});
+  await expect(inboxPanel.getByText(`Appointment booked · ${code}`)).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(inboxPanel).toBeHidden();
+  await page.getByRole('button', {name: /^Orders, /}).click();
+  const ordersPanel = page.getByRole('dialog', {name: 'Orders'});
+  await ordersPanel.getByRole('link', {name: new RegExp(code)}).click();
+  await expect(page).toHaveURL(new RegExp(`/en/orders/${code}$`));
+  await expect(ordersPanel).toBeHidden();
+  await page.goto('/en');
+  await page.getByRole('button', {name: /^Inbox, /}).click();
+  await page.getByRole('dialog', {name: 'Inbox'}).getByRole('button', {name: new RegExp(`Appointment booked · ${code}`)}).click();
+  await expect(page).toHaveURL(new RegExp(`/en/orders/${code}$`));
 
   await adminPage.getByLabel('Delivery details').fill('Your code: SECRET-CODE-123');
   adminPage.once('dialog', dialog => void dialog.accept());

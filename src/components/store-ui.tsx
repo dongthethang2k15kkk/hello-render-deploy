@@ -2,9 +2,10 @@
 import Link from 'next/link';
 import {usePathname} from 'next/navigation';
 import {useLocale, useTranslations} from 'next-intl';
-import {useDeferredValue, useEffect, useMemo, useState} from 'react';
+import {useCallback, useDeferredValue, useEffect, useMemo, useState} from 'react';
 import {type CatalogProduct, type CatalogSource, Locale} from '@/lib/catalog';
 import Price from './price';
+import {InboxPopover, OrdersPopover} from './header-popover';
 import {filterCatalog, type CatalogSort} from '@/lib/catalog-view';
 import {clearChatDrafts} from '@/lib/chat-drafts';
 import {watchChat} from '@/lib/chat-client';
@@ -30,12 +31,13 @@ function rememberAccount(account: HeaderAccount | null) {
 const badge = (count?: number) => count ? <b className="pill-badge">{count > 99 ? '99+' : count}</b> : null;
 
 export function StoreHeader() {
-  const locale = useLocale(); const path = usePathname(); const {lines} = useCart(); const [account, setAccount] = useState<HeaderAccount | null>(null); const [menuOpen, setMenuOpen] = useState(false);
+  const locale = useLocale(); const path = usePathname(); const {lines} = useCart(); const [account, setAccount] = useState<HeaderAccount | null>(null); const [menuOpen, setMenuOpen] = useState(false); const [panel, setPanel] = useState<'orders' | 'inbox' | null>(null);
+  const setUnread = useCallback((unread: number) => setAccount(current => current && current.unread !== unread ? {...current, unread} : current), []);
   useEffect(() => {
     try { const cached = sessionStorage.getItem(ACCOUNT_CACHE); if (cached) setAccount(current => current ?? JSON.parse(cached)); } catch { /* storage blocked */ }
   }, []);
   useEffect(() => {
-    setMenuOpen(false);
+    setMenuOpen(false); setPanel(null);
     const load = () => fetch('/api/auth/session', {cache: 'no-store'}).then(r => r.json()).then(data => {setAccount(data.account); rememberAccount(data.account);}).catch(() => undefined);
     void load();
     // Keeps Inbox and Chat counts fresh while the page stays open.
@@ -55,10 +57,10 @@ export function StoreHeader() {
   const cartCount = lines.reduce((sum, line) => sum + line.quantity, 0);
   return <header className="site-header"><div className="shell header"><Link href={`/${locale}`} className="brand"><span className="brand-name">Jewish Horse</span><small className="brand-tagline">Digital package shop</small></Link><button className="mobile-nav-toggle secondary" type="button" aria-expanded={menuOpen} aria-controls="store-navigation" onClick={() => setMenuOpen(value => !value)}><span aria-hidden="true">{menuOpen ? '×' : '☰'}</span><span>{menuOpen ? 'Close' : 'Menu'}</span></button><nav id="store-navigation" className={menuOpen ? 'open' : ''} aria-label="Navigation"><Link onClick={() => setMenuOpen(false)} href={`/${locale}#catalog`}>Packages</Link><Link onClick={() => setMenuOpen(false)} href={`/${locale}#how-it-works`}>How it works</Link>{/* Signed-in customers have the Chat pill (with unread count) instead. */}{account?.role !== 'user' && <Link onClick={() => setMenuOpen(false)} href={`/${locale}/workspace`}>Chat support</Link>}<Link onClick={() => setMenuOpen(false)} href={`/${locale}#faq`}>Help</Link></nav>
     <div className="header-actions">
+      {/* Orders and Inbox open small windows; chat lives in the floating Chat button (with its unread count). */}
       {account?.role === 'user' && <div className="header-pills" role="group" aria-label="Your orders and messages">
-        <Link className="header-pill" title="Orders" href={`/${locale}/orders`} aria-label={`Orders, ${cartCount} item${cartCount === 1 ? '' : 's'} in cart`}>{icons.orders}<span>Orders</span>{badge(cartCount)}</Link>
-        <Link className="header-pill" title="Inbox" href={`/${locale}/inbox`} aria-label={`Inbox, ${account.unread ?? 0} unread`}>{icons.inbox}<span>Inbox</span>{badge(account.unread)}</Link>
-        <Link className="header-pill" title="Chat" href={`/${locale}/workspace`} aria-label={`Chat, ${account.chatUnread ?? 0} unread`}>{icons.chat}<span>Chat</span>{badge(account.chatUnread)}</Link>
+        <OrdersPopover locale={locale} cartCount={cartCount} open={panel === 'orders'} onOpenChange={open => setPanel(open ? 'orders' : null)} icon={icons.orders} badge={badge(cartCount)}/>
+        <InboxPopover locale={locale} unread={account.unread ?? 0} onUnreadChange={setUnread} open={panel === 'inbox'} onOpenChange={open => setPanel(open ? 'inbox' : null)} icon={icons.inbox} badge={badge(account.unread)}/>
       </div>}
       {account ? <span className="account-menu"><Link href={`/${locale}/${account.role === 'admin' ? 'admin' : 'account'}`}>{account.name}</Link><button className="secondary" onClick={() => void logout()}>Log out</button></span> : <Link className="text-link" href={`/${locale}/login`}>Sign in / Register</Link>}
       <Link className="cart-link" aria-label="Cart" href={`/${locale}/cart`}>Cart <b>{cartCount}</b></Link>
