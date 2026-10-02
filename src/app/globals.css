@@ -1548,3 +1548,69 @@ a, .header-pill, .text-link {-webkit-tap-highlight-color:transparent;}
 .pay-secondary {display:block; margin:2px 0 16px; color:var(--text-muted); font-size:13px;}
 .checkout-layout .payment-option:has(:checked) small {color:#d6ebc8;}
 .checkout-layout .payment-option input {accent-color:#95d47a;}
+
+/* ---------- Liquid glass across the storefront ----------
+   Recipe (same as the product cards): blur what is behind (Gaussian, on the GPU), boost its colour, a dark tint for
+   legible text, a diagonal light sheen, a 1px light edge with an inner top highlight, and a soft drop shadow.
+   Admin and the white chat panels keep solid surfaces for long reading and data entry. */
+:root {
+  --glass-filter: blur(18px) saturate(170%);
+  --glass-tint: rgba(22, 25, 33, .5);
+  --glass-sheen: linear-gradient(160deg, rgba(255,255,255,.12), rgba(255,255,255,.03) 55%);
+  --glass-edge: rgba(255,255,255,.14);
+  --glass-shadow: inset 0 1px 0 rgba(255,255,255,.2), 0 12px 32px rgba(0,0,0,.28);
+}
+
+/* Soft colour fields fixed behind the page, so glass anywhere has something to blur. Static gradients on their own
+   layer: no animation, no filter, nothing repainted while scrolling. */
+body::after {
+  content:''; position:fixed; inset:0; z-index:-2; pointer-events:none; will-change:transform;
+  background:
+    radial-gradient(38vw 38vw at 4% 24%, rgba(149,212,122,.26), transparent 70%),
+    radial-gradient(44vw 44vw at 96% 8%, rgba(182,163,255,.32), transparent 70%),
+    radial-gradient(40vw 40vw at 72% 92%, rgba(242,191,107,.2), transparent 70%),
+    radial-gradient(34vw 34vw at 34% 66%, rgba(110,160,255,.14), transparent 70%);
+}
+
+:is(.card, .feature-strip, .how-section, .hero-visual, .floating-card, .notice, .site-footer, .empty-state, .inbox-list a, .pill, .header-pill, .secondary, .auth-tabs, .cart-undo):where(:not(.admin-surface *, .chat-card, .chat-card *, .support-window *, .slots-dialog *)) {
+  background: var(--glass-sheen), var(--glass-tint);
+  -webkit-backdrop-filter: var(--glass-filter);
+  backdrop-filter: var(--glass-filter);
+  border-color: var(--glass-edge);
+  box-shadow: var(--glass-shadow);
+}
+/* Small controls: lighter glass, no big shadow. */
+:is(.pill, .header-pill, .secondary, .auth-tabs):where(:not(.admin-surface *, .chat-card, .chat-card *, .support-window *, .slots-dialog *)) {
+  background: linear-gradient(160deg, rgba(255,255,255,.14), rgba(255,255,255,.04)), rgba(30, 34, 44, .45);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.18);
+}
+.header-pill:hover, .header-pill:focus-visible {background: linear-gradient(160deg, rgba(255,255,255,.2), rgba(255,255,255,.06)), rgba(40, 44, 58, .55);}
+
+/* Header: frosted while the page scrolls underneath (blurred content cannot be read through it). */
+.site-header {
+  background: linear-gradient(180deg, rgba(255,255,255,.05), rgba(255,255,255,0)), rgba(14, 16, 21, .6);
+  -webkit-backdrop-filter: blur(20px) saturate(170%);
+  backdrop-filter: blur(20px) saturate(170%);
+  border-bottom: 1px solid rgba(255,255,255,.08);
+  box-shadow: 0 10px 30px rgba(0,0,0,.25);
+}
+
+/* Without backdrop-filter, or when the visitor asks for less transparency, fall back to solid surfaces. */
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .site-header {background: var(--page);}
+  :is(.card, .feature-strip, .how-section, .hero-visual, .floating-card, .notice, .site-footer, .empty-state, .inbox-list a, .pill, .header-pill, .secondary, .auth-tabs, .cart-undo):where(:not(.admin-surface *, .chat-card, .chat-card *, .support-window *, .slots-dialog *)) {background: var(--surface);}
+}
+@media (prefers-reduced-transparency: reduce) {
+  .site-header {background: var(--page); -webkit-backdrop-filter: none; backdrop-filter: none;}
+  :is(.card, .feature-strip, .how-section, .hero-visual, .floating-card, .notice, .site-footer, .empty-state, .inbox-list a, .pill, .header-pill, .secondary, .auth-tabs, .cart-undo):where(:not(.admin-surface *, .chat-card, .chat-card *, .support-window *, .slots-dialog *)) {background: var(--surface); -webkit-backdrop-filter: none; backdrop-filter: none;}
+  .product-card .product-content {background: rgba(18,20,26,.86); -webkit-backdrop-filter: none; backdrop-filter: none;}
+}
+
+/* The page colour lives on <html>; a transparent <body> lets the fixed colour fields and backdrop image show
+   (an opaque body background is painted above negative z-index layers). */
+:root {background: radial-gradient(ellipse at 85% 0%, #29233e 0%, transparent 900px) no-repeat, var(--page);}
+body {background: transparent;}
+
+/* The floating decorations give the glass something to reflect on large screens (hidden on phones already). */
+.floating-horse-1 {opacity:.18;}
+.floating-horse-2 {opacity:.15;}

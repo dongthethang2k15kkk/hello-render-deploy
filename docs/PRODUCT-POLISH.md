@@ -161,6 +161,24 @@ Thêm: cuộn mượt cho link trong trang (`#catalog`, `#faq`), phản hồi kh
 
 **Xác minh:** TypeScript, 101 unit test. Kiểm tra bằng trình duyệt trên bản chạy local (database E2E): thanh tiến trình đi đúng `loading → done → idle` khi bấm vào một sản phẩm, không có lỗi JavaScript; ảnh tại `.local-cache/smooth-preview/` (header đăng nhập 1280/1440 px, header điện thoại khi cuộn, cửa sổ chat 1440/390 px, trang đăng nhập, skeleton của Inbox). Kết quả E2E và deploy được ghi trong `HANDOFF.md`.
 
+## Kính mờ (liquid glass) — 2026-10-03
+
+Chủ shop thích tấm kính mờ trên thẻ sản phẩm và muốn dùng ở nhiều phần khác. Công thức (không có thuật toán riêng; trình duyệt làm mờ bằng GPU):
+
+1. `backdrop-filter: blur(18px)`: mờ Gaussian những gì nằm sau tấm kính.
+2. `saturate(170%)`: đẩy màu sau khi mờ cho khỏi xỉn, giống Apple.
+3. Lớp phủ: tối khoảng 50% để chữ dễ đọc, cộng vệt sáng chéo (trắng 12% → 3%) như ánh phản chiếu.
+4. Viền sáng 1px và đường sáng bên trong ở mép trên (cạnh kính bắt sáng).
+5. Bóng đổ mềm để tấm kính nổi lên.
+
+Biến dùng chung trong `globals.css`: `--glass-filter`, `--glass-tint`, `--glass-sheen`, `--glass-edge`, `--glass-shadow`. Áp dụng cho storefront: các `.card` (giỏ hàng, checkout, đơn hàng, tài khoản, đăng nhập…), dải tính năng, "How it works", khung banner, thẻ nổi trong hero, thông báo, footer, trạng thái rỗng, danh sách Inbox, nhãn viên, nút Orders/Inbox/Chat, nút phụ, tab đăng nhập và header (kính mờ khi nội dung cuộn bên dưới). Admin, khung chat trắng, hộp chọn giờ và cửa sổ chat giữ nền đặc để đọc lâu và nhập liệu (loại trừ bằng `:where(:not(...))`, không tăng độ ưu tiên CSS).
+
+Kính chỉ đẹp khi phía sau có màu: thêm lớp nền cố định (`body::after`) gồm bốn vùng màu mờ (xanh lá, tím, hổ phách, xanh dương), không chuyển động, không filter, nằm trên lớp riêng nên cuộn không phải vẽ lại. Hai hình trang trí trôi nổi rõ hơn (18% / 15%) trên màn hình lớn. Màu nền trang chuyển sang `<html>` và `<body>` trong suốt: trước đây nền đặc của `body` che mất các lớp nền phía sau (kể cả ảnh nền Minecraft 4% có từ trước).
+
+Dự phòng: trình duyệt không hỗ trợ `backdrop-filter` hoặc người dùng bật "giảm độ trong suốt" (`prefers-reduced-transparency`) thì dùng nền đặc như cũ.
+
+**Xác minh:** TypeScript; Playwright store/product-polish/badges/accounts 22/22; build production; ảnh trang chủ, giỏ hàng, checkout, đăng nhập, sản phẩm ở 1440/390 px trong `.local-cache/glass-preview/`.
+
 Lệnh thông thường: `npm run db:generate`, `npm run typecheck`, `npm test`, `npm run build`, `npm run test:e2e`. E2E dùng database riêng theo `DATABASE.md`. Sau khi chạy app/container, `SMOKE_URL=http://localhost:3000 node scripts/smoke-container.mjs` kiểm tra static assets, đăng ký, phân quyền, SSE và idempotency.
 
 ## Tệp chính để bảo trì
