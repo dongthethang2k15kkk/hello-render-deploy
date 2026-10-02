@@ -5,6 +5,7 @@ import {useLocale} from 'next-intl';
 import AnnouncementCarousel from '@/components/announcement-carousel';
 import {MAX_SLIDES, type Announcements, type Slide} from '@/lib/announcement-rules';
 import {uploadImage} from '@/lib/image-upload';
+import {LoadingRows} from '@/components/loading-state';
 
 export default function AnnouncementSettings() {
   const locale = useLocale();
@@ -70,7 +71,7 @@ export default function AnnouncementSettings() {
     <div className="page-heading admin-page-heading"><div><p className="eyebrow"><Link href={`/${locale}/admin/settings`}>ADMIN / SETTINGS</Link> / ANNOUNCEMENTS</p><h1>Announcements</h1><p className="admin-lede">Images shown in the large panel at the top of the store. With more than one image, customers can swipe or use the arrows, and the images also change automatically.</p></div><button type="button" disabled={busy || !dirty || !state} onClick={() => void save()}>{busy ? 'Working…' : 'Save announcements'}</button></div>
     {error && <p className="admin-feedback error" role="alert">{error}</p>}
     {message && <p className="admin-feedback success" role="status">{message}</p>}
-    {!state && !error && <p className="muted" role="status">Loading…</p>}
+    {!state && !error && <LoadingRows label="Loading…"/>}
     {state && <>
       <section className="card admin-panel"><h2>Images ({state.slides.length}/{MAX_SLIDES})</h2>
         <p className="field-caption">Best at 4:3 (for example 1200 × 900 px). The whole image is shown, so text near the edges stays readable. PNG, JPEG or WebP up to 12 MB; large files are resized automatically.</p>

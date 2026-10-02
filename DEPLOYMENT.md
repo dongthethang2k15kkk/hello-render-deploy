@@ -6,14 +6,12 @@
 
 ## Phạm vi hiện tại
 
-Bản deploy này là **demo công khai**. Khách hàng có tài khoản mẫu; Admin chỉ đăng
-nhập bằng Google theo allowlist. Chat và tài khoản khách đăng ký nằm trong bộ nhớ,
-mất sau restart/sleep/redeploy. Chỉ chạy một instance. Checkout là mô phỏng.
-Khi có `DATABASE_URL`, catalog storefront đọc sản phẩm do Admin tạo trong PostgreSQL.
-
-Render Blueprint không cấu hình khóa payment. `DATABASE_URL` và các biến Google
-nhập trong dashboard. Payment staging cần triển khai nội bộ và đánh giá riêng
-trước khi mở ra Internet.
+Website hiện chạy tại https://jewish-horse.onrender.com/en. Tài khoản, chat,
+catalog, đơn hàng và cấu hình thanh toán được lưu trong PostgreSQL/Neon, tồn tại
+qua restart/sleep/redeploy. Admin đăng nhập bằng Google theo danh sách được cấp quyền.
+Chỉ chạy một instance; presence và bus sự kiện chat realtime dùng bộ nhớ của process.
+`DATABASE_URL`, `AUTH_SECRET` và các biến Google được quản lý trong Render Environment.
+Chi tiết bản cải tiến chat/giao diện: [PRODUCT-POLISH.md](docs/PRODUCT-POLISH.md).
 
 ## Đề xuất: Render Free (Docker)
 
@@ -43,9 +41,11 @@ Free, Dockerfile `./Dockerfile`, health check `/api/health`; tự tạo AUTH_SEC
 Không đặt Build Command/Start Command thay thế: dùng lệnh từ Dockerfile.
 Không nhập secret vào Dockerfile, GitHub hoặc build arguments.
 
-Repo triển khai riêng tư thuộc tài khoản dongthethang2k15kkk; remote Git là `render`.
-Repo nguồn elliotthewizerd/hello vẫn giữ ở remote `origin`. Sau khi commit thay đổi,
-dùng `git push render main` để cập nhật bản triển khai.
+Trong checkout hiện tại, remote `origin` trỏ tới repo triển khai riêng tư
+`dongthethang2k15kkk/hello-render-deploy`. Commit rồi `git push origin main` để
+Render tự build/deploy. Xác nhận `git remote -v` trước khi push từ checkout khác.
+Service đang chạy tại **Oregon**, Docker, Free, một instance; `Singapore` ở trên
+là cấu hình blueprint cho service mới. Không tạo lại service hoặc đổi region khi cập nhật.
 
 ## Đăng nhập Admin bằng Google (miễn phí)
 
@@ -202,8 +202,8 @@ migration PostgreSQL trên Linux và smoke test container. Workflow chỉ chạy
 được push lên GitHub; file workflow tồn tại không có nghĩa các check đã pass.
 Docker build cũng chạy Prisma generate và Next.js production build.
 
-Tình trạng chạy thực tế mới nhất được ghi trong HANDOFF.md. Chưa có URL public
-hoặc Docker build thành công nếu chưa có kết quả kiểm chứng từ máy có Docker.
+Tình trạng chạy thực tế, commit và deploy ID được ghi trong [HANDOFF.md](HANDOFF.md).
+Sau deploy, kiểm tra Render báo `live`, migration hoàn thành và website trả lời đúng.
 
 ## Tài liệu chính thức
 

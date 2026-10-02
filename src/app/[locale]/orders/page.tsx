@@ -5,6 +5,7 @@ import {useLocale} from 'next-intl';
 import {useRouter} from 'next/navigation';
 import {formatVnd} from '@/lib/money';
 import {formatRange, statusLabels, statusTone, type OrderStatus} from '@/lib/order-rules';
+import {LoadingRows} from '@/components/loading-state';
 
 type OrderRow = {code: string; status: OrderStatus; totalVnd: number; createdAt: string; appointmentStart: string | null; appointmentEnd: string | null; items: {title: string; quantity: number}[]};
 
@@ -26,7 +27,7 @@ export default function MyOrders() {
 
   return <div className="page-heading orders-page"><p className="eyebrow">YOUR ACCOUNT</p><h1>My orders</h1>
     {error && <p className="error-text" role="alert">{error}</p>}
-    {!orders && !error && <p aria-busy="true">Loading orders…</p>}
+    {!orders && !error && <LoadingRows label="Loading orders…"/>}
     {orders && orders.length === 0 && <div className="empty-state"><h2>No orders yet</h2><Link className="button" href={`/${locale}#catalog`}>Explore packages →</Link></div>}
     {orders && orders.length > 0 && <div className="order-list">{orders.map(order => <Link className="card order-row" key={order.code} href={`/${locale}/orders/${order.code}`}>
       <div><strong>{order.code}</strong><small>{order.items.map(item => `${item.title} × ${item.quantity}`).join(', ')}</small>{order.appointmentStart && order.appointmentEnd && order.status === 'scheduled' && <small>Appointment: {formatRange(order.appointmentStart, order.appointmentEnd, timeZone)}</small>}</div>

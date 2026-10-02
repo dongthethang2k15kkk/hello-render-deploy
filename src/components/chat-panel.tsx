@@ -265,7 +265,7 @@ export default function ChatPanel({role, accountId, compact = false, initialRoom
       <div className="chat-sidebar-tools"><h2>{'Conversations'}</h2>
       <label className="chat-search"><span className="sr-only">Search conversations</span><input ref={roomSearch} type="search" placeholder="Search customers (/ to focus)" value={roomQuery} onChange={event => setRoomQuery(event.target.value)}/></label>
       <div className="chat-filters" aria-label="Conversation filter"><button type="button" className={roomFilter === 'all' ? 'active' : ''} onClick={() => setRoomFilter('all')}>All</button><button type="button" className={roomFilter === 'needs-reply' ? 'active' : ''} onClick={() => setRoomFilter('needs-reply')}>Needs reply</button></div></div>
-      {loading && <p className="muted" role="status">{'Loading…'}</p>}
+      {loading && <LoadingRows label="Loading conversations" rows={4}/>}
       {!loading && rooms.length === 0 && <p className="muted">{'No conversations yet.'}</p>}
       {!loading && rooms.length > 0 && shownRooms.length === 0 && <p className="muted">No matching conversations.</p>}
       {shownRooms.map(item => {

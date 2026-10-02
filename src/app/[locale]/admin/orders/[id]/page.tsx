@@ -5,6 +5,7 @@ import {formatDateTime} from '@/lib/customer-labels';
 import {formatVnd} from '@/lib/money';
 import {explorerAddress, explorerTx} from '@/lib/ltc-format';
 import {dateToVietnamLocal, formatRange, statusLabels, statusTone, VN_TIME_ZONE, type OrderStatus} from '@/lib/order-rules';
+import {LoadingRows} from '@/components/loading-state';
 
 type Order = {
   id: string; code: string; status: OrderStatus; totalVnd: number; createdAt: string; holdExpiresAt: string; reportedAt: string | null; customerTimeZone: string | null;
@@ -74,7 +75,7 @@ export default function AdminOrderDetail({params}: {params: Promise<{locale: str
     finally { setBusy(false); }
   }
 
-  if (!order) return <div className="page-heading"><Link href={`/${locale}/admin/orders`}>← Orders</Link>{error ? <p className="admin-feedback error" role="alert">{error}</p> : <p className="muted" role="status">Loading order…</p>}</div>;
+  if (!order) return <div className="page-heading"><Link href={`/${locale}/admin/orders`}>← Orders</Link>{error ? <p className="admin-feedback error" role="alert">{error}</p> : <LoadingRows label="Loading order…"/>}</div>;
   const canConfirm = ['awaiting_payment', 'payment_reported', 'expired'].includes(order.status);
   const canSchedule = order.status === 'paid' || order.status === 'scheduled';
   const canComplete = order.status === 'paid' || order.status === 'scheduled';

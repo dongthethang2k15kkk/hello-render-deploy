@@ -3,6 +3,7 @@ import {useEffect, useState} from 'react';
 import Link from 'next/link';
 import {useLocale} from 'next-intl';
 import {formatUsdFromVnd} from '@/lib/money';
+import {LoadingRows} from '@/components/loading-state';
 
 type Account = {id: string; bankBin: string; bankName: string; accountNumber: string; accountHolder: string; active: boolean};
 type Wallet = {id: string; address: string; label: string; active: boolean};
@@ -56,7 +57,7 @@ export default function PaymentSettings() {
     finally { setBusy(false); }
   }
 
-  if (!state) return <div className="page-heading"><Link href={`/${locale}/admin/settings`}>← Settings</Link>{error ? <p className="admin-feedback error" role="alert">{error}</p> : <p className="muted" role="status">Loading…</p>}</div>;
+  if (!state) return <div className="page-heading"><Link href={`/${locale}/admin/settings`}>← Settings</Link>{error ? <p className="admin-feedback error" role="alert">{error}</p> : <LoadingRows label="Loading…"/>}</div>;
   const bin = draft.bankBin === 'other' ? draft.customBin : draft.bankBin;
   return <div className="admin-payments-page">
     <div className="page-heading admin-page-heading"><div><p className="eyebrow"><Link href={`/${locale}/admin/settings`}>ADMIN / SETTINGS</Link> / PAYMENTS</p><h1>Payments</h1><p className="admin-lede">Customers pay by VietQR bank transfer (VND) or Litecoin. With several active accounts or wallets, orders rotate between them.</p></div></div>

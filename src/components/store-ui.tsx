@@ -21,13 +21,22 @@ const icons = {
   inbox: <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 8a6 6 0 1 0-12 0c0 7-3 8-3 8h18s-3-1-3-8M10.3 20a2 2 0 0 0 3.4 0"/></svg>,
   chat: <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1.1-4.6A8 8 0 1 1 21 12Z"/></svg>
 };
+// The last known account for this tab, so the header does not flash "Sign in" before the session request returns.
+const ACCOUNT_CACHE = 'jh.header-account';
+function rememberAccount(account: HeaderAccount | null) {
+  try { if (account) sessionStorage.setItem(ACCOUNT_CACHE, JSON.stringify(account)); else sessionStorage.removeItem(ACCOUNT_CACHE); } catch { /* storage blocked */ }
+}
+
 const badge = (count?: number) => count ? <b className="pill-badge">{count > 99 ? '99+' : count}</b> : null;
 
 export function StoreHeader() {
   const locale = useLocale(); const path = usePathname(); const {lines} = useCart(); const [account, setAccount] = useState<HeaderAccount | null>(null); const [menuOpen, setMenuOpen] = useState(false);
   useEffect(() => {
+    try { const cached = sessionStorage.getItem(ACCOUNT_CACHE); if (cached) setAccount(current => current ?? JSON.parse(cached)); } catch { /* storage blocked */ }
+  }, []);
+  useEffect(() => {
     setMenuOpen(false);
-    const load = () => fetch('/api/auth/session', {cache: 'no-store'}).then(r => r.json()).then(data => setAccount(data.account)).catch(() => undefined);
+    const load = () => fetch('/api/auth/session', {cache: 'no-store'}).then(r => r.json()).then(data => {setAccount(data.account); rememberAccount(data.account);}).catch(() => undefined);
     void load();
     // Keeps Inbox and Chat counts fresh while the page stays open.
     const timer = window.setInterval(() => { if (document.visibilityState === 'visible') void load(); }, 30000);
@@ -42,7 +51,7 @@ export function StoreHeader() {
     });
     return () => {stop(); clearTimeout(timer);};
   }, [account?.role]);
-  async function logout() {await fetch('/api/auth/logout', {method: 'POST'}); clearChatDrafts(); setAccount(null); window.location.reload();}
+  async function logout() {await fetch('/api/auth/logout', {method: 'POST'}); clearChatDrafts(); rememberAccount(null); setAccount(null); window.location.reload();}
   const cartCount = lines.reduce((sum, line) => sum + line.quantity, 0);
   return <header className="site-header"><div className="shell header"><Link href={`/${locale}`} className="brand"><span className="brand-name">Jewish Horse</span><small className="brand-tagline">Digital package shop</small></Link><button className="mobile-nav-toggle secondary" type="button" aria-expanded={menuOpen} aria-controls="store-navigation" onClick={() => setMenuOpen(value => !value)}><span aria-hidden="true">{menuOpen ? '×' : '☰'}</span><span>{menuOpen ? 'Close' : 'Menu'}</span></button><nav id="store-navigation" className={menuOpen ? 'open' : ''} aria-label="Navigation"><Link onClick={() => setMenuOpen(false)} href={`/${locale}#catalog`}>Packages</Link><Link onClick={() => setMenuOpen(false)} href={`/${locale}#how-it-works`}>How it works</Link><Link onClick={() => setMenuOpen(false)} href={`/${locale}/workspace`}>Chat support</Link><Link onClick={() => setMenuOpen(false)} href={`/${locale}#faq`}>Help</Link></nav>
     <div className="header-actions">

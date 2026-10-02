@@ -3,6 +3,7 @@ import {useEffect, useState} from 'react';
 import Link from 'next/link';
 import {useLocale} from 'next-intl';
 import {formatDateTime} from '@/lib/customer-labels';
+import {LoadingRows} from '@/components/loading-state';
 
 type Entry = {id: string; actorEmail: string; action: string; summary: string; entityType: string | null; entityId: string | null; customerId: string | null; createdAt: string};
 type Filters = {q: string; type: string; actor: string; from: string; to: string};
@@ -47,7 +48,7 @@ export default function AdminActivity() {
         <div className="admin-filter-actions"><button type="submit">Apply</button><button type="button" className="secondary" onClick={() => {setDraft(emptyFilters); setFilters(emptyFilters); setPage(1);}}>Reset</button></div>
       </form>
       {error && <p className="admin-feedback error" role="alert">{error}</p>}
-      {!data && !error && <p className="muted" role="status">Loading activity…</p>}
+      {!data && !error && <LoadingRows label="Loading activity…"/>}
       {data && <>
         <p className="admin-result-count">{data.total} action{data.total === 1 ? '' : 's'}</p>
         <div className="admin-table-wrap"><table className="admin-table">

@@ -128,7 +128,38 @@ Rollback app có thể giữ hai cột nullable mới. Không drop cột trong r
 - Mẫu đo 12 POST văn bản liên tiếp từ Next standalone local tới Neon E2E từ xa: p50 512 ms, p95 1172 ms, min 382 ms. Smoke bản cuối gồm receipt + SSE 472 ms (lượt trước 1343 ms). Đây là phép đo local ít mẫu, không phải SLA/p95 production trên Render hoặc kiểm thử tải nhiều người dùng.
 - Đã kiểm tra storefront và admin chat ở 390/768/1440 px: không tràn ngang, không có exception trình duyệt, chiều cao inbox desktop được giới hạn; đã xem ảnh để kiểm tra bố cục. Ảnh tại `.local-cache/review-chat/*-final-*.png`, log trong `.local-cache/`, không đưa dữ liệu kiểm thử vào bundle.
 
-Môi trường E2E dùng branch riêng đã migrate và seed. Các lượt chạy lại dùng endpoint pooler của chính branch đó và cấu hình tạm bỏ bước setup đã hoàn thành; không đổi `.env` hay cấu hình deploy. Máy phát triển không có Docker CLI; standalone được kèm static/public/Prisma engine tương ứng các bước copy trong Dockerfile. Chưa deploy bản sửa lên Render và chưa đo độ trễ trên production.
+Môi trường E2E dùng branch riêng đã migrate và seed. Các lượt chạy lại dùng endpoint pooler của chính branch đó và cấu hình tạm bỏ bước setup đã hoàn thành; không đổi `.env` hay cấu hình deploy. Máy phát triển không có Docker CLI; standalone được kèm static/public/Prisma engine tương ứng các bước copy trong Dockerfile. Chưa đo p50/p95 chat trên production.
+
+## Deploy production — 2026-10-02
+
+- Theo yêu cầu deploy của chủ shop, đã push commit `e91bb92cebf64e3b3a623b56cc143a02e99e4f38` lên `origin/main`. Render tự build Docker theo cấu hình hiện có.
+- Deploy `dep-davth08ae00c73e03l1g` đạt `live` lúc **23:17:30 ngày 02/10/2026, giờ Việt Nam** (16:17:30 UTC), tại https://jewish-horse.onrender.com/en.
+- Migration `20261002120000_chat_delivery` hoàn thành lúc 16:17:21 UTC. Kiểm tra chỉ đọc trên database production xác nhận hai cột mới và unique index đã tồn tại, không có rollback.
+- Kiểm tra production: health/trang chủ/login 200; chat/SSE 401 khi chưa đăng nhập; admin counts 403; admin chat chuyển tới login; sản phẩm không tồn tại 404. Google login vẫn bật, dev-admin tắt. Hai ID sản phẩm catalog giữ nguyên so với trước deploy.
+- Trình duyệt desktop 1440 px và mobile 390 px: theme mới, tìm kiếm/xóa bộ lọc hoạt động, không tràn ngang hoặc exception JavaScript. Ảnh tại `.local-cache/review-chat/render-live-*.png`.
+- Kiểm tra trên website thật không tạo tài khoản, đơn hàng hoặc gửi tin thử cho khách/admin. Kết quả gửi/nhận qua hai trình duyệt được xác minh ở môi trường E2E và standalone; đây không phải kiểm thử tải production.
+- Commit live trước đợt này là `0dc4051d2bbc4e15a6a90f655bae08888ff2f8e6`, deploy `dep-dav7g33ncjis73dbv9mg`; có thể dùng làm mốc rollback ứng dụng, giữ nguyên hai cột nullable mới.
+
+## Độ mượt giao diện — đợt 2 (2026-10-02)
+
+Chủ shop nhận xét phần "mượt như Medusa/Chatwoot" chưa làm. Đợt này chỉ sửa cách trang tải, cuộn và phản hồi thao tác; không đổi bố cục, nội dung hay luồng nghiệp vụ, không thêm thư viện.
+
+| Vấn đề trước đây | Cách sửa | Tệp |
+| --- | --- | --- |
+| Font tải qua hai stylesheet ngoài nối tiếp (`@import` Google Fonts và cdnfonts); font Minecraft không có `font-display` nên tiêu đề bị ẩn tới khi tải xong | Inter tự host trong `public/fonts` (3 subset woff2 latin/latin-ext/vietnamese, giấy phép OFL kèm theo), `font-display: swap`, preload subset latin trong `<head>`; Minecraft khai báo `@font-face` riêng trỏ thẳng file woff (swap) và preconnect | `globals.css`, `src/app/layout.tsx`, `public/fonts/` |
+| Cuộn bị nặng: nền `background-attachment: fixed`, lớp ảnh toàn màn hình có `filter: blur`, các lớp trang trí mờ | Bỏ fixed attachment và blur (các lớp này chỉ hiện 3–8% nên nhìn gần như không đổi); lớp nền cố định được đưa lên compositor (`will-change`) nên cuộn không phải vẽ lại | `globals.css` |
+| `transition: all` trên nút, link, thẻ sản phẩm | Chỉ chuyển động các thuộc tính thay đổi (màu, viền, bóng, transform) | `globals.css` |
+| Bấm link không có phản hồi khi trang mới đang tải | Thanh tiến trình 3 px ở đỉnh trang từ lúc bấm link nội bộ tới khi trang mới hiện, sau đó nội dung mờ dần vào (220 ms, Web Animations API, không remount trang). Bỏ qua link chỉ đổi query/hash; tự tắt sau 12 giây nếu điều hướng bị hủy. Không dùng `loading.tsx` toàn site để giữ mã 404 | `src/components/route-feedback.tsx` |
+| Nhiều trang chỉ hiện chữ "Loading…" | Khung skeleton giữ chỗ (`LoadingRows`, vẫn có nhãn cho trình đọc màn hình) ở tài khoản, giỏ hàng, checkout, đơn hàng, inbox, các trang Admin và danh sách hội thoại | các `page.tsx` liên quan |
+| Header hiện "Sign in" rồi mới đổi sang tài khoản | Nhớ tài khoản gần nhất trong `sessionStorage` của tab, hiện ngay rồi xác nhận lại với server; xóa khi đăng xuất | `src/components/store-ui.tsx` |
+| Header trên điện thoại hơi trong suốt, chữ lộ phía sau khi cuộn; header khi đăng nhập bị gãy dòng ở 1280–1440 px | Header nền đặc; từ 901 đến 1500 px các nút Orders/Inbox/Chat chỉ hiện biểu tượng và số (aria-label giữ nguyên), tên và nút Log out không xuống dòng | `globals.css` |
+| Khung chat của khách lặp tiêu đề, ô chọn ảnh kiểu mặc định của trình duyệt, nút Send mờ khó đọc, ô soạn cố định 2 dòng | Ẩn tiêu đề trùng trong widget; nút chọn ảnh dạng viên (input thật vẫn nhận focus và bàn phím); trạng thái disabled đủ tương phản; ô soạn tự giãn tới 160 px (`field-sizing`, trình duyệt chưa hỗ trợ thì giữ như cũ) | `globals.css` |
+| Hộp thoại và cửa sổ chat bật ra đột ngột | Hiệu ứng hiện lên 0,2 giây cho hộp chọn giờ, nền mờ, cửa sổ chat, menu mobile và từng tin nhắn mới | `globals.css` |
+| Tab Đăng nhập/Đăng ký là khối xám sáng trên card tối | Tab theo nền tối, tab đang chọn màu tím nhấn | `globals.css` |
+
+Thêm: cuộn mượt cho link trong trang (`#catalog`, `#faq`), phản hồi khi nhấn nút (thu nhỏ 2%), ảnh sản phẩm phóng nhẹ khi rê chuột. Mọi chuyển động tắt khi người dùng bật "giảm chuyển động" (quy tắc `prefers-reduced-motion` có sẵn).
+
+**Xác minh:** TypeScript, 101 unit test. Kiểm tra bằng trình duyệt trên bản chạy local (database E2E): thanh tiến trình đi đúng `loading → done → idle` khi bấm vào một sản phẩm, không có lỗi JavaScript; ảnh tại `.local-cache/smooth-preview/` (header đăng nhập 1280/1440 px, header điện thoại khi cuộn, cửa sổ chat 1440/390 px, trang đăng nhập, skeleton của Inbox). Kết quả E2E và deploy được ghi trong `HANDOFF.md`.
 
 Lệnh thông thường: `npm run db:generate`, `npm run typecheck`, `npm test`, `npm run build`, `npm run test:e2e`. E2E dùng database riêng theo `DATABASE.md`. Sau khi chạy app/container, `SMOKE_URL=http://localhost:3000 node scripts/smoke-container.mjs` kiểm tra static assets, đăng ký, phân quyền, SSE và idempotency.
 

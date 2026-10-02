@@ -5,6 +5,7 @@ import {useLocale} from 'next-intl';
 import {formatDateTime} from '@/lib/customer-labels';
 import {formatVnd} from '@/lib/money';
 import {ORDER_STATUSES, statusLabels, statusTone, type OrderStatus} from '@/lib/order-rules';
+import {LoadingRows} from '@/components/loading-state';
 
 type Row = {id: string; code: string; status: OrderStatus; totalVnd: number; createdAt: string; reportedAt: string | null; appointmentStart: string | null; assignedAdmin: string | null; customer: {id: string; name: string; email: string}; items: {title: string; quantity: number}[]};
 type Filters = {q: string; status: string; from: string; to: string};
@@ -50,7 +51,7 @@ export default function AdminOrders() {
         <div className="admin-filter-actions"><button type="submit">Apply</button><button type="button" className="secondary" onClick={() => apply({...emptyFilters, status: 'all'})}>Reset</button></div>
       </form>
       {error && <p className="admin-feedback error" role="alert">{error}</p>}
-      {!data && !error && <p className="muted" role="status">Loading orders…</p>}
+      {!data && !error && <LoadingRows label="Loading orders…"/>}
       {data && <>
         <p className="admin-result-count">{data.total} order{data.total === 1 ? '' : 's'}</p>
         <div className="admin-table-wrap"><table className="admin-table">

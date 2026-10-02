@@ -6,6 +6,7 @@ import SignInActivity from '@/components/admin-sign-in-activity';
 import {describeUserAgent, formatDateTime, generatePassword} from '@/lib/customer-labels';
 import {formatVnd} from '@/lib/money';
 import {statusLabels, statusTone, type OrderStatus} from '@/lib/order-rules';
+import {LoadingRows} from '@/components/loading-state';
 
 type Detail = {
   customer: {id: string; email: string; name: string; emailVerified: boolean; status: string; lockedReason: string | null; mustChangePassword: boolean; createdAt: string; lastLoginAt: string | null; methods: string[]; chatMessages: number};
@@ -50,7 +51,7 @@ export default function AdminCustomerDetail({params}: {params: Promise<{locale: 
     finally { setBusy(false); }
   }
 
-  if (!detail) return <div className="page-heading"><Link href={`/${locale}/admin/customers`}>← Customers</Link>{error ? <p className="admin-feedback error" role="alert">{error}</p> : <p className="muted" role="status">Loading customer…</p>}</div>;
+  if (!detail) return <div className="page-heading"><Link href={`/${locale}/admin/customers`}>← Customers</Link>{error ? <p className="admin-feedback error" role="alert">{error}</p> : <LoadingRows label="Loading customer…"/>}</div>;
   const {customer, sessions, audit, orders} = detail;
   const locked = customer.status === 'locked';
   return <div className="admin-customer-detail">

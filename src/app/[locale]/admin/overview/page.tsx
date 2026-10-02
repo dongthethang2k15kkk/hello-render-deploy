@@ -4,6 +4,7 @@ import Link from 'next/link';
 import {useLocale} from 'next-intl';
 import {formatVnd} from '@/lib/money';
 import {formatRange, VN_TIME_ZONE} from '@/lib/order-rules';
+import {LoadingRows} from '@/components/loading-state';
 
 type Revenue = {vnd: number; orders: number};
 type Overview = {
@@ -29,7 +30,7 @@ export default function AdminOverview() {
   return <div className="admin-overview">
     <div className="page-heading admin-page-heading"><div><p className="eyebrow">ADMIN / OVERVIEW</p><h1>Overview</h1><p className="admin-lede">What needs attention today. Times are Vietnam time.</p></div></div>
     {error && <p className="admin-feedback error" role="alert">{error}</p>}
-    {!data && !error && <p className="muted" role="status">Loading…</p>}
+    {!data && !error && <LoadingRows label="Loading…"/>}
     {data && <>
       {(!data.setup.bankAccounts || !data.setup.gmail) && <section className="card admin-panel setup-panel"><h2>Finish setting up</h2><ul>
         {!data.setup.bankAccounts && !data.setup.wallets && <li>No active bank account or Litecoin wallet: customers cannot place orders. <Link href={`/${locale}/admin/settings/payments`}>Add one →</Link></li>}

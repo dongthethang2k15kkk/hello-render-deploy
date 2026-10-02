@@ -10,6 +10,7 @@ import type {CartLine} from '@/lib/cart';
 import {totalVnd} from '@/lib/cart';
 import {Locale} from '@/lib/catalog';
 import Price from '@/components/price';
+import {LoadingRows} from '@/components/loading-state';
 
 export default function Cart() {
   const {lines, ready, save} = useCart();
@@ -26,7 +27,7 @@ export default function Cart() {
       <h1>{t('cart')}</h1>
       <div className="checkout-steps"><span className="current">01 / {t('cart')}</span><span>02 / Checkout</span><span>03 / Pay &amp; book a time</span></div>
     </div>
-    {!ready || !catalog.ready ? <p aria-busy="true">Loading cart…</p> : <>
+    {!ready || !catalog.ready ? <LoadingRows label="Loading cart…"/> : <>
       {lines.length === 0 && <div className="empty-state">
         <div className="empty-icon">◇</div><h2>{t('empty')}</h2>
         <p className="muted">A new experience starts with your first pick.</p>

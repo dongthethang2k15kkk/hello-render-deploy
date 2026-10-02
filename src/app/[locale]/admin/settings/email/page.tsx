@@ -3,6 +3,7 @@ import {useEffect, useState} from 'react';
 import Link from 'next/link';
 import {useLocale} from 'next-intl';
 import {formatDateTime} from '@/lib/customer-labels';
+import {LoadingRows} from '@/components/loading-state';
 
 type Log = {id: string; recipient: string; subject: string; kind: string; status: string; error: string | null; orderId: string | null; createdAt: string};
 type State = {connection: {email: string; connectedAt: string; connectedBy: string} | null; logs: Log[]; adminRecipients: string[]};
@@ -45,7 +46,7 @@ export default function EmailSettings() {
     <div className="page-heading admin-page-heading"><div><p className="eyebrow"><Link href={`/${locale}/admin/settings`}>ADMIN / SETTINGS</Link> / EMAIL</p><h1>Email</h1><p className="admin-lede">Order emails are sent from the shop’s Gmail through the Gmail API. Customers also get every update in their Inbox on the site.</p></div></div>
     {error && <p className="admin-feedback error" role="alert">{error}</p>}
     {message && <p className="admin-feedback success" role="status">{message}</p>}
-    {!state && !error && <p className="muted" role="status">Loading…</p>}
+    {!state && !error && <LoadingRows label="Loading…"/>}
     {state && <>
       <section className="card admin-panel"><h2>Gmail sender</h2>
         {state.connection ? <><p>Connected: <strong>{state.connection.email}</strong> <span className="badge ok">active</span></p><p className="field-caption">Connected {formatDateTime(state.connection.connectedAt)} by {state.connection.connectedBy}.</p>

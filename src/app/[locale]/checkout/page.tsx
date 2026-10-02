@@ -11,6 +11,7 @@ import {Locale} from '@/lib/catalog';
 import {formatUsdFromVnd, formatVnd} from '@/lib/money';
 import {formatLtcEstimate} from '@/lib/exchange-rate-rules';
 import {HOLD_MINUTES} from '@/lib/order-rules';
+import {LoadingRows} from '@/components/loading-state';
 
 export default function Checkout() {
   const locale = useLocale() as Locale;
@@ -40,7 +41,7 @@ export default function Checkout() {
     } catch (cause) { setError(cause instanceof Error ? cause.message : 'Your order could not be placed.'); setBusy(false); }
   }
 
-  if (!ready || !catalog.ready) return <p aria-busy="true">Loading cart…</p>;
+  if (!ready || !catalog.ready) return <LoadingRows label="Loading cart…"/>;
   if (account === null) return <p aria-busy="true">Checking account…</p>;
   if (account === false) return <section className="card notice"><h1>Sign in to purchase</h1><p>Please sign in or register before continuing to checkout.</p><Link className="button" href={`/${locale}/login?next=checkout`}>Sign in / Register →</Link></section>;
   if (account.role !== 'user') return <section className="card notice"><h1>Admin accounts cannot buy</h1><p>Sign out of Admin and use a customer account to place orders.</p></section>;

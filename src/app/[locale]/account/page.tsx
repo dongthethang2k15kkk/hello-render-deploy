@@ -3,6 +3,7 @@ import {useEffect, useState, type FormEvent} from 'react';
 import {useLocale} from 'next-intl';
 import {useRouter} from 'next/navigation';
 import Link from 'next/link';
+import {LoadingRows} from '@/components/loading-state';
 
 type Profile = {name: string; email: string; emailVerified: boolean; google: boolean; hasPassword: boolean; mustChangePassword: boolean; createdAt: string};
 
@@ -52,7 +53,7 @@ export default function AccountPage() {
     if (await post({action: 'sign-out-everywhere'})) setMessage('Other devices were signed out.');
   }
 
-  if (!profile) return <div className="page-heading"><p className="eyebrow">YOUR ACCOUNT</p><h1>Account</h1>{error ? <p className="error-text" role="alert">{error}</p> : <p aria-busy="true">Loading…</p>}</div>;
+  if (!profile) return <div className="page-heading"><p className="eyebrow">YOUR ACCOUNT</p><h1>Account</h1>{error ? <p className="error-text" role="alert">{error}</p> : <LoadingRows label="Loading…"/>}</div>;
   const required = profile.mustChangePassword;
   return <div className="page-heading account-page"><p className="eyebrow">YOUR ACCOUNT</p><h1>Account</h1>
     {required && <p className="notice" role="alert"><strong>Please set a new password.</strong> The shop gave you a temporary password; choose your own before continuing.</p>}

@@ -7,6 +7,7 @@ import {googleCalendarLink} from '@/lib/calendar';
 import {formatUsdFromVnd, formatVnd} from '@/lib/money';
 import {explorerTx} from '@/lib/ltc-format';
 import {formatRange, REPORT_DELAY_SECONDS, statusLabels, statusTone, type OrderStatus} from '@/lib/order-rules';
+import {LoadingRows} from '@/components/loading-state';
 
 type Order = {
   id: string; code: string; status: OrderStatus; totalVnd: number; vndPerUsd: number; holdExpiresAt: string; createdAt: string;
@@ -65,7 +66,7 @@ export default function OrderPage({params}: {params: Promise<{locale: string; co
     return null;
   }
 
-  if (!order) return <div className="page-heading"><p className="eyebrow">ORDER {code}</p>{error ? <><p className="error-text" role="alert">{error}</p><Link href={`/${locale}/orders`}>← My orders</Link></> : <p aria-busy="true">Loading order…</p>}</div>;
+  if (!order) return <div className="page-heading"><p className="eyebrow">ORDER {code}</p>{error ? <><p className="error-text" role="alert">{error}</p><Link href={`/${locale}/orders`}>← My orders</Link></> : <LoadingRows label="Loading order…"/>}</div>;
   const secondsLeft = Math.max(0, Math.floor((Date.parse(order.holdExpiresAt) - (now + offset)) / 1000));
   const reportIn = Math.max(0, Math.ceil((Date.parse(order.createdAt) + REPORT_DELAY_SECONDS * 1000 - (now + offset)) / 1000));
   const calendar = order.appointmentStart && order.appointmentEnd ? {start: new Date(order.appointmentStart), end: new Date(order.appointmentEnd), title: `Jewish Horse · order ${order.code}`, description: 'Open the Jewish Horse website and go to Chat at this time.', url: typeof window === 'undefined' ? '' : window.location.href} : null;

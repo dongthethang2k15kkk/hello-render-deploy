@@ -4,6 +4,7 @@ import Link from 'next/link';
 import {useLocale} from 'next-intl';
 import SignInActivity from '@/components/admin-sign-in-activity';
 import {formatDateTime} from '@/lib/customer-labels';
+import {LoadingRows} from '@/components/loading-state';
 
 type Customer = {id: string; email: string; name: string; emailVerified: boolean; status: string; createdAt: string; lastLoginAt: string | null; methods: string[]};
 type Filters = {q: string; status: string; method: string; from: string; to: string};
@@ -51,7 +52,7 @@ export default function AdminCustomers() {
         <div className="admin-filter-actions"><button type="submit">Apply</button><button type="button" className="secondary" onClick={() => {setDraft(emptyFilters); setFilters(emptyFilters); setPage(1);}}>Reset</button></div>
       </form>
       {error && <p className="admin-feedback error" role="alert">{error}</p>}
-      {!data && !error && <p className="muted" role="status">Loading customers…</p>}
+      {!data && !error && <LoadingRows label="Loading customers…"/>}
       {data && <>
         <p className="admin-result-count">{data.total} customer{data.total === 1 ? '' : 's'}</p>
         <div className="admin-table-wrap"><table className="admin-table">

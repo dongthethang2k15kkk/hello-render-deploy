@@ -2,6 +2,7 @@
 import {useEffect, useState} from 'react';
 import Link from 'next/link';
 import {useLocale} from 'next-intl';
+import {LoadingRows} from '@/components/loading-state';
 
 type State = {owners: string[]; admins: string[]};
 
@@ -34,7 +35,7 @@ export default function AdminTeam() {
     <div className="page-heading admin-page-heading"><div><p className="eyebrow"><Link href={`/${locale}/admin/settings`}>ADMIN / SETTINGS</Link> / ADMINS</p><h1>Admins</h1><p className="admin-lede">People who can sign in to Admin with Google. Every Admin receives the order emails.</p></div></div>
     {error && <p className="admin-feedback error" role="alert">{error}</p>}
     {message && <p className="admin-feedback success" role="status">{message}</p>}
-    {!state && !error && <p className="muted" role="status">Loading…</p>}
+    {!state && !error && <LoadingRows label="Loading…"/>}
     {state && <>
       <section className="card admin-panel"><h2>Add an Admin</h2>
         <p className="field-caption">Use the Gmail address they sign in with. They get access within a minute. While the Google sign-in app is in Testing, also add them as a test user in Google Cloud.</p>
