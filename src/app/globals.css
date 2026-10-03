@@ -1709,3 +1709,57 @@ button.header-pill:hover:not(:disabled) {transform:translateY(-1px); background:
 .header-panel-empty {margin:8px 4px; font-size:13px;}
 .header-panel-foot {display:block; margin-top:8px; padding:10px 12px; border-radius:12px; text-align:center; font-size:13px; font-weight:600; background:rgba(255,255,255,.06); text-decoration:none;}
 .header-panel .loading-rows {padding:4px;}
+
+/* "Free right now" needs one more time: shown in the time dialog as soon as it is ticked. */
+.asap-notice {margin:8px 0 4px; padding:10px 12px; border-radius:10px; background:#fff5e6; border:1px solid #efc98f; color:#6b3a06; font-size:13px; line-height:1.5;}
+
+/* ---------- Admin workspace ---------- */
+.admin-content:has(.workspace-detail), .admin-content:has(.workspace-page) {max-width:1520px;}
+.workspace-queues {display:grid; gap:22px; margin-top:16px;}
+.workspace-queue h2 {display:flex; align-items:center; gap:8px; margin:0 0 2px; font-size:20px;}
+.workspace-count {display:inline-grid; place-items:center; min-width:24px; height:24px; padding:0 7px; border-radius:999px; background:#6f5bd6; color:#fff; font-size:12px;}
+.workspace-list {display:grid; grid-template-columns:repeat(auto-fill, minmax(300px, 1fr)); gap:12px; margin:10px 0 0; padding:0; list-style:none;}
+.workspace-card {display:grid; gap:6px; padding:14px 16px; border:1px solid #dfe3eb; border-radius:14px; background:#fff; box-shadow:0 6px 18px rgba(30,40,60,.06);}
+.workspace-card.asap {border-color:#f0c070; box-shadow:0 0 0 3px rgba(242,191,107,.2);}
+.workspace-card-head {display:flex; align-items:center; gap:8px; flex-wrap:wrap;}
+.workspace-card-head strong {font-size:16px; margin-right:auto;}
+.workspace-card-meta, .workspace-card-time {margin:0; font-size:13px; color:#566072;}
+.workspace-card-actions {display:flex; gap:8px; margin-top:4px;}
+.workspace-card-actions .button, .workspace-card-actions button {padding:9px 14px; font-size:14px;}
+
+.workspace-detail {display:grid; grid-template-columns:minmax(0, 1.1fr) minmax(380px, .9fr); gap:20px; align-items:start;}
+.workspace-tabs {display:none;}
+.workspace-chat-column {position:sticky; top:116px;}
+.workspace-chat-column .chat-card {max-width:none;}
+.workspace-order-column .admin-order-detail .page-heading {margin-bottom:10px;}
+@media (max-width:900px) {
+  .workspace-detail {grid-template-columns:1fr;}
+  .workspace-tabs {display:flex; gap:8px; position:sticky; top:0; z-index:5; padding:8px 0; background:#f3f4f7;}
+  .workspace-tabs button {flex:1; padding:10px; font-size:14px;}
+  .workspace-tabs button.active {background:#3b3256; color:#fff;}
+  .workspace-detail.show-order .workspace-chat-column, .workspace-detail.show-chat .workspace-order-column {display:none;}
+  .workspace-chat-column {position:static;}
+}
+
+/* Who handles an order: take it, release it, or take it over. */
+.claim-bar {display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; margin:0 0 14px; padding:12px 16px; border-radius:12px; border:1px solid; font-size:14px;}
+.claim-bar span {flex:1 1 260px;}
+.claim-bar button {padding:9px 16px; font-size:14px;}
+.claim-bar.unclaimed {background:#fff7e8; border-color:#efc98f; color:#5e3a07;}
+.claim-bar.mine {background:#eef8ea; border-color:#b9dcae; color:#24502f;}
+.claim-bar.other {background:#f1f2f6; border-color:#d6d9e2; color:#3d4555;}
+.complete-panel {border-color:#b9dcae;}
+
+/* Admin header: as wide as the workspace, so the navigation stays on one line on laptop screens. */
+.admin-header .admin-header-inner {max-width:1520px;}
+@media (max-width:1500px) {.admin-header span.presence-summary {display:none;}}
+@media (max-width:900px) {
+  /* On phones the header scrolls away; the Order/Chat tabs stay on top instead. */
+  .admin-surface .admin-header {position:static;}
+  .workspace-detail .workspace-chat-column .chat-card {height:calc(100dvh - 116px);}
+  .workspace-chat-column .chat-card .chat-header {display:none;}
+  .workspace-chat-column .chat-compose {flex-direction:row; gap:8px; padding:10px 12px;}
+  .workspace-chat-column .chat-compose button[type=submit] {align-self:flex-end;}
+  .workspace-chat-column .chat-caption {display:none;}
+  .workspace-chat-column .chat-messages {padding:12px;}
+}

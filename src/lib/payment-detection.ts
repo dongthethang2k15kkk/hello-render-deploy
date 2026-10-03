@@ -39,7 +39,7 @@ export async function markPaidAutomatically(orderId: string, input: {amountVnd: 
   const needsTimes = order.slots.length === 0 && !order.asap;
   await notifyCustomer({customerId: order.customerId, orderId, title: `Payment received · ${order.code}`, body: needsTimes ? 'Thank you! Your payment arrived. Tell us when you are free so we can book your appointment.' : 'Thank you! Your payment arrived. We will confirm your appointment shortly.', link: `/en/orders/${order.code}`});
   await sendMail({to: [order.customer.email], ...templates.customerPaymentConfirmed({code: order.code, name: order.customer.name, orderUrl: `${origin}/en/orders/${order.code}`}), kind: 'customer.payment_confirmed', orderId});
-  await sendMail({to: await allAdminEmails(), ...templates.adminPaymentDetected({code: order.code, customerName: order.customer.name, amountLabel: input.amountLabel, slots: order.slots.map(slot => ({start: slot.startsAt, end: slot.endsAt})), asap: order.asap, orderUrl: `${origin}/en/admin/orders/${orderId}`}), kind: 'admin.payment_detected', orderId});
+  await sendMail({to: await allAdminEmails(), ...templates.adminPaymentDetected({code: order.code, customerName: order.customer.name, amountLabel: input.amountLabel, slots: order.slots.map(slot => ({start: slot.startsAt, end: slot.endsAt})), asap: order.asap, orderUrl: `${origin}/en/admin/workspace/${orderId}`}), kind: 'admin.payment_detected', orderId});
   return true;
 }
 
@@ -115,7 +115,7 @@ export async function alertAppointment(orderId: string, origin: string, now: boo
   await addMessage({customerId: order.customerId, role: 'admin', authorName: 'Jewish Horse', body: now ? `We are ready for your order ${order.code} now. Reply here to start.` : `Reminder: your appointment for order ${order.code} starts at ${time}. We will talk here in this chat.`});
   await notifyCustomer({customerId: order.customerId, orderId, title: now ? `We are ready now · ${order.code}` : `Appointment at ${time} · ${order.code}`, body: 'Open Chat on this website to receive your order.', link: '/en/workspace'});
   if (email) await sendMail({to: [order.customer.email], ...templates.customerReminder({code: order.code, name: order.customer.name, start: order.appointmentStart, end: order.appointmentEnd, timeZone: order.customerTimeZone ?? VN_TIME_ZONE, orderUrl, now}), kind: now ? 'customer.ready_now' : 'customer.reminder', orderId});
-  if (!now && order.assignedAdmin) await sendMail({to: [order.assignedAdmin], ...templates.adminReminder({code: order.code, customerName: order.customer.name, start: order.appointmentStart, end: order.appointmentEnd, orderUrl: `${origin}/en/admin/orders/${orderId}`}), kind: 'admin.reminder', orderId});
+  if (!now && order.assignedAdmin) await sendMail({to: [order.assignedAdmin], ...templates.adminReminder({code: order.code, customerName: order.customer.name, start: order.appointmentStart, end: order.appointmentEnd, orderUrl: `${origin}/en/admin/workspace/${orderId}`}), kind: 'admin.reminder', orderId});
   return true;
 }
 

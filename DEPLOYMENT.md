@@ -114,6 +114,10 @@ sau 20 giây; chỉ đúng khi chạy **một instance** (đúng với Render Fr
 - **Litecoin**: Settings → Payments → Litecoin wallets → Add wallet (địa chỉ nhận LTC từ ví, web kiểm tra checksum) →
   **Test QR** bằng app ví. Khi có ví đang bật, cửa hàng hiện thêm giá ước tính bằng LTC cạnh USD và VND. Mỗi đơn LTC có
   số lẻ riêng để nhận ra đơn nào đã trả; khách có thể dán TXID. Kiểm tra tiền về trên litecoinspace.org.
+- **Workspace (cách làm việc hằng ngày)**: Admin → **Workspace**. Khi có email "đã báo chuyển khoản", bấm link trong email
+  hoặc mở Workspace → **Take this customer**. Màn hình chia đôi: đơn bên trái, chat với khách bên phải. Đối chiếu tiền →
+  **Confirm payment** (kèm chốt giờ) → giao hàng trong chat → **Complete transaction** (chỉ lúc này mới tính vào doanh thu).
+  Bận thì **Release** để Admin khác nhận; Admin khác vắng thì **Take over**.
 - **Ảnh nền**: Settings → Background → kéo thả ảnh vào khung xem trước, kéo ảnh tới vị trí muốn đặt, chỉnh kích thước/độ mờ/xoay/blur
   → **Save background**. *Reset to default* về lại nền ban đầu. Cửa hàng cập nhật trong khoảng 30 giây.
 - **Liên hệ**: Discord `https://discord.gg/pD4MdsJB` (`src/lib/contact.ts`, ảnh `public/contact/discord-qr.png`).

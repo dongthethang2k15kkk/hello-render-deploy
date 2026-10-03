@@ -35,7 +35,8 @@ export function adminPaymentReported(input: {code: string; customerName: string;
     `Khung giờ khách rảnh (giờ Việt Nam):<br>${input.slots.map(slot => `• ${escapeHtml(formatRange(slot.start, slot.end, VN_TIME_ZONE))}`).join('<br>')}`,
     input.crypto ? 'Hãy kiểm tra giao dịch trên blockchain (link trong trang đơn), rồi xác nhận và chọn giờ hẹn.' : 'Hãy đối chiếu sao kê ngân hàng, rồi xác nhận tiền và chọn giờ hẹn trong trang đơn.'
   ];
-  const link = {label: 'Mở đơn để xác nhận', url: input.orderUrl};
+  lines.push('Admin nào bấm <strong>Nhận đơn</strong> trong Workspace trước sẽ phụ trách khách này (chat, xác nhận tiền, giao hàng).');
+  const link = {label: 'Nhận đơn trong Workspace', url: input.orderUrl};
   return {subject: `[Jewish Horse] ${title} ${input.crypto ? `${input.crypto.amount} LTC` : formatVnd(input.totalVnd)}`, html: layout(title, lines, link), text: plain(title, lines, [link])};
 }
 

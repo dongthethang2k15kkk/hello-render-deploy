@@ -3,7 +3,13 @@ import {z} from 'zod';
 
 export const HOLD_MINUTES = 30;
 /** The "I've transferred" button unlocks this long after ordering, so customers pay before they report. */
-export const REPORT_DELAY_SECONDS = 60;
+export const REPORT_DELAY_SECONDS = 30;
+/** Shown as soon as a customer ticks "I'm free right now": Admins may be busy, so one more time is required. */
+export const ASAP_NOTICE = 'An Admin may not be free right now. Please add at least one more time you are free today, so we can still book you.';
+/** "Free right now" alone is not enough: at least one later time must come with it. */
+export function asapProblem(asap: boolean | undefined, slots: unknown[]) {
+  return asap && slots.length < 2 ? ASAP_NOTICE : null;
+}
 export const MAX_SLOTS = 5;
 export const ORDER_STATUSES = ['awaiting_payment', 'payment_reported', 'paid', 'scheduled', 'completed', 'cancelled', 'expired'] as const;
 export type OrderStatus = typeof ORDER_STATUSES[number];

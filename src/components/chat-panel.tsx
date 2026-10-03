@@ -27,7 +27,9 @@ function cacheSnapshot(rooms: Room[], messages: LocalMessage[], role: Role, curr
   return {rooms: rooms.slice(0, 50), messages: [...byRoom.values()].flatMap(list => list.slice(-CACHED_MESSAGES_PER_ROOM))};
 }
 
-export default function ChatPanel({role, accountId, compact = false, initialRoom = ''}: {role: Role; accountId: string; compact?: boolean; initialRoom?: string}) {
+/** `lockedRoom` pins an Admin to one customer's conversation (the workspace): no conversation list. */
+export default function ChatPanel({role, accountId, compact = false, initialRoom: requestedRoom = '', lockedRoom, lockedTitle}: {role: Role; accountId: string; compact?: boolean; initialRoom?: string; lockedRoom?: string; lockedTitle?: string}) {
+  const initialRoom = lockedRoom ?? requestedRoom;
   const [messages, setMessages] = useState<LocalMessage[]>([]);
   const [rooms, setRooms] = useState<Room[]>([]);
   const [room, setRoom] = useState(initialRoom);
@@ -105,7 +107,7 @@ export default function ChatPanel({role, accountId, compact = false, initialRoom
   }
 
   const loadRooms = useCallback(async () => {
-    if (role !== 'admin') return;
+    if (role !== 'admin' || lockedRoom) return;
     if (roomsLoading.current) {roomsRefreshAgain.current = true; return;}
     roomsLoading.current = true;
     try {
@@ -126,7 +128,7 @@ export default function ChatPanel({role, accountId, compact = false, initialRoom
       if (mounted.current) setRoomsReady(true);
       if (roomsRefreshAgain.current && mounted.current) {roomsRefreshAgain.current = false; void loadRooms();}
     }
-  }, [role]);
+  }, [role, lockedRoom]);
 
   const load = useCallback(async (full = false) => {
     const requested = roomRef.current;
@@ -333,8 +335,9 @@ export default function ChatPanel({role, accountId, compact = false, initialRoom
   const {admins, self, setResource} = useAdminPresence();
   useEffect(() => { if (role === 'admin') setResource(room ? `chat:${room}` : 'chat'); }, [role, room, setResource]);
   const viewersOf = (id: string) => admins.filter(admin => admin.id !== self && admin.resource === `chat:${id}`);
-  return <section ref={panel} className={`chat-card card ${role === 'admin' ? 'admin-inbox' : ''} ${compact ? 'chat-compact' : ''}`} aria-label={role === 'admin' ? 'Customer inbox' : 'Consultation'}>
-    {role === 'admin' && <aside className="chat-sidebar">
+  const inbox = role === 'admin' && !lockedRoom;
+  return <section ref={panel} className={`chat-card card ${inbox ? 'admin-inbox' : ''} ${lockedRoom ? 'chat-locked' : ''} ${compact ? 'chat-compact' : ''}`} aria-label={role === 'admin' ? 'Customer inbox' : 'Consultation'}>
+    {inbox && <aside className="chat-sidebar">
       <div className="chat-sidebar-tools"><h2>{'Conversations'}</h2>
       <label className="chat-search"><span className="sr-only">Search conversations</span><input ref={roomSearch} type="search" placeholder="Search customers (/ to focus)" value={roomQuery} onChange={event => setRoomQuery(event.target.value)}/></label>
       <div className="chat-filters" aria-label="Conversation filter"><button type="button" className={roomFilter === 'all' ? 'active' : ''} onClick={() => setRoomFilter('all')}>All</button><button type="button" className={roomFilter === 'needs-reply' ? 'active' : ''} onClick={() => setRoomFilter('needs-reply')}>Needs reply</button></div></div>
@@ -350,7 +353,7 @@ export default function ChatPanel({role, accountId, compact = false, initialRoom
       })}
     </aside>}
     <div className={`chat-main ${showRoomList ? 'show-room-list' : ''}`}>
-      <div className="chat-header"><div>{role === 'admin' && <button type="button" className="inbox-back secondary" onClick={() => setShowRoomList(true)}>← {'Conversations'}</button>}<span className="eyebrow">{role === 'admin' ? 'ADMIN INBOX' : 'DIRECT SUPPORT'}</span><h2>{role === 'admin' ? (selected?.name ?? ('Select a conversation')) : 'Chat with support'}</h2>{role === 'admin' && selected?.booking && <p className="room-booking">{bookingLabel(selected.booking)}</p>}{role === 'admin' && selected && <PresenceBadges viewers={viewersOf(selected.id)} context="this conversation"/>}</div><span className={`live-dot ${connected ? "" : "reconnecting"}`} role="status">{connected ? "Live updates" : "Reconnecting..."}</span></div>
+      <div className="chat-header"><div>{inbox && <button type="button" className="inbox-back secondary" onClick={() => setShowRoomList(true)}>← {'Conversations'}</button>}<span className="eyebrow">{lockedRoom ? 'CHAT WITH CUSTOMER' : role === 'admin' ? 'ADMIN INBOX' : 'DIRECT SUPPORT'}</span><h2>{role === 'admin' ? (lockedTitle ?? selected?.name ?? ('Select a conversation')) : 'Chat with support'}</h2>{role === 'admin' && selected?.booking && <p className="room-booking">{bookingLabel(selected.booking)}</p>}{role === 'admin' && selected && <PresenceBadges viewers={viewersOf(selected.id)} context="this conversation"/>}</div><span className={`live-dot ${connected ? "" : "reconnecting"}`} role="status">{connected ? "Live updates" : "Reconnecting..."}</span></div>
       <div className="chat-messages" ref={messageArea} onScroll={() => {const area = messageArea.current; if (!area) return; const atBottom = area.scrollHeight - area.scrollTop - area.clientHeight < 80; if (atBottom !== nearBottom.current) setViewVersion(value => value + 1); nearBottom.current = atBottom; if (atBottom) setNewMessages(false);}} role="log" aria-label={'Message history'}>
         {hasOlder && <button type="button" className="secondary chat-history" disabled={loadingOlder} onClick={() => void loadOlder()}>{loadingOlder ? "Loading..." : "Load earlier messages"}</button>}
         {loading && !visible.length && <LoadingRows label="Loading messages"/>}

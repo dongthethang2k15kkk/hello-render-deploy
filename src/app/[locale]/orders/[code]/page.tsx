@@ -105,7 +105,7 @@ export default function OrderPage({params}: {params: Promise<{locale: string; co
           <div className="pay-actions"><button type="button" disabled={secondsLeft <= 0 || reportIn > 0} onClick={() => setDialog('report')}>{order.paymentMethod === 'ltc' ? 'I’ve sent the LTC →' : 'I’ve transferred →'}{reportIn > 0 && secondsLeft > 0 ? ` (${reportIn}s)` : ''}</button><button type="button" className="secondary" onClick={() => { if (window.confirm('Cancel this order?')) void act({action: 'cancel'}).then(failure => failure ? setError(failure) : setNotice('Order cancelled.')); }}>Cancel order</button></div>
           {order.paymentSeenAt && <p className="payment-seen" role="status">Payment seen on the Litecoin network. Waiting for confirmations ({Math.min(order.txConfirmations ?? 0, 2)}/2); this page updates by itself.</p>}
           {autoDetect && !order.paymentSeenAt && <p className="field-caption">This page updates by itself when your payment arrives, usually within a minute or two. You can also tap the button after paying.</p>}
-          {reportIn > 0 && secondsLeft > 0 && <p className="field-caption">First {order.paymentMethod === 'ltc' ? 'send the LTC from your wallet' : 'make the transfer in your banking app'}. The button unlocks one minute after you order.</p>}
+          {reportIn > 0 && secondsLeft > 0 && <p className="field-caption">First {order.paymentMethod === 'ltc' ? 'send the LTC from your wallet' : 'make the transfer in your banking app'}. The button unlocks {REPORT_DELAY_SECONDS} seconds after you order.</p>}
           {secondsLeft <= 0 && <p className="field-caption">If you already transferred, message us in <Link href={`/${locale}/workspace`}>Chat</Link> with the order code.</p>}
         </section>}
 

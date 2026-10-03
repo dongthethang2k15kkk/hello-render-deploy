@@ -50,8 +50,9 @@ export async function listMessages(customerId: string) {
 
 /** Same eligibility as the inbox, without loading every conversation and unread count. */
 export async function validChatCustomer(customerId: string) {
+  // Reported payments count too, so the Admin handling an order can write first from the workspace.
   return Boolean(await getPaymentDb().customer.findFirst({where: {id: customerId,
-    OR: [{chatMessages: {some: {}}}, {orders: {some: {status: {in: BOOKED_STATUSES}}}}]}, select: {id: true}}));
+    OR: [{chatMessages: {some: {}}}, {orders: {some: {status: {in: [...BOOKED_STATUSES, 'payment_reported']}}}}]}, select: {id: true}}));
 }
 
 export async function messageForRequest(requestKey: string) {
@@ -64,8 +65,15 @@ const BOOKED_STATUSES = ['paid', 'scheduled'];
 
 /** Conversations for the Admin inbox, most recent first. */
 export async function listRooms() {
-  const [unread, customers] = await Promise.all([adminUnreadByCustomer(), getPaymentDb().customer.findMany({
-    where: {OR: [{chatMessages: {some: {}}}, {orders: {some: {status: {in: BOOKED_STATUSES}}}}]}, take: 200,
+  const db = getPaymentDb();
+  // The most recent 200 conversations plus customers with a paid order, so new conversations are never cut off.
+  const [recent, booked] = await Promise.all([
+    db.chatMessage.groupBy({by: ['customerId'], _max: {createdAt: true}, orderBy: {_max: {createdAt: 'desc'}}, take: 200}),
+    db.order.findMany({where: {status: {in: BOOKED_STATUSES}}, distinct: ['customerId'], orderBy: {paidAt: 'desc'}, take: 100, select: {customerId: true}})
+  ]);
+  const ids = [...new Set([...recent.map(row => row.customerId), ...booked.map(row => row.customerId)])];
+  const [unread, customers] = await Promise.all([adminUnreadByCustomer(), db.customer.findMany({
+    where: {id: {in: ids}},
     select: {
       id: true, name: true, email: true,
       chatMessages: {orderBy: {createdAt: 'desc'}, take: 1, select: {body: true, imageId: true, authorRole: true, createdAt: true}},

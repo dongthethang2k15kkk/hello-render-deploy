@@ -47,7 +47,7 @@ export default function AdminOverview() {
         <section className="card admin-panel"><h2>Upcoming appointments</h2>
           {data.upcoming.length === 0 ? <p className="admin-empty">No upcoming appointments.</p> : <ul className="admin-list">{data.upcoming.map(item => <li key={item.id}><Link href={`/${locale}/admin/orders/${item.id}`}><strong>{formatRange(item.appointmentStart, item.appointmentEnd, VN_TIME_ZONE)}</strong><span>{item.customer.name} · {item.code}{item.assignedAdmin ? ` · ${item.assignedAdmin}` : ''}</span></Link></li>)}</ul>}
         </section>
-        <section className="card admin-panel"><h2>Revenue (confirmed payments)</h2>
+        <section className="card admin-panel"><h2>Revenue (completed transactions)</h2>
           <dl className="revenue-list">{([['Today', data.revenue.today], ['Last 7 days', data.revenue.week], ['Last 30 days', data.revenue.month]] as const).map(([label, value]) => <div key={label}><dt>{label}</dt><dd><strong>{formatVnd(value.vnd)}</strong><small>{value.orders} order{value.orders === 1 ? '' : 's'}</small></dd></div>)}</dl>
         </section>
         <section className="card admin-panel"><h2>Low stock</h2>

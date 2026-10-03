@@ -78,7 +78,7 @@ test('full order: checkout, VietQR, times, admin confirms and books, customer is
 
   // The button stays locked for a minute so customers pay first; the server refuses early reports too.
   await expect(page.getByRole('button', {name: 'I’ve transferred →'})).toBeDisabled();
-  await expect(page.getByText('The button unlocks one minute after you order.')).toBeVisible();
+  await expect(page.getByText('The button unlocks 30 seconds after you order.')).toBeVisible();
   const early = await page.request.post(`/api/orders/${code}`, {data: {action: 'report', timeZone: 'Asia/Ho_Chi_Minh', slots: [{start: new Date(Date.now() + 86_400_000).toISOString(), end: new Date(Date.now() + 90_000_000).toISOString()}]}});
   expect(early.status()).toBe(409);
   await olderOrder(code);
@@ -136,8 +136,8 @@ test('full order: checkout, VietQR, times, admin confirms and books, customer is
 
   await adminPage.getByLabel('Delivery details').fill('Your code: SECRET-CODE-123');
   adminPage.once('dialog', dialog => void dialog.accept());
-  await adminPage.getByRole('button', {name: 'Complete order'}).click();
-  await expect(adminPage.getByText('Order completed; the customer was notified.')).toBeVisible();
+  await adminPage.getByRole('button', {name: 'Complete transaction'}).click();
+  await expect(adminPage.getByText('Transaction completed and recorded; the customer was notified.')).toBeVisible();
 
   await page.goto(`/en/orders/${code}`);
   await expect(page.getByText('Your code: SECRET-CODE-123')).toBeVisible();

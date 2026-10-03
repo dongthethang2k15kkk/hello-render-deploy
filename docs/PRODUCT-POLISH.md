@@ -208,6 +208,24 @@ Dự phòng: trình duyệt không hỗ trợ `backdrop-filter` hoặc người 
   - Bấm vào một đơn/thông báo mới mở trang đầy đủ; bấm thông báo đánh dấu đã đọc và cập nhật số trên chuông ngay.
 - **How it works** viết lại theo cách shop chạy hiện tại: "Three steps. No guesswork." — chọn gói (giữ 30 phút, giá USD), trả bằng VietQR hoặc Litecoin (chỉ nhắc Litecoin khi đang bật) rồi chọn giờ, nhận hàng trong chat. Mỗi bước nằm trên một ô kính nhỏ.
 
+## Admin Workspace — 2026-10-03
+
+Chủ shop thấy Admin phải đổi qua lại nhiều tab (Orders, Chat, trang đơn). Workspace gom việc chăm một khách vào một màn hình, bắt đầu từ lúc khách báo đã trả tiền.
+
+**Phía khách**
+- Nút "I've transferred" mở sau **30 giây** kể từ lúc đặt đơn (`REPORT_DELAY_SECONDS`); máy chủ từ chối báo sớm hơn 25 giây.
+- Tích **I'm free right now** thì hiện ngay thông báo: *"An Admin may not be free right now. Please add at least one more time you are free today, so we can still book you."*, và phải có thêm ít nhất 1 khung giờ (ô đầu tự gợi ý hôm nay, khoảng 2 giờ tới, nếu khách chưa tự chọn giờ). Máy chủ cũng kiểm tra (`asapProblem` trong `order-rules.ts`) khi báo trả tiền và khi đổi giờ.
+
+**Luồng Admin**
+1. Khách báo trả tiền → email tới mọi Admin, nút trong email: **Nhận đơn trong Workspace** → `/en/admin/workspace/<order>` (mọi email Admin về đơn giờ dẫn tới workspace).
+2. Admin bấm **Take this order / Take this customer**: ai bấm trước người đó phụ trách (`Order.assignedAdmin`, ghi có điều kiện để hai Admin không cùng nhận). Người nhận có thể **Release**; Admin khác có thể **Take over** (có hỏi xác nhận, ghi sự kiện và Activity). Đơn đã có người nhận: Admin khác không xác nhận tiền, chốt giờ, hoàn thành hay hủy được (máy chủ trả 409); ghi chú nội bộ, gửi lại email và kiểm tra Litecoin vẫn mở cho mọi Admin. Sự kiện nhận/nhả/nhận thay không hiện trên trang đơn của khách.
+3. Trong workspace: bên trái là toàn bộ đơn (khách, món, cách trả, giờ khách rảnh, xác nhận tiền + chốt giờ, Start now, hoàn thành, hủy, timeline, email); bên phải là chat của đúng khách đó (khung chat "khóa" vào một phòng, không có danh sách hội thoại, Admin nhắn trước được kể cả khi khách mới báo trả tiền). Trên điện thoại hai phần là hai tab Order / Chat.
+4. **Complete transaction** (trước là "Complete order"): bấm khi khách đã nhận đủ. **Doanh thu ở Overview giờ chỉ tính đơn đã Complete** (theo ngày hoàn thành), không tính lúc xác nhận tiền.
+
+**Trang Workspace** (`/en/admin/workspace`, tab đầu tiên của Admin, số đỏ = đơn chưa ai nhận): *Waiting for an Admin* (đơn đã báo trả/đã trả chưa ai nhận, khách "Free now" lên đầu), *My customers* (đơn mình phụ trách, theo giờ hẹn), *Handled by other Admins* (xem cùng hoặc nhận thay). Tự làm mới mỗi 15 giây.
+
+**Mã nguồn:** `src/components/admin-workspace.tsx` (hàng chờ + trang làm việc), `src/components/admin-order-view.tsx` (phần đơn dùng chung cho trang đơn và workspace, có thanh nhận đơn), `src/app/api/admin/workspace/route.ts`, `claimOrder` / `assertHandles` / `workspaceQueues` / `unclaimedCount` trong `order-store.ts`, `lockedRoom` trong `ChatPanel`.
+
 Lệnh thông thường: `npm run db:generate`, `npm run typecheck`, `npm test`, `npm run build`, `npm run test:e2e`. E2E dùng database riêng theo `DATABASE.md`. Sau khi chạy app/container, `SMOKE_URL=http://localhost:3000 node scripts/smoke-container.mjs` kiểm tra static assets, đăng ký, phân quyền, SSE và idempotency.
 
 ## Tệp chính để bảo trì

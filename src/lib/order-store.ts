@@ -11,7 +11,7 @@ import {formatVnd} from './money';
 import {notifyCustomer} from './notifications';
 import {allAdminEmails} from './admin-team';
 import {postPaymentMessage} from './chat-store';
-import {appointmentProblem, generateOrderCode, HOLD_MINUTES, NEEDS_ACTION, nextStatus, REPORT_DELAY_SECONDS, slotProblem, validTimeZone, VN_TIME_ZONE, type OrderStatus} from './order-rules';
+import {appointmentProblem, asapProblem, generateOrderCode, HOLD_MINUTES, NEEDS_ACTION, nextStatus, REPORT_DELAY_SECONDS, slotProblem, validTimeZone, VN_TIME_ZONE, type OrderStatus} from './order-rules';
 import {getPaymentDb} from './payment-db';
 import {alertAppointment} from './payment-detection';
 import {reReserveItems, restockItems, StockError} from './order-stock';
@@ -109,7 +109,7 @@ export async function createOrder(customer: {id: string}, lines: CartLine[], met
 const customerOrderInclude = {
   items: {select: {title: true, sku: true, unitPriceVnd: true, quantity: true, delivery: true}},
   slots: {orderBy: {startsAt: 'asc'}, select: {startsAt: true, endsAt: true}},
-  events: {where: {action: {not: 'note'}}, orderBy: {createdAt: 'asc'}, select: {action: true, note: true, createdAt: true}}
+  events: {where: {action: {notIn: ['note', 'claimed', 'released', 'taken_over']}}, orderBy: {createdAt: 'asc'}, select: {action: true, note: true, createdAt: true}}
 } satisfies Prisma.OrderInclude;
 
 /** Expires this order immediately when its hold has passed, so the page never shows a stale "awaiting payment". */
@@ -144,8 +144,8 @@ export async function reportTransfer(customer: {id: string; name: string; email:
   }
   if (!nextStatus(order.status, 'report')) throw new OrderError('This order is not waiting for payment.', 409);
   // A few seconds of slack for clock differences; the page itself waits the full delay.
-  if (Date.now() - order.createdAt.getTime() < (REPORT_DELAY_SECONDS - 5) * 1000) throw new OrderError('Please make the payment first. You can confirm it about a minute after placing the order.', 409);
-  const problem = slotProblem(input.slots);
+  if (Date.now() - order.createdAt.getTime() < (REPORT_DELAY_SECONDS - 5) * 1000) throw new OrderError(`Please make the payment first. You can confirm it about ${REPORT_DELAY_SECONDS} seconds after placing the order.`, 409);
+  const problem = slotProblem(input.slots) ?? asapProblem(input.asap, input.slots);
   if (problem) throw new OrderError(problem);
   const timeZone = validTimeZone(input.timeZone) ? input.timeZone : VN_TIME_ZONE;
   const slots = input.slots.map(slot => ({startsAt: new Date(slot.start), endsAt: new Date(slot.end)})).sort((a, b) => a.startsAt.getTime() - b.startsAt.getTime());
@@ -156,7 +156,7 @@ export async function reportTransfer(customer: {id: string; name: string; email:
     await tx.orderEvent.create({data: {orderId: order.id, actor: 'customer', action: 'payment_reported', note: `${slots.length} available time${slots.length === 1 ? '' : 's'} proposed`}});
   }, txOptions);
   await notifyCustomer({customerId: customer.id, orderId: order.id, title: `We are checking your payment · ${order.code}`, body: 'Thanks! We will confirm your transfer and book one of the times you chose. You will get an email and a message here.', link: customerLink(order.code)});
-  const mail = templates.adminPaymentReported({code: order.code, customerName: customer.name, customerEmail: customer.email, totalVnd: order.totalVnd, crypto: order.paymentMethod === 'ltc' ? {amount: order.cryptoAmount ?? '', address: (order.bankSnapshot as WalletSnapshot).address, txid: input.txid ?? null} : null, items: order.items.map(item => `${item.title} × ${item.quantity}`), slots: slots.map(slot => ({start: slot.startsAt, end: slot.endsAt})), orderUrl: `${origin}/en/admin/orders/${order.id}`});
+  const mail = templates.adminPaymentReported({code: order.code, customerName: customer.name, customerEmail: customer.email, totalVnd: order.totalVnd, crypto: order.paymentMethod === 'ltc' ? {amount: order.cryptoAmount ?? '', address: (order.bankSnapshot as WalletSnapshot).address, txid: input.txid ?? null} : null, items: order.items.map(item => `${item.title} × ${item.quantity}`), slots: slots.map(slot => ({start: slot.startsAt, end: slot.endsAt})), orderUrl: `${origin}/en/admin/workspace/${order.id}`});
   await sendMail({to: await allAdminEmails(), ...mail, kind: 'admin.payment_reported', orderId: order.id});
 }
 
@@ -165,7 +165,7 @@ export async function updateTimes(customerId: string, code: string, input: {time
   const order = await db.order.findFirst({where: {code, customerId}, select: {id: true, code: true, status: true, asap: true, customer: {select: {name: true}}, _count: {select: {slots: true}}}});
   if (!order) throw new OrderError('Order not found.', 404);
   if (order.status !== 'payment_reported' && order.status !== 'paid') throw new OrderError('Times can only be changed before the appointment is booked. Message us in Chat.', 409);
-  const problem = slotProblem(input.slots);
+  const problem = slotProblem(input.slots) ?? asapProblem(input.asap, input.slots);
   if (problem) throw new OrderError(problem);
   await db.$transaction(async tx => {
     await tx.orderSlot.deleteMany({where: {orderId: order.id}});
@@ -175,7 +175,7 @@ export async function updateTimes(customerId: string, code: string, input: {time
   }, txOptions);
   // After an automatic payment the Admins have not seen any times yet, so tell them when the customer picks some.
   if (order.status === 'paid' && (order._count.slots === 0 || (input.asap && !order.asap)) && origin) {
-    await sendMail({to: await allAdminEmails(), ...templates.adminTimesAdded({code: order.code, customerName: order.customer.name, slots: input.slots, asap: Boolean(input.asap), orderUrl: `${origin}/en/admin/orders/${order.id}`}), kind: 'admin.times_added', orderId: order.id});
+    await sendMail({to: await allAdminEmails(), ...templates.adminTimesAdded({code: order.code, customerName: order.customer.name, slots: input.slots, asap: Boolean(input.asap), orderUrl: `${origin}/en/admin/workspace/${order.id}`}), kind: 'admin.times_added', orderId: order.id});
   }
 }
 
@@ -233,6 +233,64 @@ export async function needsActionCount() {
   try { return await getPaymentDb().order.count({where: {status: {in: NEEDS_ACTION}}}); } catch { return 0; }
 }
 
+// ---------- Admin workspace: one Admin takes care of each customer's order ----------
+
+const OPEN_STATUSES: OrderStatus[] = ['awaiting_payment', 'payment_reported', 'paid', 'scheduled'];
+export type ClaimMode = 'claim' | 'release' | 'take-over';
+
+/** First Admin to claim an open order handles it; the claimer can release it and another Admin can take it over. */
+export async function claimOrder(adminEmail: string, id: string, mode: ClaimMode) {
+  const order = await loadForAdmin(id);
+  if (!OPEN_STATUSES.includes(order.status as OrderStatus)) throw new OrderError('Only open orders can be claimed.', 409);
+  const db = getPaymentDb();
+  if (mode === 'claim') {
+    const changed = await db.order.updateMany({where: {id, OR: [{assignedAdmin: null}, {assignedAdmin: adminEmail}]}, data: {assignedAdmin: adminEmail}});
+    if (changed.count !== 1) {
+      const current = await db.order.findUnique({where: {id}, select: {assignedAdmin: true}});
+      throw new OrderError(`${current?.assignedAdmin ?? 'Another Admin'} already took this order. Use “Take over” if they cannot finish it.`, 409);
+    }
+    if (order.assignedAdmin === adminEmail) return;
+  } else if (mode === 'release') {
+    const changed = await db.order.updateMany({where: {id, assignedAdmin: adminEmail}, data: {assignedAdmin: null}});
+    if (changed.count !== 1) throw new OrderError('Only the Admin handling this order can release it.', 409);
+  } else {
+    if (order.assignedAdmin === adminEmail) return;
+    await db.order.update({where: {id}, data: {assignedAdmin: adminEmail}});
+  }
+  const action = mode === 'claim' ? 'claimed' : mode === 'release' ? 'released' : 'taken_over';
+  await db.orderEvent.create({data: {orderId: id, actor: adminEmail, action, note: mode === 'take-over' && order.assignedAdmin ? `From ${order.assignedAdmin}` : null}});
+  await recordAudit({actorEmail: adminEmail, action: `order.${action}`, summary: mode === 'claim' ? `Took order ${order.code}` : mode === 'release' ? `Released order ${order.code}` : `Took over order ${order.code}${order.assignedAdmin ? ` from ${order.assignedAdmin}` : ''}`, entityType: 'order', entityId: id, customerId: order.customerId});
+}
+
+/** Order actions are for the Admin handling the order; an unclaimed order goes to whoever acts first. */
+export async function assertHandles(adminEmail: string, id: string) {
+  const order = await getPaymentDb().order.findUnique({where: {id}, select: {assignedAdmin: true}});
+  if (!order) throw new OrderError('Order not found.', 404);
+  if (order.assignedAdmin && order.assignedAdmin !== adminEmail) throw new OrderError(`${order.assignedAdmin} is handling this order. Take it over first if they cannot finish it.`, 409);
+}
+
+const workspaceSelect = {id: true, code: true, status: true, totalVnd: true, createdAt: true, reportedAt: true, asap: true, assignedAdmin: true, appointmentStart: true, appointmentEnd: true, paymentMethod: true,
+  customer: {select: {id: true, name: true}}, items: {select: {title: true, quantity: true}}} satisfies Prisma.OrderSelect;
+
+/** The Admin workspace queues: waiting for an Admin, handled by me, handled by others. */
+export async function workspaceQueues(adminEmail: string) {
+  await expireStaleOrders(60_000);
+  const db = getPaymentDb();
+  const active: OrderStatus[] = ['payment_reported', 'paid', 'scheduled'];
+  const [waiting, mine, others] = await Promise.all([
+    db.order.findMany({where: {assignedAdmin: null, status: {in: active}}, orderBy: [{asap: 'desc'}, {reportedAt: 'asc'}], take: 50, select: workspaceSelect}),
+    db.order.findMany({where: {assignedAdmin: adminEmail, status: {in: active}}, orderBy: [{appointmentStart: 'asc'}, {reportedAt: 'asc'}], take: 50, select: workspaceSelect}),
+    db.order.findMany({where: {assignedAdmin: {not: null}, NOT: {assignedAdmin: adminEmail}, status: {in: active}}, orderBy: {reportedAt: 'asc'}, take: 50, select: workspaceSelect})
+  ]);
+  return {waiting, mine, others};
+}
+
+/** Badge for the Workspace tab: paid or reported orders nobody has taken yet. */
+export async function unclaimedCount() {
+  if (!process.env.DATABASE_URL) return 0;
+  try { return await getPaymentDb().order.count({where: {assignedAdmin: null, status: {in: ['payment_reported', 'paid', 'scheduled']}}}); } catch { return 0; }
+}
+
 async function loadForAdmin(id: string) {
   const order = await getPaymentDb().order.findUnique({where: {id}, include: {customer: {select: {id: true, name: true, email: true}}}});
   if (!order) throw new OrderError('Order not found.', 404);
@@ -245,7 +303,7 @@ async function sendAppointment(order: {id: string; code: string; customerTimeZon
   const calendar = {uid: `${order.id}@jewish-horse`, start, end, title, description: 'Open the Jewish Horse website and go to Chat at this time.', url: customerUrl};
   const ics = [{filename: 'appointment.ics', contentType: 'text/calendar; charset=UTF-8; method=PUBLISH', content: icsEvent(calendar)}];
   const customerMail = templates.customerAppointment({code: order.code, name: order.customer.name, start, end, timeZone: order.customerTimeZone ?? VN_TIME_ZONE, orderUrl: customerUrl, calendarUrl: googleCalendarLink(calendar), rescheduled});
-  const adminUrl = `${origin}/en/admin/orders/${order.id}`;
+  const adminUrl = `${origin}/en/admin/workspace/${order.id}`;
   const adminCalendar = {...calendar, uid: `${order.id}-admin@jewish-horse`, title: `Hẹn khách ${order.customer.name} · ${order.code}`, description: 'Mở chat của khách trong trang đơn.', url: adminUrl};
   const adminMail = templates.adminAppointmentAssigned({code: order.code, customerName: order.customer.name, start, end, orderUrl: adminUrl, calendarUrl: googleCalendarLink(adminCalendar)});
   await Promise.all([
@@ -347,7 +405,7 @@ export async function resendEmail(adminEmail: string, id: string, kind: 'admin.p
   const order = await getPaymentDb().order.findUnique({where: {id}, include: {customer: {select: {name: true, email: true}}, items: true, slots: {orderBy: {startsAt: 'asc'}}}});
   if (!order) throw new OrderError('Order not found.', 404);
   if (kind === 'admin.payment_reported') {
-    const mail = templates.adminPaymentReported({code: order.code, customerName: order.customer.name, customerEmail: order.customer.email, totalVnd: order.totalVnd, crypto: order.paymentMethod === 'ltc' ? {amount: order.cryptoAmount ?? '', address: (order.bankSnapshot as WalletSnapshot).address, txid: order.customerTxid} : null, items: order.items.map(item => `${item.title} × ${item.quantity}`), slots: order.slots.map(slot => ({start: slot.startsAt, end: slot.endsAt})), orderUrl: `${origin}/en/admin/orders/${order.id}`});
+    const mail = templates.adminPaymentReported({code: order.code, customerName: order.customer.name, customerEmail: order.customer.email, totalVnd: order.totalVnd, crypto: order.paymentMethod === 'ltc' ? {amount: order.cryptoAmount ?? '', address: (order.bankSnapshot as WalletSnapshot).address, txid: order.customerTxid} : null, items: order.items.map(item => `${item.title} × ${item.quantity}`), slots: order.slots.map(slot => ({start: slot.startsAt, end: slot.endsAt})), orderUrl: `${origin}/en/admin/workspace/${order.id}`});
     await sendMail({to: await allAdminEmails(), ...mail, kind, orderId: id});
   } else if (kind === 'customer.appointment') {
     if (!order.appointmentStart || !order.appointmentEnd) throw new OrderError('This order has no appointment yet.', 409);
@@ -371,7 +429,8 @@ export async function overview() {
   await expireStaleOrders(60_000);
   const db = getPaymentDb();
   const revenue = async (since: Date) => {
-    const result = await db.order.aggregate({where: {paidAt: {gte: since}, status: {notIn: ['cancelled', 'expired']}}, _sum: {paidAmountVnd: true}, _count: true});
+    // A sale counts once an Admin presses "Complete": the money was received and the order delivered.
+    const result = await db.order.aggregate({where: {status: 'completed', completedAt: {gte: since}}, _sum: {paidAmountVnd: true}, _count: true});
     return {vnd: result._sum.paidAmountVnd ?? 0, orders: result._count};
   };
   const [paymentReported, paid, awaitingPayment, upcoming, today, week, month, customers, newCustomers, lowStock, size, emailFailures] = await Promise.all([
