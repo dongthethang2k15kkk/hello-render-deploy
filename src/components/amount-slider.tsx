@@ -2,7 +2,7 @@
 import {useLocale} from 'next-intl';
 import {useRouter} from 'next/navigation';
 import {useState} from 'react';
-import {snapAmount, type AmountSlider} from '@/lib/amount-slider-rules';
+import {sliderTop, snapAmount, type AmountSlider} from '@/lib/amount-slider-rules';
 import type {CatalogProduct} from '@/lib/catalog';
 import {cartLineSchema, createCartSchema} from '@/lib/cart';
 import {formatLtcEstimate} from '@/lib/exchange-rate-rules';
@@ -18,20 +18,22 @@ export function AmountSliderCard({slider, product, vndPerUsd, vndPerLtc}: {slide
   const router = useRouter();
   const {lines, save, ready} = useCart();
   const catalog = useCatalog();
-  const top = Math.min(slider.max, product.stock);
+  const top = sliderTop(slider, product.stock);
   const [amount, setAmount] = useState(() => snapAmount(slider.defaultAmount, slider, product.stock));
   const [typed, setTyped] = useState(String(amount));
   const [delivery, setDelivery] = useState<Record<string, string>>({});
   const [status, setStatus] = useState('');
-  const soldOut = product.stock < slider.min;
+  const soldOut = top < slider.min;
   const pick = (value: number) => { const next = snapAmount(value, slider, product.stock); setAmount(next); setTyped(String(next)); };
   const presets = [...new Set([slider.min, slider.min + (top - slider.min) / 4, slider.min + (top - slider.min) / 2, top].map(value => snapAmount(value, slider, product.stock)))];
   const fill = top > slider.min ? ((amount - slider.min) / (top - slider.min)) * 100 : 100;
-  const vnd = product.priceVnd * amount;
+  // The cart holds packages: 300 M coins of a 100M package is 3 packages.
+  const packages = amount / slider.unitSize;
+  const vnd = product.priceVnd * packages;
 
   function buy(event: React.FormEvent) {
     event.preventDefault();
-    const line = cartLineSchema.safeParse({productId: product.id, quantity: amount, delivery: Object.fromEntries(product.fields.map(field => [field.key, (delivery[field.key] ?? '').trim()]))});
+    const line = cartLineSchema.safeParse({productId: product.id, quantity: packages, delivery: Object.fromEntries(product.fields.map(field => [field.key, (delivery[field.key] ?? '').trim()]))});
     const next = line.success ? [...lines, line.data] : null;
     if (!next || !createCartSchema(catalog.products).safeParse(next).success) { setStatus('Check the details and the amount.'); return; }
     if (!save(next)) { setStatus('Unable to save the cart on this device.'); return; }
@@ -41,7 +43,7 @@ export function AmountSliderCard({slider, product, vndPerUsd, vndPerLtc}: {slide
 
   return <form className="card amount-slider" onSubmit={buy} aria-label={slider.title}>
     <div className="amount-slider-head">
-      <div><p className="eyebrow">ANY AMOUNT</p><h3>{slider.title}</h3><p className="muted">{product.title.en} · 1 {slider.unitLabel} = {formatUsdFromVnd(product.priceVnd, vndPerUsd)}</p></div>
+      <div><p className="eyebrow">ANY AMOUNT</p><h3>{slider.title}</h3><p className="muted">{product.title.en} · {slider.unitSize} {slider.unitLabel} = {formatUsdFromVnd(product.priceVnd, vndPerUsd)}</p></div>
       <div className="amount-slider-price" aria-live="polite"><span className="amount-slider-amount">{formatAmount(amount)} <small>{slider.unitLabel}</small></span><strong>{formatUsdFromVnd(vnd, vndPerUsd)}</strong><small>{formatVnd(vnd)}{vndPerLtc ? ` · ≈ ${formatLtcEstimate(vnd, vndPerLtc)}` : ''}</small></div>
     </div>
     {soldOut ? <p className="error-text">Out of stock right now. Message us in Chat for a custom amount.</p> : <>

@@ -40,6 +40,14 @@ describe('amount slider', () => {
     expect(amountSliderSchema.safeParse({...slider, enabled: true, packageId: ''}).success).toBe(false);
     expect(amountSliderSchema.safeParse({...slider, enabled: true, packageId: 'pkg1'}).success).toBe(true);
   });
+  it('counts amounts in units when one package holds many (300 M coins = 3 × 100M)', () => {
+    const coins = {...slider, unitSize: 100, min: 100, max: 10000, step: 100, defaultAmount: 300};
+    expect(amountSliderSchema.safeParse(coins).success).toBe(true);
+    expect(amountSliderSchema.safeParse({...coins, step: 50}).success).toBe(false);
+    expect(snapAmount(260, coins)).toBe(300);
+    expect(snapAmount(5000, coins, 10)).toBe(1000);
+    expect(amountSliderSchema.parse({...slider, unitSize: undefined}).unitSize).toBe(1);
+  });
   it('reads very large stock as always available', () => {
     expect(stockText(UNLIMITED_STOCK)).toBe('Always in stock');
     expect(stockText(3)).toBe('3 currently available');

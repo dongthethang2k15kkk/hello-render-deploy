@@ -152,13 +152,15 @@ test('the amount slider is set up in Admin and sells any amount from the store',
   const original = (await (await adminContext.request.get(url)).json()).slider;
   try {
     const packageId = await catalogId(adminContext.request, 'SAMPLE_BASIC');
-    const base = {enabled: true, packageId, title: 'Pick your amount', unitLabel: 'packs', min: 1, max: 3, step: 1, defaultAmount: 1, hideFromGrid: false};
-    expect((await adminContext.request.post(url, {data: {...base, min: 5, max: 2}})).status()).toBe(400);
+    // One package holds 100 M coins, like the live 100M package: customers pick 100M, 200M, 300M.
+    const base = {enabled: true, packageId, title: 'Pick your amount', unitLabel: 'M coins', unitSize: 100, min: 100, max: 300, step: 100, defaultAmount: 100, hideFromGrid: false};
+    expect((await adminContext.request.post(url, {data: {...base, min: 500, max: 200}})).status()).toBe(400);
+    expect((await adminContext.request.post(url, {data: {...base, step: 50}})).status()).toBe(400);
     expect((await adminContext.request.post(url, {data: base})).ok()).toBe(true);
     const settingsPage = await adminContext.newPage();
     await settingsPage.goto('/en/admin/settings/slider');
     await expect(settingsPage.getByLabel('Show the slider on the store')).toBeChecked();
-    await expect(settingsPage.locator('.slider-preview')).toContainText('1 packs = $10.00');
+    await expect(settingsPage.locator('.slider-preview')).toContainText('100 M coins = $10.00');
 
     const customer = await browser.newContext();
     const page = await customer.newPage();
@@ -166,11 +168,13 @@ test('the amount slider is set up in Admin and sells any amount from the store',
     const card = page.locator('.amount-slider');
     await expect(card.getByRole('heading', {name: 'Pick your amount'})).toBeVisible();
     await expect(card.locator('.amount-slider-price strong')).toHaveText('$10.00');
-    await card.getByRole('button', {name: '2', exact: true}).click();
+    await card.getByRole('button', {name: '200', exact: true}).click();
     await expect(card.locator('.amount-slider-price strong')).toHaveText('$20.00');
     await card.getByLabel('Recipient name (test data)').fill('Slider buyer');
-    await card.getByRole('button', {name: /^Buy 2 packs/}).click();
+    await card.getByRole('button', {name: /^Buy 200 M coins/}).click();
     await expect(page).toHaveURL(/\/en\/cart$/);
+    // 200 M coins of a 100M package = 2 packages in the cart.
+    expect(await page.evaluate(() => JSON.parse(localStorage.getItem('shop-demo-cart-v1') ?? '[]')[0]?.quantity)).toBe(2);
     await expect(page.getByText('Basic sample package').first()).toBeVisible();
     await customer.close();
   } finally {
