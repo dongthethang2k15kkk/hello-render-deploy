@@ -1,5 +1,5 @@
 import {describe, expect, it} from 'vitest';
-import {amountSliderSchema, autoSlider, defaultAmountSlider, formatUnits, lineAmount, snapAmount, stockText, titleAmount} from '../../src/lib/amount-slider-rules';
+import {amountSliderSchema, autoSlider, defaultAmountSlider, formatUnits, lineAmount, sliderPresets, snapAmount, stockText, titleAmount} from '../../src/lib/amount-slider-rules';
 import {explorerTx, isCrypto, reportSchema, timingSchema} from '../../src/lib/order-rules';
 
 const later = (hours: number) => new Date(Date.now() + hours * 3_600_000).toISOString();
@@ -47,6 +47,13 @@ describe('amount slider', () => {
     expect(snapAmount(260, coins)).toBe(300);
     expect(snapAmount(5000, coins, 10)).toBe(1000);
     expect(amountSliderSchema.parse({...slider, unitSize: undefined}).unitSize).toBe(1);
+  });
+  it('offers round quick picks: 100M, 500M, 1B, 5B and the largest', () => {
+    const coins = {min: 100, max: 10000, step: 100, unitSize: 100};
+    expect(sliderPresets(coins)).toEqual([100, 500, 1000, 5000, 10000]);
+    expect(sliderPresets(coins, 99)).toEqual([100, 500, 1000, 5000, 9900]);
+    expect(sliderPresets({min: 100, max: 300, step: 100, unitSize: 100})).toEqual([100, 200, 300]);
+    expect(sliderPresets({min: 1, max: 3, step: 1, unitSize: 1})).toEqual([1, 2, 3]);
   });
   it('never shows the stock count to customers', () => {
     expect(stockText(100_000_000)).toBe('Available');

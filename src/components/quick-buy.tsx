@@ -2,7 +2,7 @@
 import {useLocale} from 'next-intl';
 import {useRouter} from 'next/navigation';
 import {useState} from 'react';
-import {formatUnits, lineAmount, shortTitle, sliderTop, snapAmount, type AmountSlider} from '@/lib/amount-slider-rules';
+import {formatUnits, lineAmount, shortTitle, sliderPresets, sliderTop, snapAmount, type AmountSlider} from '@/lib/amount-slider-rules';
 import type {CatalogProduct} from '@/lib/catalog';
 import {cartLineSchema, createCartSchema} from '@/lib/cart';
 import {formatLtcEstimate} from '@/lib/exchange-rate-rules';
@@ -36,7 +36,7 @@ export function QuickBuy({products, slider, vndPerUsd, vndPerLtc, trades}: {prod
 
   const product = choice === CUSTOM && custom ? custom.product : packages.find(item => item.id === choice) ?? packages[0];
   const pick = (value: number) => { if (!custom) return; const next = snapAmount(value, custom.slider, custom.product.stock); setAmount(next); setTyped(String(next)); };
-  const presets = custom ? [...new Set([custom.slider.min, custom.slider.min + (top - custom.slider.min) / 4, custom.slider.min + (top - custom.slider.min) / 2, top].map(value => snapAmount(value, custom.slider, custom.product.stock)))] : [];
+  const presets = custom ? sliderPresets(custom.slider, custom.product.stock) : [];
   const fill = custom && top > custom.slider.min ? ((amount - custom.slider.min) / (top - custom.slider.min)) * 100 : 100;
   // The cart holds packages: 300M of a 100M package is 3 packages.
   const count = choice === CUSTOM && custom ? amount / custom.slider.unitSize : quantity;

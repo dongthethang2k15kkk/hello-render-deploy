@@ -83,3 +83,24 @@ export function autoSlider(products: {id: string; title: {en: string}; stock: nu
   return {enabled: true, packageId: first.product.id, title: 'Choose any amount', unitLabel: /coin/i.test(first.product.title.en) ? `${unit} coins` : unit,
     unitSize: value, min: value, max, step: value, defaultAmount: Math.min(value * 3, max), hideFromGrid: false};
 }
+
+/**
+ * Quick-pick amounts under the slider: the smallest, round numbers players use (500M, 1B, 5B… from ×1 and ×5 of powers
+ * of ten, else ×2 too) and the largest. Falls back to quarter points when the range is too narrow for round numbers.
+ */
+export function sliderPresets(slider: Pick<AmountSlider, 'min' | 'max' | 'step' | 'unitSize'>, stock = MAX_AMOUNT) {
+  const top = sliderTop(slider, stock);
+  const round = (multipliers: number[]) => {
+    const values: number[] = [];
+    for (let power = 1; power <= top; power *= 10) for (const multiplier of multipliers) {
+      const value = multiplier * power;
+      if (value > slider.min && value < top && (value - slider.min) % slider.step === 0) values.push(value);
+    }
+    return values.sort((a, b) => a - b);
+  };
+  const preferred = round([1, 5]);
+  const nice = preferred.length >= 2 ? preferred : round([1, 2, 5]);
+  if (nice.length < 2) return [...new Set([slider.min, slider.min + (top - slider.min) / 4, slider.min + (top - slider.min) / 2, top].map(value => snapAmount(value, slider, stock)))];
+  const picked = nice.length <= 3 ? nice : [0, 1, 2].map(index => nice[Math.round(index * (nice.length - 1) / 2)]);
+  return [...new Set([slider.min, ...picked, top])];
+}
