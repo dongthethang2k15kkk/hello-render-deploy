@@ -1765,7 +1765,7 @@ button.header-pill:hover:not(:disabled) {transform:translateY(-1px); background:
 }
 
 /* ---------- Online to trade now ----------
-   Admins switch themselves online with one big button (off only by hand); the store shows a glass status pill and
+   Admins switch themselves online with one big button (off only by hand); the store header shows a glowing pill and
    checkout offers "Trade now" while at least one Admin is online. */
 .availability-toggle {display:inline-flex; align-items:center; gap:12px; min-height:52px; padding:9px 18px 9px 14px; border-radius:999px; border:2px solid #cfd5df; background:#fff; color:#3d4555; font-size:14px; line-height:1.2; text-align:left; box-shadow:0 4px 14px rgba(30,40,60,.08);}
 .availability-text {display:grid; gap:2px;}
@@ -1779,16 +1779,8 @@ button.header-pill:hover:not(:disabled) {transform:translateY(-1px); background:
 .availability-toggle.loading {display:inline-block; width:170px; height:52px; padding:0; border-radius:999px; background:#eef0f4;}
 .admin-surface .availability-toggle:disabled {background:#eef0f4; color:#6b7385; border:2px solid #d6d9e2;}
 
-.live-status {display:inline-flex; align-items:center; gap:10px; max-width:100%; margin:0 0 6px; padding:9px 16px; border-radius:999px; font-size:14px; line-height:1.4; color:var(--text);
-  background:linear-gradient(160deg, rgba(255,255,255,.14), rgba(255,255,255,.04)), rgba(30,34,44,.45); -webkit-backdrop-filter:var(--glass-filter); backdrop-filter:var(--glass-filter);
-  border:1px solid var(--glass-edge); box-shadow:inset 0 1px 0 rgba(255,255,255,.18);}
-.live-status.pending {width:min(420px, 100%); min-height:42px; visibility:hidden;}
-.live-status.online {border-color:rgba(149,212,122,.5);}
-.live-status.online strong {color:var(--brand);}
-.live-status.offline strong {color:var(--amber);}
-.live-status.compact {font-size:13px; padding:7px 13px;}
 .live-status-dot {display:inline-block; flex:none; width:10px; height:10px; border-radius:50%; background:var(--amber); box-shadow:0 0 0 3px rgba(242,191,107,.18);}
-.live-status.online .live-status-dot, .live-status-dot.on {background:var(--brand); animation:live-pulse 2s ease-out infinite;}
+.header-live.online .live-status-dot, .live-status-dot.on {background:var(--brand); animation:live-pulse 2s ease-out infinite;}
 @keyframes live-pulse {0% {box-shadow:0 0 0 0 rgba(149,212,122,.6);} 100% {box-shadow:0 0 0 10px rgba(149,212,122,0);}}
 @media (prefers-reduced-motion: reduce) {.live-status-dot, .availability-dot {animation:none!important;}}
 
@@ -1884,3 +1876,48 @@ button.header-pill:hover:not(:disabled) {transform:translateY(-1px); background:
 .checkout-sign-in .auth-divider::before, .checkout-sign-in .auth-divider::after {border-top-color:var(--glass-edge);}
 .buy-again {margin-top:12px;}
 .order-summary form .full-width + .full-width {margin-top:10px;}
+
+/* Online pill in the store header: large and glowing while a trader is online, small and quiet while away. */
+.header-live {display:inline-flex; align-items:center; gap:12px; padding:10px 20px 10px 16px; border-radius:999px; text-decoration:none; line-height:1.15; white-space:nowrap; transition:transform .15s ease, box-shadow .15s ease;}
+.header-live.pending {width:150px; height:46px; padding:0;}
+.header-live-text {display:grid; gap:2px;}
+.header-live-text strong {font-size:17px; font-weight:800; letter-spacing:.2px;}
+.header-live-text small {font-size:12px; font-weight:600;}
+.header-live.online {color:#eaffdf; background:linear-gradient(135deg, rgba(149,212,122,.38), rgba(84,170,96,.22)); border:1.5px solid rgba(170,235,140,.85); box-shadow:0 0 0 4px rgba(149,212,122,.14), 0 0 28px rgba(149,212,122,.45), inset 0 1px 0 rgba(255,255,255,.25);}
+.header-live.online strong {color:#c8ffad;}
+.header-live.online small {color:#e3f6d8;}
+.header-live.online .live-status-dot {width:14px; height:14px;}
+.header-live.online:hover {transform:translateY(-1px); box-shadow:0 0 0 5px rgba(149,212,122,.2), 0 0 36px rgba(149,212,122,.6), inset 0 1px 0 rgba(255,255,255,.25);}
+.header-live.offline {color:var(--text-muted); background:rgba(255,255,255,.05); border:1px solid var(--glass-edge); padding:8px 16px 8px 13px;}
+.header-live.offline strong {font-size:14px; color:var(--amber);}
+.header-live.offline small {font-size:11px; font-weight:500;}
+@media (max-width:1280px) and (min-width:901px) {.header-live small {display:none;} .header-live {padding:10px 16px 10px 13px;}}
+@media (max-width:900px) {
+  .site-header .header-live {grid-column:1 / -1; justify-content:center; width:100%; box-sizing:border-box;}
+  .header-live.pending {height:44px; width:100%;}
+}
+
+/* Inbox bell: amber while something is unread, shakes and glows when a new notification arrives. */
+.header-pill.has-unread {color:#ffe2a8!important; border-color:rgba(242,191,107,.75); background:linear-gradient(160deg, rgba(242,191,107,.3), rgba(242,191,107,.1)), rgba(40,34,24,.55);}
+.header-pill.has-unread .pill-badge {animation:badge-pulse 1.8s ease-out infinite;}
+.header-pill.ringing {box-shadow:0 0 0 4px rgba(242,191,107,.25), 0 0 26px rgba(242,191,107,.65);}
+.header-pill.ringing svg {animation:bell-ring 1s ease-in-out 3; transform-origin:50% 10%;}
+.header-pill.ringing .pill-badge {transform:scale(1.25);}
+@keyframes bell-ring {0%,100% {transform:rotate(0);} 10% {transform:rotate(18deg);} 25% {transform:rotate(-16deg);} 40% {transform:rotate(12deg);} 55% {transform:rotate(-9deg);} 70% {transform:rotate(5deg);} 85% {transform:rotate(-2deg);}}
+@keyframes badge-pulse {0% {box-shadow:0 0 0 2px var(--page), 0 0 0 2px rgba(229,72,77,.7);} 100% {box-shadow:0 0 0 2px var(--page), 0 0 0 11px rgba(229,72,77,0);}}
+@media (prefers-reduced-motion: reduce) {.header-pill.ringing svg, .header-pill.has-unread .pill-badge, .notification-toast {animation:none!important;}}
+.sound-toggle {margin-left:auto; margin-right:10px; font-size:12px;}
+
+/* New notification pop-up under the header (rendered in <body>, like the Orders/Inbox windows). */
+.notification-toast {position:fixed; top:96px; right:max(16px, calc((100vw - 1170px) / 2)); z-index:80; display:flex; align-items:flex-start; width:min(380px, calc(100vw - 32px)); border-radius:16px; color:var(--text);
+  background:linear-gradient(160deg, rgba(242,191,107,.22), rgba(242,191,107,.06)), rgba(24,26,34,.9); -webkit-backdrop-filter:blur(18px) saturate(170%); backdrop-filter:blur(18px) saturate(170%);
+  border:1.5px solid rgba(242,191,107,.7); box-shadow:0 18px 44px rgba(0,0,0,.45), 0 0 24px rgba(242,191,107,.3); animation:toast-in .35s cubic-bezier(.2,.9,.3,1.2);}
+.notification-toast-body {display:flex; gap:12px; flex:1; min-width:0; padding:14px 6px 14px 16px; background:none!important; border:0; box-shadow:none!important; color:inherit; text-align:left; font-weight:400; transform:none!important;}
+.notification-toast-body > span:last-child {display:grid; gap:3px; min-width:0;}
+.notification-toast-body small {font-size:11px; font-weight:700; letter-spacing:.6px; text-transform:uppercase; color:#f6c97e;}
+.notification-toast-body strong {font-size:15px; color:#fff;}
+.notification-toast-body span span {font-size:13px; color:var(--text-muted); display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden;}
+.notification-toast-icon {font-size:24px; line-height:1; animation:bell-ring 1s ease-in-out 2;}
+.notification-toast-close {flex:none; width:36px; height:36px; margin:8px 8px 0 0; padding:0; border-radius:10px; font-size:20px; line-height:1; background:rgba(255,255,255,.08)!important; color:var(--text); box-shadow:none!important;}
+@keyframes toast-in {from {opacity:0; transform:translateY(-12px) scale(.96);} to {opacity:1; transform:none;}}
+@media (max-width:900px) {.notification-toast {top:auto; bottom:90px; right:16px;}}

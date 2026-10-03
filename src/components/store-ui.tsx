@@ -1,13 +1,15 @@
 'use client';
 import Link from 'next/link';
-import {usePathname} from 'next/navigation';
+import {usePathname, useRouter} from 'next/navigation';
 import {useLocale, useTranslations} from 'next-intl';
-import {useCallback, useDeferredValue, useEffect, useMemo, useState} from 'react';
+import {useCallback, useDeferredValue, useEffect, useMemo, useRef, useState} from 'react';
 import {type CatalogProduct, type CatalogSource, Locale} from '@/lib/catalog';
 import Price from './price';
 import {QuickBuy} from './quick-buy';
 import {shortTitle, stockText, type AmountSlider} from '@/lib/amount-slider-rules';
-import {InboxPopover, OrdersPopover} from './header-popover';
+import {InboxPopover, NotificationToast, OrdersPopover, type Notice} from './header-popover';
+import {HeaderLiveStatus} from './availability';
+import {playChime, unlockSound} from '@/lib/notify-sound';
 import {filterCatalog, type CatalogSort} from '@/lib/catalog-view';
 import {clearChatDrafts} from '@/lib/chat-drafts';
 import {watchChat} from '@/lib/chat-client';
@@ -35,6 +37,45 @@ const badge = (count?: number) => count ? <b className="pill-badge">{count > 99 
 export function StoreHeader() {
   const locale = useLocale(); const path = usePathname(); const {lines} = useCart(); const [account, setAccount] = useState<HeaderAccount | null>(null); const [menuOpen, setMenuOpen] = useState(false); const [panel, setPanel] = useState<'orders' | 'inbox' | null>(null);
   const setUnread = useCallback((unread: number) => setAccount(current => current && current.unread !== unread ? {...current, unread} : current), []);
+  const router = useRouter();
+  const [ringing, setRinging] = useState(false);
+  const [toast, setToast] = useState<Notice | null>(null);
+  const closeToast = useCallback(() => setToast(null), []);
+  const seenUnread = useRef<number | null>(null);
+  // Browsers allow sound only after a click or key press on the page.
+  useEffect(() => {
+    window.addEventListener('pointerdown', unlockSound);
+    window.addEventListener('keydown', unlockSound);
+    return () => { window.removeEventListener('pointerdown', unlockSound); window.removeEventListener('keydown', unlockSound); };
+  }, []);
+  // A new Inbox notification: the bell shakes and glows, a chime plays and the notification pops up under the header.
+  const unreadNow = account?.role === 'user' ? account.unread ?? 0 : null;
+  useEffect(() => {
+    const before = seenUnread.current;
+    seenUnread.current = unreadNow;
+    if (unreadNow === null || before === null || unreadNow <= before) return;
+    setRinging(true);
+    playChime();
+    void fetch('/api/notifications', {cache: 'no-store'}).then(response => response.json()).then(data => {
+      const latest = (data.notifications as Notice[] | undefined)?.find(item => !item.readAt);
+      if (latest) setToast(latest);
+    }).catch(() => undefined);
+  }, [unreadNow]);
+  useEffect(() => {
+    if (!ringing) return;
+    const timer = window.setTimeout(() => setRinging(false), 4000);
+    return () => window.clearTimeout(timer);
+  }, [ringing]);
+  // "(3) Jewish Horse" in the browser tab, so a waiting notification shows even when the tab is in the background.
+  useEffect(() => {
+    const base = document.title.replace(/^\(\d+\+?\) /, '');
+    document.title = unreadNow ? `(${unreadNow > 99 ? '99+' : unreadNow}) ${base}` : base;
+  }, [unreadNow, path]);
+  function openToast(notice: Notice) {
+    setToast(null);
+    void fetch('/api/notifications', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({action: 'read', ids: [notice.id]})}).then(response => response.json()).then(data => { if (typeof data?.unread === 'number') setUnread(data.unread); }).catch(() => undefined);
+    router.push(notice.link.startsWith('/') ? notice.link : `/${locale}/inbox`);
+  }
   useEffect(() => {
     try { const cached = sessionStorage.getItem(ACCOUNT_CACHE); if (cached) setAccount(current => current ?? JSON.parse(cached)); } catch { /* storage blocked */ }
   }, []);
@@ -42,8 +83,9 @@ export function StoreHeader() {
     setMenuOpen(false); setPanel(null);
     const load = () => fetch('/api/auth/session', {cache: 'no-store'}).then(r => r.json()).then(data => {setAccount(data.account); rememberAccount(data.account);}).catch(() => undefined);
     void load();
-    // Keeps Inbox and Chat counts fresh while the page stays open.
-    const timer = window.setInterval(() => { if (document.visibilityState === 'visible') void load(); }, 30000);
+    // Keeps Inbox and Chat counts fresh, also in a background tab (browsers slow that down to about once a minute),
+    // so the chime can announce a new notification while the customer is elsewhere.
+    const timer = window.setInterval(() => void load(), 20000);
     // Checkout signs customers in without leaving the page; it announces the new session so the header updates at once.
     window.addEventListener('jh-account-changed', load);
     return () => { window.clearInterval(timer); window.removeEventListener('jh-account-changed', load); };
@@ -60,15 +102,16 @@ export function StoreHeader() {
   async function logout() {await fetch('/api/auth/logout', {method: 'POST'}); clearChatDrafts(); rememberAccount(null); setAccount(null); window.location.reload();}
   const cartCount = lines.reduce((sum, line) => sum + line.quantity, 0);
   return <header className="site-header"><div className="shell header"><Link href={`/${locale}`} className="brand"><span className="brand-name">Jewish Horse</span><small className="brand-tagline">Digital package shop</small></Link><button className="mobile-nav-toggle secondary" type="button" aria-expanded={menuOpen} aria-controls="store-navigation" onClick={() => setMenuOpen(value => !value)}><span aria-hidden="true">{menuOpen ? '×' : '☰'}</span><span>{menuOpen ? 'Close' : 'Menu'}</span></button><nav id="store-navigation" className={menuOpen ? 'open' : ''} aria-label="Navigation"><Link onClick={() => setMenuOpen(false)} href={`/${locale}#catalog`}>Packages</Link><Link onClick={() => setMenuOpen(false)} href={`/${locale}#how-it-works`}>How it works</Link>{/* Signed-in customers have the Chat pill (with unread count) instead. */}{account?.role !== 'user' && <Link onClick={() => setMenuOpen(false)} href={`/${locale}/workspace`}>Chat support</Link>}<Link onClick={() => setMenuOpen(false)} href={`/${locale}#faq`}>Help</Link></nav>
+    <HeaderLiveStatus locale={locale}/>
     <div className="header-actions">
       {/* Orders and Inbox open small windows; chat lives in the floating Chat button (with its unread count). */}
       {account?.role === 'user' && <div className="header-pills" role="group" aria-label="Your orders and messages">
         <OrdersPopover locale={locale} cartCount={cartCount} open={panel === 'orders'} onOpenChange={open => setPanel(open ? 'orders' : null)} icon={icons.orders} badge={badge(cartCount)}/>
-        <InboxPopover locale={locale} unread={account.unread ?? 0} onUnreadChange={setUnread} open={panel === 'inbox'} onOpenChange={open => setPanel(open ? 'inbox' : null)} icon={icons.inbox} badge={badge(account.unread)}/>
+        <InboxPopover locale={locale} unread={account.unread ?? 0} onUnreadChange={setUnread} open={panel === 'inbox'} onOpenChange={open => setPanel(open ? 'inbox' : null)} icon={icons.inbox} badge={badge(account.unread)} ringing={ringing}/>
       </div>}
       {account ? <span className="account-menu"><Link href={`/${locale}/${account.role === 'admin' ? 'admin' : 'account'}`}>{account.name}</Link><button className="secondary" onClick={() => void logout()}>Log out</button></span> : <Link className="text-link" href={`/${locale}/login`}>Sign in / Register</Link>}
       <Link className="cart-link" aria-label="Cart" href={`/${locale}/cart`}>Cart <b>{cartCount}</b></Link>
-    </div></div></header>;
+    </div></div><NotificationToast notice={toast} onOpen={openToast} onClose={closeToast}/></header>;
 }
 
 export function ProductPreview({product, variant = 0}: {product: CatalogProduct; variant?: number}) {

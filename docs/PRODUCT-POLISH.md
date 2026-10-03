@@ -253,6 +253,16 @@ Chủ shop thấy "vẫn thế, vẫn khó dùng": đợt trước làm phần n
 - **Giao dịch thật gần đây** dưới hộp mua: "✓ N trades completed" và 3 giao dịch mới nhất ("300M delivered · 12 min ago"), không có tên khách, chỉ hiện khi đã có giao dịch hoàn thành.
 - **Sửa lỗi**: trình duyệt bỏ cuộc sau 5 giây khi tải danh sách gói (Neon vừa thức dậy) và dùng danh sách mẫu, khiến "Add to cart" báo "Unable to save the cart on this device". Giờ chờ 12 giây và thử lại 2 lần.
 
+## Nút Online trên header, chuông thông báo có âm thanh — 2026-10-03
+
+- **Online trên header** (mọi trang): khi có Admin online là viên to, xanh phát sáng "Online now · 1 trader ready · Trade now →" với chấm nhấp nháy; bấm vào là tới hộp mua. Không ai online thì là viên nhỏ màu vàng "Away · Order now · pick a time". Trên điện thoại là một hàng rộng hết màn hình dưới tên shop. Bỏ viên trạng thái cũ ở hero và trang sản phẩm.
+- **Chuông thông báo**: còn thông báo chưa đọc thì chuông màu vàng, số đỏ nhấp nháy nhẹ. Khi có thông báo **mới**:
+  - chuông rung lắc và sáng lên trong 4 giây;
+  - phát tiếng "ting-ting" (2 nốt, tạo bằng Web Audio). Trình duyệt chỉ cho phát âm thanh sau khi khách đã bấm hoặc gõ trên trang;
+  - hiện ô thông báo dưới header: bấm để mở và đánh dấu đã đọc, × để đóng, tự ẩn sau 12 giây. Trên điện thoại ô này nằm phía trên nút Chat;
+  - tiêu đề tab trình duyệt có "(1)" để thấy cả khi đang ở tab khác.
+- Trong cửa sổ Inbox có nút **🔔 Sound on / 🔕 Sound off** (nhớ trên trình duyệt). Header kiểm tra thông báo mỗi 20 giây, kể cả khi tab đang ở nền (trình duyệt sẽ giãn ra khoảng 1 phút/lần).
+
 Lệnh thông thường: `npm run db:generate`, `npm run typecheck`, `npm test`, `npm run build`, `npm run test:e2e`. E2E dùng database riêng theo `DATABASE.md`. Sau khi chạy app/container, `SMOKE_URL=http://localhost:3000 node scripts/smoke-container.mjs` kiểm tra static assets, đăng ký, phân quyền, SSE và idempotency.
 
 ## Tệp chính để bảo trì

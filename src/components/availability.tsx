@@ -1,5 +1,6 @@
 'use client';
 import {useCallback, useEffect, useState} from 'react';
+import Link from 'next/link';
 
 /** Big header switch: an Admin tells customers they are online and can trade right now (only turned off by hand). */
 export function AvailabilityToggle() {
@@ -40,14 +41,15 @@ export function useOnlineAdmins() {
   return online;
 }
 
-/** Live status for customers: online to trade now, or schedule a time. */
-export function LiveStatus({compact = false}: {compact?: boolean}) {
+/** Big status pill in the store header on every page: green and glowing while a trader is online, quiet when away. */
+export function HeaderLiveStatus({locale}: {locale: string}) {
   const online = useOnlineAdmins();
-  if (online === null) return <div className={`live-status ${compact ? 'compact' : ''} pending`} aria-hidden="true"/>;
-  return <div className={`live-status ${compact ? 'compact' : ''} ${online > 0 ? 'online' : 'offline'}`} role="status">
+  if (online === null) return <span className="header-live pending" aria-hidden="true"/>;
+  return <Link className={`header-live ${online > 0 ? 'online' : 'offline'}`} href={`/${locale}#buy`} role="status"
+    title={online > 0 ? 'A trader is online: choose “Trade now” at checkout and trade in minutes.' : 'Nobody is online right now: order any time and pick a time to trade.'}>
     <span className="live-status-dot" aria-hidden="true"/>
     {online > 0
-      ? <span><strong>Online now</strong> · {online} trader{online === 1 ? '' : 's'} ready — pick “Trade now” at checkout</span>
-      : <span><strong>Away right now</strong> · order any time and choose when to trade; we confirm your time</span>}
-  </div>;
+      ? <span className="header-live-text"><strong>Online now</strong><small>{online} trader{online === 1 ? '' : 's'} ready · Trade now →</small></span>
+      : <span className="header-live-text"><strong>Away</strong><small>Order now · pick a time</small></span>}
+  </Link>;
 }

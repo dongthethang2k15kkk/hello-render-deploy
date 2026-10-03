@@ -40,18 +40,19 @@ test('an Admin goes online with one button; customers see it and can pick "Trade
     await registerCustomer(customer.request, 'Trade Now Customer');
     const page = await customer.newPage();
     await page.goto('/en');
-    await expect(page.locator('.hero .live-status')).toContainText('Away right now');
+    await expect(page.locator('.header-live')).toContainText('Away');
 
     await toggle.click();
     await expect(toggle).toContainText('Online — trading');
     expect((await (await customer.request.get('/api/availability')).json()).online).toBeGreaterThanOrEqual(1);
     await page.reload();
-    await expect(page.locator('.hero .live-status')).toContainText('Online now');
+    await expect(page.locator('.header-live.online')).toContainText('Online now');
 
     // Checkout offers Trade now first and asks for one backup time, then the order keeps both.
     const productId = await catalogId(page.request, 'SAMPLE_BASIC');
     await page.goto(`/en/products/${productId}`);
-    await expect(page.locator('.order-summary .live-status')).toContainText('Online now');
+    // The header pill shows on every page, not only on the home page.
+    await expect(page.locator('.header-live.online')).toContainText('Trade now');
     await page.getByLabel('Recipient name (test data)').fill('Trade now');
     await page.getByRole('button', {name: 'Add to cart'}).click();
     await page.goto('/en/checkout');
@@ -78,7 +79,7 @@ test('an Admin goes online with one button; customers see it and can pick "Trade
     await expect(page.getByRole('radio', {name: /Trade now/})).toBeDisabled();
     await expect(page.locator('.timing-option.disabled')).toContainText('Nobody is online right now');
     await page.goto('/en');
-    await expect(page.locator('.hero .live-status')).toContainText('Away right now');
+    await expect(page.locator('.header-live')).toContainText('Away');
     await adminContext.request.post(`/api/admin/orders/${order.id}`, {data: {action: 'cancel', reason: 'E2E cleanup'}});
     await customer.close();
   } finally {
@@ -247,3 +248,25 @@ test('a new customer buys in three screens: quick buy, checkout with sign-up ins
     await customer.close(); await adminContext.close();
   }
 });
+
+test('a new Inbox notification rings the bell, pops up and counts in the tab title', async ({browser}) => {
+  test.setTimeout(120000);
+  const customer = await browser.newContext();
+  await registerCustomer(customer.request, 'Bell Customer');
+  const accountId = (await (await customer.request.get('/api/auth/session')).json()).account.id as string;
+  const page = await customer.newPage();
+  await page.goto('/en');
+  const bell = page.getByRole('button', {name: /^Inbox, \d+ unread$/});
+  await expect(bell).toHaveAccessibleName('Inbox, 0 unread');
+  await db.notification.create({data: {customerId: accountId, title: 'Payment received · E2E', body: 'Your payment arrived.', link: '/en/inbox'}});
+  // The header checks every 20 seconds.
+  const toast = page.locator('.notification-toast');
+  await expect(toast).toContainText('Payment received · E2E', {timeout: 40000});
+  await expect(page.locator('.header-pill.ringing.has-unread')).toBeVisible();
+  await expect.poll(() => page.title()).toMatch(/^\(1\) /);
+  await toast.getByRole('button', {name: /Payment received/}).click();
+  await expect(page).toHaveURL(/\/en\/inbox$/);
+  await expect(bell).toHaveAccessibleName('Inbox, 0 unread');
+  await customer.close();
+});
+

@@ -1,6 +1,7 @@
 'use client';
 import {useEffect, useLayoutEffect, useRef, useState, type ReactNode} from 'react';
 import {createPortal} from 'react-dom';
+import {setSoundEnabled, soundEnabled} from '@/lib/notify-sound';
 import Link from 'next/link';
 import {useRouter} from 'next/navigation';
 import {formatUsdFromVnd} from '@/lib/money';
@@ -9,7 +10,7 @@ import {useCatalog} from './catalog-provider';
 import {LoadingRows} from './loading-state';
 
 type OrderRow = {code: string; status: OrderStatus; totalVnd: number; createdAt: string; items: {title: string; quantity: number}[]};
-type Notice = {id: string; title: string; body: string; link: string; readAt: string | null; createdAt: string};
+export type Notice = {id: string; title: string; body: string; link: string; readAt: string | null; createdAt: string};
 type Appointment = {code: string; appointmentStart: string; appointmentEnd: string};
 
 const ago = (iso: string) => {
@@ -24,7 +25,7 @@ const ago = (iso: string) => {
  * A header pill that opens a small, non-modal glass window under it: the page stays usable around it. It closes on
  * Escape, an outside click or navigation. Rendered in <body> because the frosted header would trap fixed positioning.
  */
-function HeaderPopover({open, onOpenChange, label, title, icon, text, badge, children}: {open: boolean; onOpenChange: (open: boolean) => void; label: string; title: string; icon: ReactNode; text: string; badge: ReactNode; children: ReactNode}) {
+function HeaderPopover({open, onOpenChange, label, title, icon, text, badge, children, pillClass = ''}: {open: boolean; onOpenChange: (open: boolean) => void; label: string; title: string; icon: ReactNode; text: string; badge: ReactNode; children: ReactNode; pillClass?: string}) {
   const button = useRef<HTMLButtonElement>(null);
   const panel = useRef<HTMLDivElement>(null);
   const [place, setPlace] = useState<{top: number; right: number; width: number} | null>(null);
@@ -55,7 +56,7 @@ function HeaderPopover({open, onOpenChange, label, title, icon, text, badge, chi
   }, [open, onOpenChange]);
 
   return <>
-    <button ref={button} type="button" className={`header-pill ${open ? 'open' : ''}`} title={title} aria-label={label} aria-expanded={open} aria-haspopup="dialog" onClick={() => onOpenChange(!open)}>{icon}<span>{text}</span>{badge}</button>
+    <button ref={button} type="button" className={`header-pill ${open ? 'open' : ''} ${pillClass}`} title={title} aria-label={label} aria-expanded={open} aria-haspopup="dialog" onClick={() => onOpenChange(!open)}>{icon}<span>{text}</span>{badge}</button>
     {open && place && createPortal(<div ref={panel} className="header-panel" role="dialog" aria-label={title} style={{top: place.top, right: place.right, width: place.width}}>{children}</div>, document.body)}
   </>;
 }
@@ -90,8 +91,10 @@ export function OrdersPopover({locale, cartCount, open, onOpenChange, icon, badg
   </HeaderPopover>;
 }
 
-export function InboxPopover({locale, unread, onUnreadChange, open, onOpenChange, icon, badge}: {locale: string; unread: number; onUnreadChange: (unread: number) => void; open: boolean; onOpenChange: (open: boolean) => void; icon: ReactNode; badge: ReactNode}) {
+export function InboxPopover({locale, unread, onUnreadChange, open, onOpenChange, icon, badge, ringing = false}: {locale: string; unread: number; onUnreadChange: (unread: number) => void; open: boolean; onOpenChange: (open: boolean) => void; icon: ReactNode; badge: ReactNode; ringing?: boolean}) {
   const router = useRouter();
+  const [sound, setSound] = useState(true);
+  useEffect(() => setSound(soundEnabled()), []);
   const [items, setItems] = useState<Notice[] | null>(null);
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [error, setError] = useState('');
@@ -113,8 +116,8 @@ export function InboxPopover({locale, unread, onUnreadChange, open, onOpenChange
     onOpenChange(false);
     router.push(item.link.startsWith('/') ? item.link : `/${locale}/inbox`);
   }
-  return <HeaderPopover open={open} onOpenChange={onOpenChange} title="Inbox" text="Inbox" icon={icon} badge={badge} label={`Inbox, ${unread} unread`}>
-    <div className="header-panel-head"><strong>Inbox</strong>{unread > 0 ? <button type="button" className="header-panel-link" onClick={() => { setItems(current => current?.map(entry => ({...entry, readAt: entry.readAt ?? new Date().toISOString()})) ?? null); void markRead(); }}>Mark all read</button> : <span className="muted">All caught up</span>}</div>
+  return <HeaderPopover open={open} onOpenChange={onOpenChange} title="Inbox" text="Inbox" icon={icon} badge={badge} label={`Inbox, ${unread} unread`} pillClass={`${unread > 0 ? 'has-unread' : ''} ${ringing ? 'ringing' : ''}`}>
+    <div className="header-panel-head"><strong>Inbox</strong><button type="button" className="header-panel-link sound-toggle" aria-pressed={sound} onClick={() => { setSoundEnabled(!sound); setSound(!sound); }}>{sound ? '🔔 Sound on' : '🔕 Sound off'}</button>{unread > 0 ? <button type="button" className="header-panel-link" onClick={() => { setItems(current => current?.map(entry => ({...entry, readAt: entry.readAt ?? new Date().toISOString()})) ?? null); void markRead(); }}>Mark all read</button> : <span className="muted">All caught up</span>}</div>
     {appointments.length > 0 && <div className="header-panel-appointments">{appointments.slice(0, 2).map(item => <Link key={item.code} href={`/${locale}/orders/${item.code}`} onClick={() => onOpenChange(false)}><small>Upcoming appointment · {item.code}</small><strong>{formatRange(item.appointmentStart, item.appointmentEnd, Intl.DateTimeFormat().resolvedOptions().timeZone)}</strong></Link>)}</div>}
     {error && <p className="error-text" role="alert">{error}</p>}
     {!items && !error && <LoadingRows label="Loading your Inbox…" rows={3}/>}
@@ -127,4 +130,21 @@ export function InboxPopover({locale, unread, onUnreadChange, open, onOpenChange
     </li>)}</ul>}
     <Link className="header-panel-foot" href={`/${locale}/inbox`} onClick={() => onOpenChange(false)}>Open Inbox →</Link>
   </HeaderPopover>;
+}
+
+/** Pops up under the header when a new Inbox notification arrives; a click opens it, it hides by itself after a while. */
+export function NotificationToast({notice, onOpen, onClose}: {notice: Notice | null; onOpen: (notice: Notice) => void; onClose: () => void}) {
+  useEffect(() => {
+    if (!notice) return;
+    const timer = window.setTimeout(onClose, 12000);
+    return () => window.clearTimeout(timer);
+  }, [notice, onClose]);
+  if (!notice || typeof document === 'undefined') return null;
+  return createPortal(<div className="notification-toast" role="alert">
+    <button type="button" className="notification-toast-body" onClick={() => onOpen(notice)}>
+      <span className="notification-toast-icon" aria-hidden="true">🔔</span>
+      <span><small>New notification</small><strong>{notice.title}</strong><span>{notice.body}</span></span>
+    </button>
+    <button type="button" className="notification-toast-close" aria-label="Dismiss notification" onClick={onClose}>×</button>
+  </div>, document.body);
 }
