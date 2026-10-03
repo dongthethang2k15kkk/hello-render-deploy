@@ -5,8 +5,8 @@ import {useLocale, useTranslations} from 'next-intl';
 import {useCallback, useDeferredValue, useEffect, useMemo, useState} from 'react';
 import {type CatalogProduct, type CatalogSource, Locale} from '@/lib/catalog';
 import Price from './price';
-import {AmountSliderCard} from './amount-slider';
-import {stockText, type AmountSlider} from '@/lib/amount-slider-rules';
+import {QuickBuy} from './quick-buy';
+import {shortTitle, stockText, type AmountSlider} from '@/lib/amount-slider-rules';
 import {InboxPopover, OrdersPopover} from './header-popover';
 import {filterCatalog, type CatalogSort} from '@/lib/catalog-view';
 import {clearChatDrafts} from '@/lib/chat-drafts';
@@ -44,7 +44,9 @@ export function StoreHeader() {
     void load();
     // Keeps Inbox and Chat counts fresh while the page stays open.
     const timer = window.setInterval(() => { if (document.visibilityState === 'visible') void load(); }, 30000);
-    return () => window.clearInterval(timer);
+    // Checkout signs customers in without leaving the page; it announces the new session so the header updates at once.
+    window.addEventListener('jh-account-changed', load);
+    return () => { window.clearInterval(timer); window.removeEventListener('jh-account-changed', load); };
   }, [path]);
   useEffect(() => {
     if (!account) return;
@@ -81,7 +83,7 @@ const comparison: Record<string, string[]> = {
   'sample-plus': ['Higher sample price', 'Recipient name plus an optional delivery note']
 };
 
-export function Catalog({products: allProducts, source, vndPerUsd, vndPerLtc = null, slider = null}: {products: CatalogProduct[]; source: CatalogSource; vndPerUsd: number; vndPerLtc?: number | null; slider?: AmountSlider | null}) {
+export function Catalog({products: allProducts, source, vndPerUsd, vndPerLtc = null, slider = null, trades}: {products: CatalogProduct[]; source: CatalogSource; vndPerUsd: number; vndPerLtc?: number | null; slider?: AmountSlider | null; trades?: {completed: number; recent: {label: string; at: string}[]}}) {
   const locale = useLocale() as Locale; const t = useTranslations();
   // The slider sells its per-unit package by amount; that package can stay out of the grid.
   const sliderProduct = slider?.enabled ? allProducts.find(product => product.id === slider.packageId) : undefined;
@@ -93,11 +95,12 @@ export function Catalog({products: allProducts, source, vndPerUsd, vndPerLtc = n
   const shown = useMemo(() => filterCatalog(products, deferredQuery, inStock, sort), [products, deferredQuery, inStock, sort]);
   const reset = () => {setQuery(''); setInStock(false); setSort('featured');};
   return <section id="catalog" className="section">
-    <div className="section-heading"><div><p className="eyebrow">THE COLLECTION</p><h2>Choose a package</h2><p className="muted">{products.length ? `${products.length} package${products.length === 1 ? '' : 's'} available. Review the details before continuing.` : 'No packages are currently available.'}</p></div><span className="pill">Prices in USD</span></div>
-    {slider && sliderProduct && <AmountSliderCard slider={slider} product={sliderProduct} vndPerUsd={vndPerUsd} vndPerLtc={vndPerLtc}/>}
+    <div className="section-heading"><div><p className="eyebrow">BUY</p><h2>Choose your amount</h2><p className="muted">{products.length ? 'Any amount on the slider, or one of the packages below. Checkout takes about a minute.' : 'No packages are currently available.'}</p></div><span className="pill">Prices in USD</span></div>
+    {source !== 'fallback' && <QuickBuy products={allProducts} slider={slider} vndPerUsd={vndPerUsd} vndPerLtc={vndPerLtc} trades={trades}/>}
     {source === 'fallback' && <p className="catalog-status" role="status">The catalog is temporarily unavailable. Please refresh in a moment.</p>}
     {!products.length && <div className="empty-state"><div className="empty-icon">◇</div><h3>Catalog coming soon</h3><p className="muted">The store has no active packages right now. Please check again later or ask support.</p></div>}
-    {products.length > 0 && <div className="package-tools">
+    {/* Search and sort only help with a longer list; a few packages are easier to compare at a glance. */}
+    {products.length > 4 && <div className="package-tools">
       <label className="package-search"><span className="sr-only">Search packages</span><input type="search" value={query} onChange={event => setQuery(event.target.value)} placeholder="Search packages..."/></label>
       <label className="package-sort"><span className="sr-only">Sort packages</span><select aria-label="Sort packages" value={sort} onChange={event => setSort(event.target.value as CatalogSort)}><option value="featured">Featured</option><option value="price-low">Price: low to high</option><option value="price-high">Price: high to low</option><option value="name">Name: A to Z</option></select></label>
       <label className="stock-filter"><input type="checkbox" checked={inStock} onChange={event => setInStock(event.target.checked)}/>In stock only</label>
@@ -111,7 +114,7 @@ export function Catalog({products: allProducts, source, vndPerUsd, vndPerLtc = n
         <h3>{p.title[locale]}</h3>
         <p className="muted">{p.description[locale]}</p>
         <ul className="compare-list">{(comparison[p.id] ?? [stockText(p.stock), p.fields.length ? `${p.fields.filter(field => field.required).length} required delivery field${p.fields.filter(field => field.required).length === 1 ? '' : 's'}` : 'No delivery details required']).map(item => <li key={item}>{item}</li>)}</ul>
-        <div className="product-bottom"><div><small>{p.salePriceVnd ? 'Sale price' : 'Price'}</small>{p.salePriceVnd && <del>{formatUsdFromVnd(p.basePriceVnd, vndPerUsd)}</del>}<Price vnd={p.priceVnd} vndPerUsd={vndPerUsd} vndPerLtc={vndPerLtc}/></div><Link className={`button ${!p.stock ? 'disabled-link' : ''}`} aria-disabled={!p.stock} tabIndex={p.stock ? undefined : -1} href={p.stock ? `/${locale}/products/${p.id}` : '#catalog'}>{p.stock ? t('detail') : 'Out of stock'} <span aria-hidden="true">→</span></Link></div>
+        <div className="product-bottom"><div><small>{p.salePriceVnd ? 'Sale price' : 'Price'}</small>{p.salePriceVnd && <del>{formatUsdFromVnd(p.basePriceVnd, vndPerUsd)}</del>}<Price vnd={p.priceVnd} vndPerUsd={vndPerUsd} vndPerLtc={vndPerLtc}/></div><Link className={`button ${!p.stock ? 'disabled-link' : ''}`} aria-disabled={!p.stock} tabIndex={p.stock ? undefined : -1} href={p.stock ? `/${locale}/products/${p.id}` : '#catalog'}>{p.stock ? `Buy ${shortTitle(p.title[locale])}` : 'Out of stock'} <span aria-hidden="true">→</span></Link></div>
       </div>
     </article>)}</div>
     <div className="after-purchase card"><p className="eyebrow">WHAT YOU GET AFTER PURCHASE</p><h3>Pick a time, pay, then trade in the chat</h3><p className="muted">At checkout choose “Trade now” while a trader is online, or a few times you are free. Then pay within 30 minutes using the QR code. We confirm your payment and your time by email and in your Inbox, and deliver with you through the site chat.</p></div>

@@ -41,4 +41,45 @@ export function snapAmount(value: number, slider: Pick<AmountSlider, 'min' | 'ma
   return Math.max(slider.min, Math.min(top, stepped));
 }
 
-export const stockText = (stock: number) => stock >= UNLIMITED_STOCK ? 'Always in stock' : stock ? `${stock} currently available` : 'Currently out of stock';
+/** Customers see only whether a package can be bought, never the stock count (coins are farmed on demand). */
+export const stockText = (stock: number) => stock > 0 ? 'Available' : 'Out of stock';
+
+const UNIT_LADDER = ['K', 'M', 'B', 'T'];
+/** "100M · Coins Skyblock" → {value: 100, unit: 'M'}; null when the title does not start with an amount. */
+export function titleAmount(title: string) {
+  const match = /^\s*(\d+(?:\.\d+)?)\s*([KMBT])\b/i.exec(title);
+  return match ? {value: Number(match[1]), unit: match[2].toUpperCase()} : null;
+}
+const baseValue = (amount: {value: number; unit: string}) => amount.value * 1000 ** UNIT_LADDER.indexOf(amount.unit);
+
+/** "1500" + "M coins" → "1.5B coins"; labels without a K/M/B/T unit read "3 packs". */
+export function formatUnits(amount: number, unitLabel: string) {
+  const match = /^([KMBT])\b(.*)$/i.exec(unitLabel.trim());
+  if (!match) return `${amount.toLocaleString('en-US')} ${unitLabel}`;
+  let index = UNIT_LADDER.indexOf(match[1].toUpperCase());
+  let value = amount;
+  while (value >= 1000 && index < UNIT_LADDER.length - 1) { value /= 1000; index++; }
+  return `${Number(value.toFixed(2)).toLocaleString('en-US')}${UNIT_LADDER[index]}${match[2]}`;
+}
+/** What a cart line holds in game units: 3 × "100M · Coins" → "300M"; otherwise "Title × 3". */
+export function lineAmount(title: string, quantity: number) {
+  const amount = titleAmount(title);
+  return amount ? formatUnits(amount.value * quantity, amount.unit) : `${shortTitle(title)} × ${quantity}`;
+}
+export const shortTitle = (title: string) => title.split(' · ')[0].trim();
+
+/**
+ * Until an Admin saves the slider, it is set up from the catalog: the smallest package whose name starts with an amount
+ * ("100M · …") becomes the unit, so customers can pick 100M, 200M, … up to 100 packages. Null when no name has an amount.
+ */
+export function autoSlider(products: {id: string; title: {en: string}; stock: number}[]): AmountSlider | null {
+  const candidates = products.map(product => ({product, amount: titleAmount(product.title.en)}))
+    .filter((item): item is {product: typeof item.product; amount: {value: number; unit: string}} => Boolean(item.amount && Number.isInteger(item.amount.value) && item.amount.value > 0 && item.product.stock > 0))
+    .sort((a, b) => baseValue(a.amount) - baseValue(b.amount));
+  const first = candidates[0];
+  if (!first) return null;
+  const {value, unit} = first.amount;
+  const max = value * 100;
+  return {enabled: true, packageId: first.product.id, title: 'Choose any amount', unitLabel: /coin/i.test(first.product.title.en) ? `${unit} coins` : unit,
+    unitSize: value, min: value, max, step: value, defaultAmount: Math.min(value * 3, max), hideFromGrid: false};
+}

@@ -149,7 +149,10 @@ test('the amount slider is set up in Admin and sells any amount from the store',
   const adminContext = await admin(browser);
   await ensureBank(adminContext.request);
   const url = '/api/admin/settings/slider';
-  const original = (await (await adminContext.request.get(url)).json()).slider;
+  const before = await (await adminContext.request.get(url)).json();
+  // The E2E packages have no amount in their names, so the store has no automatic slider until one is saved.
+  expect(before.saved || before.slider.enabled === false).toBe(true);
+  const original = before.slider;
   try {
     const packageId = await catalogId(adminContext.request, 'SAMPLE_BASIC');
     // One package holds 100 M coins, like the live 100M package: customers pick 100M, 200M, 300M.
@@ -165,17 +168,18 @@ test('the amount slider is set up in Admin and sells any amount from the store',
     const customer = await browser.newContext();
     const page = await customer.newPage();
     await page.goto('/en');
-    const card = page.locator('.amount-slider');
+    const card = page.locator('.quick-buy');
     await expect(card.getByRole('heading', {name: 'Pick your amount'})).toBeVisible();
+    await expect(card.getByRole('radio', {name: 'Any amount'})).toHaveAttribute('aria-checked', 'true');
     await expect(card.locator('.amount-slider-price strong')).toHaveText('$10.00');
-    await card.getByRole('button', {name: '200', exact: true}).click();
+    await card.getByRole('button', {name: '200M coins', exact: true}).click();
     await expect(card.locator('.amount-slider-price strong')).toHaveText('$20.00');
     await card.getByLabel('Recipient name (test data)').fill('Slider buyer');
-    await card.getByRole('button', {name: /^Buy 200 M coins/}).click();
-    await expect(page).toHaveURL(/\/en\/cart$/);
-    // 200 M coins of a 100M package = 2 packages in the cart.
+    await card.getByRole('button', {name: /^Buy 200M coins/}).click();
+    // Buy now skips the cart: 200M of a 100M package = 2 packages, straight to checkout.
+    await expect(page).toHaveURL(/\/en\/checkout$/);
     expect(await page.evaluate(() => JSON.parse(localStorage.getItem('shop-demo-cart-v1') ?? '[]')[0]?.quantity)).toBe(2);
-    await expect(page.getByText('Basic sample package').first()).toBeVisible();
+    await expect(page.locator('.summary-line')).toContainText('Basic sample package × 2');
     await customer.close();
   } finally {
     await adminContext.request.post(url, {data: original});
@@ -189,4 +193,57 @@ test('Discord sign-in stays hidden until it is configured', async ({page}) => {
   await expect(page).toHaveURL(/\/en\/login\?error=discord_not_configured$/);
   await expect(page.getByText('Discord sign-in is not configured yet.')).toBeVisible();
   await expect(page.getByRole('link', {name: 'Continue with Discord'})).toHaveCount(0);
+});
+
+test('a new customer buys in three screens: quick buy, checkout with sign-up inside, order page; then buys again', async ({browser}) => {
+  test.setTimeout(150000);
+  const adminContext = await admin(browser);
+  await ensureBank(adminContext.request);
+  const customer = await browser.newContext();
+  const page = await customer.newPage();
+  try {
+    // Real completed trades (from earlier tests in this database) appear under the buy box, without names.
+    await page.goto('/en');
+    await expect(page.locator('.trade-feed')).toContainText(/trades? completed/);
+    const box = page.locator('.quick-buy');
+    await box.getByRole('radio', {name: /Basic sample package/}).click();
+    await box.getByLabel('Recipient name (test data)').fill('Three screens');
+    await box.getByRole('button', {name: /^Buy Basic sample package × 1/}).click();
+    await expect(page).toHaveURL(/\/en\/checkout$/);
+
+    // Signing up happens inside checkout and keeps the chosen time.
+    await page.getByRole('radio', {name: /Schedule a time/}).check();
+    await page.getByRole('button', {name: '+ Add another time'}).click();
+    const signIn = page.locator('.checkout-sign-in');
+    await signIn.getByLabel('Name').fill('Three Screens');
+    await signIn.getByLabel('Email').fill(`three-${Date.now()}@example.test`);
+    await signIn.getByLabel('Password').fill('test-password-123');
+    await page.getByRole('button', {name: 'Create account and continue'}).click();
+    await expect(page.getByRole('heading', {name: 'Signed in as Three Screens'})).toBeVisible();
+    await expect(page.locator('.summary-timing')).toHaveText('Scheduled · 2 times chosen');
+    await page.getByRole('radio', {name: /Bank transfer/}).check();
+    await page.getByRole('button', {name: 'Place order →'}).click();
+    await expect(page).toHaveURL(/\/en\/orders\/JH[2-9A-Z]{6}$/);
+    const code = page.url().split('/').pop()!;
+    await expect(page.getByRole('heading', {name: /Price locked · pay within/})).toBeVisible();
+
+    // After cancelling (or paying), "Buy again" refills checkout with the same package and details.
+    page.once('dialog', dialog => void dialog.accept());
+    await page.getByRole('button', {name: 'Cancel order'}).click();
+    await expect(page.getByText('Order cancelled.')).toBeVisible();
+    await page.getByRole('button', {name: /^Buy again/}).click();
+    await expect(page).toHaveURL(/\/en\/checkout$/);
+    await expect(page.locator('.summary-line')).toContainText('Basic sample package × 1');
+    expect(await page.evaluate(() => JSON.parse(localStorage.getItem('shop-demo-cart-v1') ?? '[]')[0]?.delivery?.recipient)).toBe('Three screens');
+    expect(code).toMatch(/^JH/);
+
+    // Short links for Discord: /en/buy/<slug or SKU> opens that package.
+    await page.goto('/en/buy/sample_basic');
+    await expect(page).toHaveURL(/\/en\/products\//);
+    await expect(page.getByRole('button', {name: /^Buy now/})).toBeVisible();
+    await page.goto('/en/buy/no-such-package');
+    await expect(page).toHaveURL(/\/en(#buy)?$/);
+  } finally {
+    await customer.close(); await adminContext.close();
+  }
 });

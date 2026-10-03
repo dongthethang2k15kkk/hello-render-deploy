@@ -1852,3 +1852,35 @@ button.header-pill:hover:not(:disabled) {transform:translateY(-1px); background:
 .oauth-buttons {display:grid; gap:10px;}
 .discord-signin {display:block; text-align:center; text-decoration:none; background:#5865f2; color:#fff;}
 .discord-signin:hover {background:#4752c4; color:#fff;}
+
+/* ---------- One-page buying: quick buy box, trust line, sign-in inside checkout ---------- */
+.quick-buy {scroll-margin-top:110px;}
+.quick-buy-choices {display:flex; flex-wrap:wrap; gap:8px;}
+.quick-buy-choices button {display:inline-flex; align-items:baseline; gap:8px; padding:10px 16px; border-radius:999px; font-size:15px; color:var(--text);}
+.quick-buy-choices button small {font-size:12px; color:var(--text-muted); font-weight:500;}
+.quick-buy-choices button.active {border-color:var(--brand); color:var(--brand); box-shadow:0 0 0 3px rgba(149,212,122,.18);}
+.quick-buy-choices button.active small {color:#c9e3b5;}
+.quick-buy-stepper {display:flex; align-items:center; gap:10px; font-size:14px; color:var(--text-muted);}
+.quick-buy-stepper span {margin-right:4px;}
+.quick-buy-stepper button {width:42px; height:42px; padding:0; border-radius:12px; font-size:20px; line-height:1; color:var(--text);}
+.quick-buy-stepper output {min-width:36px; text-align:center; font-size:20px; font-weight:700; color:var(--text);}
+.trade-feed {display:grid; gap:6px; padding-top:14px; border-top:1px solid var(--glass-edge); font-size:13px;}
+.trade-feed strong {color:var(--brand);}
+.trade-feed ul {display:grid; gap:4px; margin:0; padding:0; list-style:none;}
+.trade-feed li {display:flex; gap:10px; color:var(--text-muted);}
+.trade-feed li small {margin-left:auto; white-space:nowrap;}
+.checkout-lede {max-width:720px; margin:8px 0 0;}
+.checkout-account {scroll-margin-top:110px;}
+.checkout-account h2 {margin-bottom:6px;}
+.checkout-sign-in {display:grid; gap:4px;}
+.checkout-sign-in .oauth-buttons {margin:10px 0 0;}
+.checkout-sign-in .auth-tabs {margin:12px 0 4px; background:rgba(255,255,255,.06);}
+.checkout-sign-in .auth-tabs button {color:var(--text-muted);}
+.checkout-sign-in .auth-tabs button.active {background:var(--accent); color:#17131f;}
+.checkout-sign-in label {display:grid; gap:6px; margin:12px 0 0; font-size:13px; font-weight:600; color:var(--text-muted);}
+.checkout-sign-in input {width:100%; box-sizing:border-box;}
+.checkout-sign-in .full-width {margin-top:14px;}
+.checkout-sign-in .auth-divider {color:var(--text-muted);}
+.checkout-sign-in .auth-divider::before, .checkout-sign-in .auth-divider::after {border-top-color:var(--glass-edge);}
+.buy-again {margin-top:12px;}
+.order-summary form .full-width + .full-width {margin-top:10px;}

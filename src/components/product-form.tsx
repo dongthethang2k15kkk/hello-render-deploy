@@ -21,15 +21,18 @@ export function ProductForm({product}: {product: CatalogProduct}) {
   return <form key={editing ? `edit-${editIndex}` : 'new'} onSubmit={event => {
     event.preventDefault();
     const form = new FormData(event.currentTarget);
+    // "Buy now" checks out exactly this item; "Add to cart" keeps shopping.
+    const buyNow = !editing && (event.nativeEvent as SubmitEvent).submitter?.getAttribute('value') === 'buy';
     const parsed = cartLineSchema.safeParse({
       productId, quantity: Number(form.get('quantity')),
       delivery: Object.fromEntries(product.fields.map(f => [f.key, String(form.get(f.key) ?? '').trim()]))
     });
-    const next = parsed.success ? (editing ? lines.map((line, index) => index === editIndex ? parsed.data : line) : [...lines, parsed.data]) : null;
+    const next = parsed.success ? (editing ? lines.map((line, index) => index === editIndex ? parsed.data : line) : buyNow ? [parsed.data] : [...lines, parsed.data]) : null;
     const validationCatalog = catalog.products.some(item => item.id === product.id) ? catalog.products : [...catalog.products, product];
     if (!parsed.success || !next || !createCartSchema(validationCatalog).safeParse(next).success) {setStatus('Check the information and available stock.'); return;}
     if (!save(next)) {setStatus('Unable to save the cart on this device.'); return;}
     // The shop has few packages, so buying one goes straight to the cart.
+    if (buyNow) { setStatus('Opening checkout…'); router.push(`/${locale}/checkout`); return; }
     setStatus(editing ? 'Cart updated. Opening your cart…' : 'Added to cart. Opening your cart…');
     router.push(`/${locale}/cart`);
   }}>
@@ -37,7 +40,8 @@ export function ProductForm({product}: {product: CatalogProduct}) {
       <input name={field.key} required={field.required} maxLength={field.maxLength} autoComplete="off" defaultValue={editing?.delivery[field.key] ?? ''}/>
     </label>)}
     <label>Quantity<input name="quantity" type="number" min="1" max={product.stock} defaultValue={editing?.quantity ?? 1} required /></label>
-    <button className="full-width" disabled={!ready || !product.stock} type="submit">{product.stock ? (editing ? 'Update cart' : 'Add to cart') : 'Out of stock'} <span aria-hidden="true">→</span></button>
+    {!editing && product.stock > 0 && <button className="full-width" disabled={!ready} type="submit" name="intent" value="buy">Buy now <span aria-hidden="true">→</span></button>}
+    <button className={`full-width ${editing || !product.stock ? '' : 'secondary'}`} disabled={!ready || !product.stock} type="submit">{product.stock ? (editing ? 'Update cart' : 'Add to cart') : 'Out of stock'}</button>
     <p className="form-status" role="status" aria-live="polite">{status}</p>
   </form>;
 }

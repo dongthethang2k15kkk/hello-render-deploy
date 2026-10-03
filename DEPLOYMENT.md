@@ -147,10 +147,9 @@ sau 20 giây; chỉ đúng khi chạy **một instance** (đúng với Render Fr
   trừ phí nên tiền về thiếu: web không tự nhận; Admin mở link Tronscan trong đơn, kiểm tra rồi bấm Confirm payment như
   chuyển khoản.
 - **Nút Online**: trong header Admin. Mỗi Admin tự bật khi sẵn sàng giao dịch và nhớ **tự tắt** khi rời đi (không tự tắt).
-- **Thanh kéo số lượng**: Settings → Products: đặt tồn kho gói **100M** là `100000000` (không giới hạn) → Settings →
-  **Amount slider**: chọn gói 100M, đơn vị `M coins`, *One package holds* `100`, nhỏ nhất `100`, lớn nhất `10000`, bước `100`,
-  bắt đầu `300`, bỏ tích ẩn khỏi lưới nếu muốn giữ thẻ 100M → bật *Show the slider on the store* → Save (cửa hàng cập nhật
-  trong khoảng 30 giây).
+- **Thanh kéo số lượng**: tự bật từ gói nhỏ nhất có tên bắt đầu bằng số lượng (gói **100M** → 100M–10B, bước 100M). Muốn
+  đổi: Settings → **Amount slider** → sửa → Save (cửa hàng cập nhật trong khoảng 30 giây). Nên đặt tồn kho các gói là
+  `100000000` trong Settings → Products để không bao giờ hết (khách không thấy con số tồn kho).
 - **Đăng nhập Discord (miễn phí, không cần xác minh app)**:
   1. Mở https://discord.com/developers/applications → **New Application** (tên: Jewish Horse) → đồng ý điều khoản.
   2. Mục **OAuth2**: chép **Client ID**; bấm **Reset Secret** → chép **Client Secret** (chỉ hiện một lần, không gửi cho ai).

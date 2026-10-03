@@ -74,7 +74,7 @@ test('full order: checkout, VietQR, times, admin confirms and books, customer is
   await expect(page).toHaveURL(/\/en\/orders\/JH[2-9A-Z]{6}$/);
   const code = page.url().split('/').pop()!;
 
-  await expect(page.getByRole('heading', {name: /Pay within/})).toBeVisible();
+  await expect(page.getByRole('heading', {name: /Price locked · pay within/})).toBeVisible();
   await expect(page.getByRole('img', {name: /VietQR code: 260\.000 ₫ to Vietcombank/})).toBeVisible();
   await expect(page.locator('.pay-row', {hasText: 'Transfer content'})).toContainText(code);
   await expect(page.locator('.pay-row', {hasText: 'Account holder'})).toContainText('NGUYEN VAN TEST');

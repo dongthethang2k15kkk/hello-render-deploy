@@ -5,6 +5,7 @@ import {useLocale} from 'next-intl';
 import {useRouter} from 'next/navigation';
 import {useEffect, useState} from 'react';
 import {useOnlineAdmins} from '@/components/availability';
+import {CheckoutSignIn} from '@/components/checkout-sign-in';
 import {useCart} from '@/components/cart-provider';
 import {useCatalog} from '@/components/catalog-provider';
 import {browserTimeZone, buildTiming, defaultRow, SlotRows, soonRow, type Row} from '@/components/time-picker';
@@ -35,8 +36,9 @@ export default function Checkout() {
   const [rows, setRows] = useState<Row[]>([defaultRow(1)]);
   const [touched, setTouched] = useState(false);
 
+  const loadAccount = () => fetch('/api/auth/session', {cache: 'no-store'}).then(response => response.json()).then(data => setAccount(data.account ?? false)).catch(() => setAccount(false));
   useEffect(() => {
-    fetch('/api/auth/session', {cache: 'no-store'}).then(response => response.json()).then(data => setAccount(data.account ?? false)).catch(() => setAccount(false));
+    void loadAccount();
     fetch('/api/payment-methods', {cache: 'no-store'}).then(response => response.json()).then((data: Methods) => {
       setMethods(data);
       if (!data.bank) setMethod(data.usdt ? 'usdt' : 'ltc');
@@ -71,28 +73,18 @@ export default function Checkout() {
 
   if (!ready || !catalog.ready) return <LoadingRows label="Loading cart…"/>;
   if (account === null) return <p aria-busy="true">Checking account…</p>;
-  if (account === false) return <section className="card notice"><h1>Sign in to purchase</h1><p>Please sign in or register before continuing to checkout.</p><Link className="button" href={`/${locale}/login?next=checkout`}>Sign in / Register →</Link></section>;
-  if (account.role !== 'user') return <section className="card notice"><h1>Admin accounts cannot buy</h1><p>Sign out of Admin and use a customer account to place orders.</p></section>;
+  if (account && account.role !== 'user') return <section className="card notice"><h1>Admin accounts cannot buy</h1><p>Sign out of Admin and use a customer account to place orders.</p></section>;
   if (!lines.length) return <div className="empty-state"><h1>No products to check out</h1><Link className="button" href={`/${locale}#catalog`}>Explore packages</Link></div>;
   const total = totalVnd(lines, products);
   const usd = formatUsdFromVnd(total, catalog.vndPerUsd);
   const noMethod = methods && !methods.bank && !methods.ltc && !methods.usdt;
-  const payLabel = method === 'usdt' ? `${usd} in USDT` : method === 'ltc' ? 'in Litecoin' : usd;
+  const signedIn = Boolean(account && account.role === 'user');
 
   return <>
-    <div className="page-heading"><p className="eyebrow">CHECKOUT</p><h1>Review and place your order</h1><div className="checkout-steps"><Link href={`/${locale}/cart`}>01 / Cart</Link><span className="current">02 / Time &amp; payment</span><span>03 / Pay</span></div></div>
+    <div className="page-heading"><p className="eyebrow">CHECKOUT</p><h1>Review and place your order</h1><p className="muted checkout-lede">Pick when to trade, choose how to pay, place the order. Your price is held for {HOLD_MINUTES} minutes while you pay with the QR code; then we trade with you in the site chat.</p></div>
     <div className="checkout-layout">
       <div>
-        <section className="card"><span className="eyebrow">01 / HOW IT WORKS</span><h2>Pick a time, pay, trade</h2>
-          <ol className="checkout-flow">
-            <li><strong>Choose when to trade.</strong> Trade now while a trader is online, or pick a few times you are free.</li>
-            <li><strong>Pay {payLabel}</strong>{method === 'bank' && <> ({formatVnd(total)})</>} by scanning the QR code. Your price is held for {HOLD_MINUTES} minutes.</li>
-            <li><strong>Tap “I’ve paid”.</strong>{method !== 'bank' && ' Crypto payments are also detected by themselves.'}</li>
-            <li><strong>We confirm</strong> your payment and time by email and in your Inbox, then trade with you in the site chat.</li>
-          </ol>
-        </section>
-
-        <section className="card timing-card" style={{marginTop: 20}}><span className="eyebrow">02 / WHEN</span><h2>When do you want to trade?</h2>
+        <section className="card timing-card"><span className="eyebrow">01 / WHEN</span><h2>When do you want to trade?</h2>
           {mode === null ? <p aria-busy="true">Checking who is online…</p> : <>
             <div className="payment-options timing-options" role="radiogroup" aria-label="When to trade">
               <label className={`payment-option timing-option ${nowAvailable ? '' : 'disabled'}`}><input type="radio" name="timing" value="now" checked={asap} disabled={!nowAvailable} onChange={() => choose('now')}/>
@@ -107,7 +99,7 @@ export default function Checkout() {
           </>}
         </section>
 
-        <section className="card" style={{marginTop: 20}}><span className="eyebrow">03 / PAYMENT METHOD</span><h2>How do you want to pay?</h2>
+        <section className="card" style={{marginTop: 20}}><span className="eyebrow">02 / PAYMENT METHOD</span><h2>How do you want to pay?</h2>
           {!methods ? <p aria-busy="true">Checking payment options…</p> : <div className="payment-options">
             {methods.usdt && <label className="payment-option"><input type="radio" name="method" value="usdt" checked={method === 'usdt'} onChange={() => setMethod('usdt')}/><span>USDT · TRON (TRC20)<small>Send {usd} in USDT from any wallet or exchange · exact amount on the next page</small></span></label>}
             {methods.ltc && <label className="payment-option"><input type="radio" name="method" value="ltc" checked={method === 'ltc'} onChange={() => setMethod('ltc')}/><span>Litecoin (LTC)<small>About {formatLtcEstimate(total, methods.ltc.vndPerLtc)} · exact amount shown after you place the order</small></span></label>}
@@ -115,7 +107,10 @@ export default function Checkout() {
             {noMethod && <p className="error-text">Payments are not set up yet. Please contact the shop on Discord.</p>}
           </div>}
         </section>
-        <section className="card" style={{marginTop: 20}}><span className="eyebrow">04 / ACCOUNT</span><h2>Signed in as {account.name}</h2><p className="muted">Order updates go to the email on your account and to your <Link href={`/${locale}/inbox`}>Inbox</Link>.</p></section>
+        <section id="account" className="card checkout-account" style={{marginTop: 20}}><span className="eyebrow">03 / ACCOUNT</span>
+          {account ? <><h2>Signed in as {account.name}</h2><p className="muted">Order updates go to the email on your account and to your <Link href={`/${locale}/inbox`}>Inbox</Link>.</p></>
+            : <CheckoutSignIn locale={locale} onSignedIn={() => void loadAccount()}/>}
+        </section>
       </div>
       <aside className="card order-summary">
         <h2>Your order</h2>
@@ -127,8 +122,8 @@ export default function Checkout() {
         <div className="summary-total"><small>{method === 'usdt' ? 'You pay in USDT (TRC20)' : method === 'ltc' ? 'Order value (paid in LTC)' : 'You pay by bank transfer'}</small><p className="pay-amount">{usd}</p><small className="pay-secondary">{formatVnd(total)}{methods?.ltc ? ` · ≈ ${formatLtcEstimate(total, methods.ltc.vndPerLtc)}` : ''}</small></div>
         {mode !== null && <p className="summary-timing">{asap ? <><span className="live-status-dot on" aria-hidden="true"/> Trade now, right after payment</> : <>Scheduled · {rows.length} time{rows.length === 1 ? '' : 's'} chosen</>}</p>}
         {error && <p className="error-text" role="alert">{error}</p>}
-        <button className="full-width" type="button" disabled={busy || !methods || Boolean(noMethod) || mode === null} onClick={() => void placeOrder()}>{busy ? 'Placing order…' : 'Place order →'}</button>
-        <p className="field-caption">You will see the {method === 'bank' ? 'bank details' : 'wallet address'} and QR code on the next page.</p>
+        <button className="full-width" type="button" disabled={busy || !signedIn || !methods || Boolean(noMethod) || mode === null} onClick={() => void placeOrder()}>{busy ? 'Placing order…' : 'Place order →'}</button>
+        <p className="field-caption">{signedIn ? `You will see the ${method === 'bank' ? 'bank details' : 'wallet address'} and QR code on the next page.` : <><a href="#account">Sign in or create an account</a> (step 03, takes a few seconds) to place your order.</>}</p>
       </aside>
     </div>
   </>;

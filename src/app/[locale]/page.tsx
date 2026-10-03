@@ -5,19 +5,21 @@ import AnnouncementCarousel from '@/components/announcement-carousel';
 import {getAnnouncements} from '@/lib/announcements';
 import {getPublicCatalog, usdtCheckout} from '@/lib/catalog-server';
 import {LiveStatus} from '@/components/availability';
-import {getAmountSlider} from '@/lib/amount-slider';
+import {storeAmountSlider} from '@/lib/amount-slider';
+import {getTradeStats} from '@/lib/trade-stats';
 
 export default async function Store({params}: {params: Promise<{locale: string}>}) {
   const {locale} = await params;
   if (locale !== 'en') notFound();
-  const [catalog, announcements, usdt, slider] = await Promise.all([getPublicCatalog(), getAnnouncements(), usdtCheckout(), getAmountSlider()]);
+  const [catalog, announcements, usdt, trades] = await Promise.all([getPublicCatalog(), getAnnouncements(), usdtCheckout(), getTradeStats()]);
+  const slider = await storeAmountSlider(catalog.products);
   const currencies = ['VND', ...(usdt ? ['USDT'] : []), ...(catalog.vndPerLtc ? ['LTC'] : [])];
   const payIn = currencies.length > 1 ? `${currencies.slice(0, -1).join(', ')} or ${currencies.at(-1)}` : currencies[0];
   const cryptoNames = [...(usdt ? ['USDT on TRON (TRC20)'] : []), ...(catalog.vndPerLtc ? ['Litecoin'] : [])].join(' or ');
   return <>
-    <section className="hero"><div className="hero-copy"><span className="pill">✦ Digital packages · delivered by appointment</span><h1>Digital goods.<br/>A better <em>experience.</em></h1><p>Choose a package, trade right now when we are online or pick a time that suits you, and pay with a QR code. We deliver it with you, live in the site chat.</p><div className="hero-actions"><Link className="button" href="#catalog">Explore packages →</Link><Link className="text-link" href="#how-it-works">How it works ↗</Link></div><LiveStatus/><div className="hero-meta"><span>{`Prices in USD · pay in ${payIn}`}</span><span>Delivered by appointment</span></div></div>{announcements.slides.length ? <div className="hero-visual announcement-visual"><AnnouncementCarousel slides={announcements.slides} intervalSeconds={announcements.intervalSeconds}/></div> : <div className="hero-visual"><div className="visual-label">A NEW WAY TO EXPLORE <span>↗</span></div><ProductArt/><div className="floating-card"><span>✦</span><div><strong>Every detail, considered.</strong><small>Discover → Cart → Checkout</small></div></div><div className="visual-bottom">COLLECTION 01 <span>INTERACTIVE CONCEPT</span></div></div>}</section>
+    <section className="hero"><div className="hero-copy"><span className="pill">✦ Digital packages · delivered by appointment</span><h1>Digital goods.<br/>A better <em>experience.</em></h1><p>Choose a package, trade right now when we are online or pick a time that suits you, and pay with a QR code. We deliver it with you, live in the site chat.</p><div className="hero-actions"><Link className="button" href="#buy">Buy now →</Link><Link className="text-link" href="#how-it-works">How it works ↗</Link></div><LiveStatus/><div className="hero-meta"><span>{`Prices in USD · pay in ${payIn}`}</span><span>Delivered by appointment</span></div></div>{announcements.slides.length ? <div className="hero-visual announcement-visual"><AnnouncementCarousel slides={announcements.slides} intervalSeconds={announcements.intervalSeconds}/></div> : <div className="hero-visual"><div className="visual-label">A NEW WAY TO EXPLORE <span>↗</span></div><ProductArt/><div className="floating-card"><span>✦</span><div><strong>Every detail, considered.</strong><small>Discover → Cart → Checkout</small></div></div><div className="visual-bottom">COLLECTION 01 <span>INTERACTIVE CONCEPT</span></div></div>}</section>
+    <Catalog products={catalog.products} source={catalog.source} vndPerUsd={catalog.vndPerUsd} vndPerLtc={catalog.vndPerLtc} slider={slider} trades={trades}/>
     <div className="feature-strip">{[['01','Clear information','Review prices and details first'],['02','Package by package','Individual delivery forms'],['03','Chat support','Ask the team before you buy']].map(([n,title,desc]) => <div key={n}><span className="feature-index">{n}</span><div><strong>{title}</strong><small>{desc}</small></div></div>)}</div>
-    <Catalog products={catalog.products} source={catalog.source} vndPerUsd={catalog.vndPerUsd} vndPerLtc={catalog.vndPerLtc} slider={slider}/>
     <section id="how-it-works" className="section how-section"><p className="eyebrow">HOW IT WORKS</p><h2>Three steps. No guesswork.</h2><div className="steps-grid">{[
       ['Pick your package', 'Choose a package, add the few details we need for delivery and place your order. It is reserved for you for 30 minutes, prices shown in USD.'],
       ['Choose a time, then pay', `Trade now while a trader is online, or pick a few times you are free. Then pay by scanning a QR code: ${cryptoNames ? `${cryptoNames} from your wallet, or a bank transfer` : 'a bank transfer in your banking app'}.`],

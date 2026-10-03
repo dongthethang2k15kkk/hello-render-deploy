@@ -4,7 +4,9 @@ test('English catalog, delivery form, persisted cart and checkout link', async (
   await registerCustomer(page.request);
   await page.goto('/en');
   await expect(page.locator('html')).toHaveAttribute('lang', 'en');
-  await page.getByRole('link', {name: 'Package details'}).first().click();
+  await page.locator('.product-card a.button').first().click();
+  // The buy box on the home page has the same field, so wait for the product page first.
+  await expect(page).toHaveURL(/\/en\/products\//);
   await page.getByLabel('Recipient name (test data)').fill('Demo recipient');
   // Adding an item opens the cart straight away.
   await page.getByRole('button', {name: 'Add to cart'}).click();
@@ -31,8 +33,9 @@ test('mobile catalog, quantity controls and checkout review', async ({page}) => 
   await page.setViewportSize({width: 390,height: 844});
   const customer = await registerCustomer(page.request);
   await page.goto('/en');
-  await expect(page.getByRole('link', {name: 'Package details'})).toHaveCount(2);
-  await page.getByRole('link', {name: 'Package details'}).first().click();
+  await expect(page.locator('.product-card a.button')).toHaveCount(2);
+  await page.locator('.product-card a.button').first().click();
+  await expect(page).toHaveURL(/\/en\/products\//);
   await page.getByLabel('Recipient name (test data)').fill('Demo mobile');
   await page.getByRole('button', {name: 'Add to cart'}).click();
   await expect(page).toHaveURL(/\/en\/cart$/);
@@ -40,12 +43,14 @@ test('mobile catalog, quantity controls and checkout review', async ({page}) => 
   await expect(page.locator('output')).toHaveText('2');
   await page.request.post('/api/auth/logout');
   await page.getByRole('link', {name: 'Continue to checkout →'}).click();
-  await expect(page.getByRole('heading', {name: 'Sign in to purchase'})).toBeVisible();
-  await page.getByRole('main').getByRole('link', {name: 'Sign in / Register'}).click();
-  await expect(page).toHaveURL(/\/en\/login\?next=checkout$/);
-  await page.getByLabel('Email', {exact: true}).fill(customer.email);
-  await page.locator('input[autocomplete="current-password"]').fill(customer.password);
-  await page.locator('form').getByRole('button', {name: 'Sign in', exact: true}).click();
+  // Signing in happens inside checkout: no other page, the order stays on screen.
+  await expect(page.getByRole('heading', {name: 'Sign in to place your order'})).toBeVisible();
+  await expect(page.getByRole('button', {name: 'Place order →'})).toBeDisabled();
+  await page.getByRole('button', {name: 'I have an account'}).click();
+  await page.locator('.checkout-sign-in').getByLabel('Email').fill(customer.email);
+  await page.locator('.checkout-sign-in').getByLabel('Password').fill(customer.password);
+  await page.getByRole('button', {name: 'Sign in and continue'}).click();
+  await expect(page.getByRole('heading', {name: /^Signed in as/})).toBeVisible();
   await expect(page).toHaveURL(/\/en\/checkout$/);
   await expect(page.getByText('520.000 ₫').first()).toBeVisible();
   await expect(page.getByRole('button', {name: 'Place order →'})).toBeEnabled();

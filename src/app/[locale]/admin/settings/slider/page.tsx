@@ -14,6 +14,7 @@ export default function SliderSettings() {
   const [slider, setSlider] = useState<AmountSlider | null>(null);
   const [packages, setPackages] = useState<Package[]>([]);
   const [vndPerUsd, setVndPerUsd] = useState(25000);
+  const [saved, setSaved] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
@@ -22,7 +23,7 @@ export default function SliderSettings() {
     fetch('/api/admin/settings/slider', {cache: 'no-store'}).then(async response => {
       if (response.status === 403) { window.location.assign(`/${locale}/login?next=${encodeURIComponent(window.location.pathname)}`); return; }
       const body = await response.json(); if (!response.ok) throw new Error(body.error);
-      setSlider(body.slider); setPackages(body.packages); setVndPerUsd(body.vndPerUsd);
+      setSlider(body.slider); setPackages(body.packages); setVndPerUsd(body.vndPerUsd); setSaved(Boolean(body.saved));
     }).catch(cause => setError(cause instanceof Error ? cause.message : 'Settings could not be loaded.'));
   }, [locale]);
 
@@ -34,7 +35,7 @@ export default function SliderSettings() {
     const body = await response?.json().catch(() => null);
     setBusy(false);
     if (!response?.ok) { setError(body?.error ?? 'Settings could not be saved.'); return; }
-    setSlider(body.slider); setMessage(body.slider.enabled ? 'Saved. The slider is live on the store.' : 'Saved. The slider is off.');
+    setSlider(body.slider); setSaved(true); setMessage(body.slider.enabled ? 'Saved. The slider is live on the store.' : 'Saved. The slider is off.');
   }
 
   const set = <K extends keyof AmountSlider>(key: K, value: AmountSlider[K]) => setSlider(current => current && {...current, [key]: value});
@@ -45,6 +46,7 @@ export default function SliderSettings() {
     <p className="notice">A card above the packages where customers drag to any amount. Choose a package and say how much one package holds: with the <strong>100M</strong> package, “one package holds 100 M coins” lets customers pick 100M, 200M, 300M… and pay the package price for each 100M.</p>
     {error && <p className="admin-feedback error" role="alert">{error}</p>}
     {message && <p className="admin-feedback success" role="status">{message}</p>}
+    {slider && !saved && <p className="admin-feedback success" role="status">Not saved yet: the store already shows this automatic slider, built from the smallest package whose name starts with an amount (like “100M”). Change anything and save to take control.</p>}
     {!slider ? !error && <LoadingRows label="Loading slider settings…"/> : <form className="card admin-panel slider-settings" onSubmit={event => void save(event)}>
       <label className="admin-compact-check"><input type="checkbox" checked={slider.enabled} onChange={event => set('enabled', event.target.checked)}/> Show the slider on the store</label>
       <label>Package that sets the price per unit<select value={slider.packageId} onChange={event => set('packageId', event.target.value)}>

@@ -1,5 +1,5 @@
 import {describe, expect, it} from 'vitest';
-import {amountSliderSchema, defaultAmountSlider, snapAmount, stockText, UNLIMITED_STOCK} from '../../src/lib/amount-slider-rules';
+import {amountSliderSchema, autoSlider, defaultAmountSlider, formatUnits, lineAmount, snapAmount, stockText, titleAmount} from '../../src/lib/amount-slider-rules';
 import {explorerTx, isCrypto, reportSchema, timingSchema} from '../../src/lib/order-rules';
 
 const later = (hours: number) => new Date(Date.now() + hours * 3_600_000).toISOString();
@@ -48,9 +48,25 @@ describe('amount slider', () => {
     expect(snapAmount(5000, coins, 10)).toBe(1000);
     expect(amountSliderSchema.parse({...slider, unitSize: undefined}).unitSize).toBe(1);
   });
-  it('reads very large stock as always available', () => {
-    expect(stockText(UNLIMITED_STOCK)).toBe('Always in stock');
-    expect(stockText(3)).toBe('3 currently available');
-    expect(stockText(0)).toBe('Currently out of stock');
+  it('never shows the stock count to customers', () => {
+    expect(stockText(100_000_000)).toBe('Available');
+    expect(stockText(3)).toBe('Available');
+    expect(stockText(0)).toBe('Out of stock');
+  });
+  it('reads amounts from package names and writes them the way players do', () => {
+    expect(titleAmount('100M · COINS SKYBLOCK HYPIXEL')).toEqual({value: 100, unit: 'M'});
+    expect(titleAmount('1B · COINS')).toEqual({value: 1, unit: 'B'});
+    expect(titleAmount('Basic sample package')).toBeNull();
+    expect(formatUnits(300, 'M coins')).toBe('300M coins');
+    expect(formatUnits(1500, 'M coins')).toBe('1.5B coins');
+    expect(formatUnits(3, 'packs')).toBe('3 packs');
+    expect(lineAmount('100M · COINS SKYBLOCK HYPIXEL', 3)).toBe('300M');
+    expect(lineAmount('Basic sample package', 2)).toBe('Basic sample package × 2');
+  });
+  it('sets the slider up from the catalog until an Admin saves one', () => {
+    const products = [{id: 'b', title: {en: '1B · COINS SKYBLOCK HYPIXEL'}, stock: 10}, {id: 'm', title: {en: '100M · COINS SKYBLOCK HYPIXEL'}, stock: 99}];
+    expect(autoSlider(products)).toMatchObject({enabled: true, packageId: 'm', unitLabel: 'M coins', unitSize: 100, min: 100, max: 10000, step: 100, defaultAmount: 300});
+    expect(amountSliderSchema.safeParse(autoSlider(products)).success).toBe(true);
+    expect(autoSlider([{id: 'x', title: {en: 'Basic sample package'}, stock: 5}])).toBeNull();
   });
 });

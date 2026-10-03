@@ -1,5 +1,5 @@
-import {amountSliderSchema} from '@/lib/amount-slider-rules';
-import {getAmountSlider, setAmountSlider} from '@/lib/amount-slider';
+import {amountSliderSchema, autoSlider, defaultAmountSlider} from '@/lib/amount-slider-rules';
+import {getSavedAmountSlider, setAmountSlider} from '@/lib/amount-slider';
 import {recordAudit} from '@/lib/audit';
 import {getSession} from '@/lib/auth';
 import {getPublicCatalog} from '@/lib/catalog-server';
@@ -11,13 +11,16 @@ const json = (data: unknown, status = 200) => Response.json(data, {status, heade
 /** Active packages the slider can sell, with their price per unit and stock. */
 async function packages() {
   const catalog = await getPublicCatalog();
-  return {vndPerUsd: catalog.vndPerUsd, packages: catalog.products.map(product => ({id: product.id, title: product.title.en, priceVnd: product.priceVnd, stock: product.stock}))};
+  return {vndPerUsd: catalog.vndPerUsd, products: catalog.products, packages: catalog.products.map(product => ({id: product.id, title: product.title.en, priceVnd: product.priceVnd, stock: product.stock}))};
 }
 
 export async function GET() {
   if ((await getSession())?.role !== 'admin') return json({error: 'Admin role required'}, 403);
   if (!process.env.DATABASE_URL) return json({error: 'Database is not configured'}, 503);
-  return json({slider: await getAmountSlider(), ...await packages()});
+  const {products, ...rest} = await packages();
+  const saved = await getSavedAmountSlider();
+  // Until an Admin saves, the store uses the automatic slider; show it so saving keeps what customers already see.
+  return json({slider: saved ?? autoSlider(products) ?? defaultAmountSlider, saved: Boolean(saved), ...rest});
 }
 
 export async function POST(request: Request) {

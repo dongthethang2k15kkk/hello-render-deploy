@@ -1,19 +1,18 @@
 import {expect, test} from '@playwright/test';
 import {registerCustomer} from './helpers';
 
-test('catalog search, sort and empty-state reset preserve access to the packages', async ({page}) => {
+test('a short catalog skips search and sort; the quick buy box goes straight to checkout', async ({page}) => {
   await page.goto('/en');
-  const cards = page.locator('.product-card');
-  const count = await cards.count();
-  expect(count).toBeGreaterThan(0);
-  await page.getByRole('searchbox', {name: 'Search packages'}).fill('no-package-with-this-name-123');
-  await expect(page.getByText('No matching packages', {exact: true})).toBeVisible();
-  await page.getByRole('button', {name: 'Clear filters'}).click();
-  await expect(cards).toHaveCount(count);
-  await page.getByLabel('Sort packages', {exact: true}).selectOption('price-high');
-  const amounts = await cards.locator('.price-usd').allTextContents();
-  const numbers = amounts.map(value => Number(value.replace(/[^\d.]/g, '')));
-  expect(numbers).toEqual([...numbers].sort((a, b) => b - a));
+  await expect(page.locator('.product-card')).toHaveCount(2);
+  await expect(page.getByRole('searchbox', {name: 'Search packages'})).toHaveCount(0);
+  const box = page.locator('.quick-buy');
+  await box.getByRole('radio', {name: /Extended sample package/}).click();
+  await box.getByRole('button', {name: 'More'}).click();
+  await expect(box.locator('.amount-slider-price strong')).toHaveText('$50.00');
+  await box.getByLabel('Recipient name (test data)').fill('Quick buyer');
+  await box.getByRole('button', {name: /^Buy Extended sample package × 2/}).click();
+  await expect(page).toHaveURL(/\/en\/checkout$/);
+  await expect(page.locator('.summary-line')).toContainText('Extended sample package × 2');
 });
 
 test('drafts survive navigation, remain scoped to an account, and quick replies stay editable', async ({browser}) => {

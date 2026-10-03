@@ -3,6 +3,9 @@ import {use, useCallback, useEffect, useState} from 'react';
 import Link from 'next/link';
 import {useRouter} from 'next/navigation';
 import TimeSlotsDialog from '@/components/time-slots-dialog';
+import {useCart} from '@/components/cart-provider';
+import {useCatalog} from '@/components/catalog-provider';
+import {createCartSchema} from '@/lib/cart';
 import {googleCalendarLink} from '@/lib/calendar';
 import {formatUsdFromVnd, formatVnd} from '@/lib/money';
 import {CRYPTO_METHODS, explorerTx, formatRange, isCrypto, REPORT_DELAY_SECONDS, statusLabels, statusTone, type OrderStatus} from '@/lib/order-rules';
@@ -29,6 +32,8 @@ function Copy({label, value}: {label: string; value: string}) {
 export default function OrderPage({params}: {params: Promise<{locale: string; code: string}>}) {
   const {locale, code} = use(params);
   const router = useRouter();
+  const {save} = useCart();
+  const catalog = useCatalog();
   const [order, setOrder] = useState<Order | null>(null);
   const [qr, setQr] = useState<string | null>(null);
   const [paymentUri, setPaymentUri] = useState<string | null>(null);
@@ -72,6 +77,18 @@ export default function OrderPage({params}: {params: Promise<{locale: string; co
   const secondsLeft = Math.max(0, Math.floor((Date.parse(order.holdExpiresAt) - (now + offset)) / 1000));
   const reportIn = Math.max(0, Math.ceil((Date.parse(order.createdAt) + REPORT_DELAY_SECONDS * 1000 - (now + offset)) / 1000));
   const crypto = isCrypto(order.paymentMethod) ? CRYPTO_METHODS[order.paymentMethod] : null;
+  // Returning customers reorder in one click: the same packages (matched by SKU at today's price) and delivery details.
+  function buyAgain() {
+    if (!order) return;
+    const lines = order.items.flatMap(item => {
+      const product = catalog.products.find(entry => entry.sku === item.sku && entry.stock > 0);
+      if (!product) return [];
+      const delivery = Object.fromEntries(product.fields.map(field => [field.key, item.delivery[field.key] ?? '']));
+      return [{productId: product.id, quantity: Math.min(item.quantity, product.stock), delivery}];
+    });
+    if (!lines.length || !createCartSchema(catalog.products).safeParse(lines).success || !save(lines)) { setError('These packages are not available right now. Choose a new amount on the store.'); return; }
+    router.push(`/${locale}/checkout`);
+  }
   const usdt = order.paymentMethod === 'usdt';
   // Times chosen at checkout: "I've paid" reports at once. Older orders still ask for times in the dialog.
   async function reportPaid() {
@@ -93,7 +110,7 @@ export default function OrderPage({params}: {params: Promise<{locale: string; co
       <div>
         {order.status === 'awaiting_payment' && <section className="card pay-card">
           <span className="eyebrow">STEP 1 / {usdt ? 'PAY WITH USDT (TRC20)' : crypto ? 'PAY WITH LITECOIN' : 'PAY BY BANK TRANSFER'}</span>
-          <h2>{secondsLeft > 0 ? <>Pay within <span className="countdown">{Math.floor(secondsLeft / 60)}:{String(secondsLeft % 60).padStart(2, '0')}</span></> : 'Payment window ended'}</h2>
+          <h2>{secondsLeft > 0 ? <>Price locked · pay within <span className="countdown">{Math.floor(secondsLeft / 60)}:{String(secondsLeft % 60).padStart(2, '0')}</span></> : 'Payment window ended'}</h2>
           <div className="pay-grid">
             {'address' in order.bankSnapshot ? <>
               {qr && <figure className="vietqr"><img src={`data:image/svg+xml;utf8,${encodeURIComponent(qr)}`} alt={usdt ? `TRON address QR code for ${order.cryptoAmount} USDT` : `Litecoin QR code: ${order.cryptoAmount} LTC`}/><figcaption>{usdt ? 'Scan the address, then type the amount' : 'Scan with your Litecoin wallet'}</figcaption></figure>}
@@ -158,6 +175,7 @@ export default function OrderPage({params}: {params: Promise<{locale: string; co
         {order.items.map((item, index) => <div className="summary-item" key={index}><div className="summary-line"><span>{item.title} × {item.quantity}</span><span className="summary-amount"><strong>{formatUsdFromVnd(item.unitPriceVnd * item.quantity, order.vndPerUsd)}</strong><small>{formatVnd(item.unitPriceVnd * item.quantity)}</small></span></div>{Object.entries(item.delivery).filter(([, value]) => value).map(([key, value]) => <small key={key}>{key}: {value}</small>)}</div>)}
         <div className="summary-total"><small>Total</small><p className="pay-amount">{formatUsdFromVnd(order.totalVnd, order.vndPerUsd)}</p><small className="pay-secondary">{formatVnd(order.totalVnd)}{order.cryptoAmount ? ` · paid as ${order.cryptoAmount} ${crypto?.coin ?? 'LTC'}` : ''}</small></div>
         <p className="field-caption">Placed {new Date(order.createdAt).toLocaleString('en-GB')}</p>
+        {order.status !== 'awaiting_payment' && <button type="button" className="full-width buy-again" onClick={buyAgain}>Buy again <span aria-hidden="true">→</span></button>}
       </aside>
     </div>
     <TimeSlotsDialog open={dialog !== null} askTxid={dialog === 'report' && Boolean(crypto)} title={dialog === 'report' || !order.slots.length ? 'When can you receive your order?' : 'Change your available times'} submitLabel={dialog === 'report' || !order.slots.length ? 'Send my times' : 'Save times'} onClose={() => setDialog(null)} onSubmit={async input => {

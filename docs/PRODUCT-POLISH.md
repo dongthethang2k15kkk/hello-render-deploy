@@ -239,6 +239,20 @@ Từ câu trả lời của chủ shop sau bài phân tích marketing. Giao di�
 
 **Mã nguồn:** `src/lib/availability.ts`, `src/components/availability.tsx`, `src/components/time-picker.tsx`, `src/lib/usdt.ts`, `checkCryptoOrder` trong `src/lib/payment-detection.ts`, `CRYPTO_METHODS`/`timingSchema` trong `src/lib/order-rules.ts`, `src/lib/amount-slider-rules.ts`, `src/components/amount-slider.tsx`, `src/app/[locale]/admin/settings/slider/page.tsx`, `src/app/api/auth/discord/*`. Kiểm thử: `tests/unit/conversion.test.ts`, `tests/unit/usdt.test.ts`, `tests/e2e/conversion.spec.ts`.
 
+## Mua một trang — 2026-10-03
+
+Chủ shop thấy "vẫn thế, vẫn khó dùng": đợt trước làm phần nền nhưng chưa làm luồng mua một trang đã thống nhất. Đợt này hoàn thiện giai đoạn 1.
+
+- **Hộp "Buy now"** ngay dưới phần đầu trang chủ (nút "Buy now →" ở hero nhảy tới đây): chọn *Any amount* (thanh kéo) hoặc một gói (100M, 1B… kèm giá USD), gói thì có nút − / + số lượng, điền IGN, giá USD lớn + VND/LTC nhỏ cập nhật ngay → **Buy now đi thẳng tới thanh toán** với đúng món đó (không qua trang sản phẩm, không qua giỏ). Thẻ gói ghi "Buy 100M →"; ô tìm kiếm/sắp xếp chỉ hiện khi có hơn 4 gói.
+- **Thanh kéo tự bật**: khi Admin chưa lưu cài đặt, web lấy gói nhỏ nhất có tên bắt đầu bằng số lượng ("100M · …") làm đơn vị: 100M–10B, bước 100M, bắt đầu 300M; số hiển thị kiểu game thủ ("1.5B coins"). Vào Settings → Amount slider để đổi rồi Save.
+- **Không hiện số tồn kho** cho khách: chỉ "Available" / "Out of stock".
+- **Thanh toán gọn hơn**: bỏ thẻ "How it works", còn 3 bước 01 When · 02 Payment · 03 Account. Chưa đăng nhập thì **đăng nhập/tạo tài khoản ngay trong trang thanh toán** (Discord/Google nếu đã cài, hoặc email), giờ đã chọn được giữ nguyên; nút Place order chờ tới khi đăng nhập, có link nhảy tới bước 03.
+- **Trang sản phẩm**: nút "Buy now →" (thanh toán ngay) phía trên "Add to cart".
+- **Trang đơn**: dòng "Price locked · pay within 29:41"; nút **Buy again** (cùng gói, giá hiện tại, cùng thông tin giao hàng → thanh toán) cho khách cũ.
+- **Link ngắn cho Discord**: `/en/buy/100m` (theo slug hoặc SKU của gói) mở thẳng gói đó.
+- **Giao dịch thật gần đây** dưới hộp mua: "✓ N trades completed" và 3 giao dịch mới nhất ("300M delivered · 12 min ago"), không có tên khách, chỉ hiện khi đã có giao dịch hoàn thành.
+- **Sửa lỗi**: trình duyệt bỏ cuộc sau 5 giây khi tải danh sách gói (Neon vừa thức dậy) và dùng danh sách mẫu, khiến "Add to cart" báo "Unable to save the cart on this device". Giờ chờ 12 giây và thử lại 2 lần.
+
 Lệnh thông thường: `npm run db:generate`, `npm run typecheck`, `npm test`, `npm run build`, `npm run test:e2e`. E2E dùng database riêng theo `DATABASE.md`. Sau khi chạy app/container, `SMOKE_URL=http://localhost:3000 node scripts/smoke-container.mjs` kiểm tra static assets, đăng ký, phân quyền, SSE và idempotency.
 
 ## Tệp chính để bảo trì
