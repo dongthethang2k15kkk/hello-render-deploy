@@ -1,6 +1,6 @@
 import {NextResponse} from 'next/server';
-import {devAdminLoginEnabled, googleConfig} from '@/lib/oauth-helpers';
+import {devAdminLoginEnabled, discordConfig, googleConfig} from '@/lib/oauth-helpers';
 
 export async function GET() {
-  return NextResponse.json({google: Boolean(googleConfig()), devAdmin: devAdminLoginEnabled()}, {headers: {'Cache-Control': 'no-store'}});
+  return NextResponse.json({google: Boolean(googleConfig()), discord: Boolean(discordConfig()), devAdmin: devAdminLoginEnabled()}, {headers: {'Cache-Control': 'no-store'}});
 }

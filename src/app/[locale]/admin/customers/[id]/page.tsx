@@ -3,13 +3,13 @@ import {use, useCallback, useEffect, useState} from 'react';
 import Link from 'next/link';
 import {useRouter} from 'next/navigation';
 import SignInActivity from '@/components/admin-sign-in-activity';
-import {describeUserAgent, formatDateTime, generatePassword} from '@/lib/customer-labels';
+import {describeUserAgent, formatDateTime, generatePassword, methodLabels} from '@/lib/customer-labels';
 import {formatVnd} from '@/lib/money';
 import {statusLabels, statusTone, type OrderStatus} from '@/lib/order-rules';
 import {LoadingRows} from '@/components/loading-state';
 
 type Detail = {
-  customer: {id: string; email: string; name: string; emailVerified: boolean; status: string; lockedReason: string | null; mustChangePassword: boolean; createdAt: string; lastLoginAt: string | null; methods: string[]; chatMessages: number};
+  customer: {id: string; email: string; name: string; emailVerified: boolean; status: string; lockedReason: string | null; mustChangePassword: boolean; createdAt: string; lastLoginAt: string | null; methods: string[]; chatMessages: number; discordUsername: string | null};
   sessions: {id: string; ip: string | null; userAgent: string | null; createdAt: string; lastSeenAt: string; expiresAt: string}[];
   audit: {id: string; actorEmail: string; action: string; summary: string; createdAt: string}[];
   orders: {id: string; code: string; status: OrderStatus; totalVnd: number; createdAt: string}[];
@@ -55,13 +55,13 @@ export default function AdminCustomerDetail({params}: {params: Promise<{locale: 
   const {customer, sessions, audit, orders} = detail;
   const locked = customer.status === 'locked';
   return <div className="admin-customer-detail">
-    <div className="page-heading admin-page-heading"><div><p className="eyebrow"><Link href={`/${locale}/admin/customers`}>ADMIN / CUSTOMERS</Link></p><h1>{customer.name}</h1><p className="admin-lede">{customer.email} {customer.emailVerified ? <span className="badge ok">verified by Google</span> : <span className="badge warn">email not verified</span>} <span className={`badge ${locked ? 'danger' : 'ok'}`}>{locked ? 'Locked' : 'Active'}</span></p></div><Link className="button secondary" href={`/${locale}/admin/chat?room=user:${customer.id}`}>Open chat ({customer.chatMessages})</Link></div>
+    <div className="page-heading admin-page-heading"><div><p className="eyebrow"><Link href={`/${locale}/admin/customers`}>ADMIN / CUSTOMERS</Link></p><h1>{customer.name}</h1><p className="admin-lede">{customer.email} {customer.emailVerified ? <span className="badge ok">email verified</span> : <span className="badge warn">email not verified</span>} <span className={`badge ${locked ? 'danger' : 'ok'}`}>{locked ? 'Locked' : 'Active'}</span></p></div><Link className="button secondary" href={`/${locale}/admin/chat?room=user:${customer.id}`}>Open chat ({customer.chatMessages})</Link></div>
     {error && <p className="admin-feedback error" role="alert">{error}</p>}
     {message && <p className="admin-feedback success" role="status">{message}</p>}
 
     <div className="admin-detail-grid">
       <section className="card admin-panel"><h2>Profile</h2>
-        <dl className="account-details"><dt>Joined</dt><dd>{formatDateTime(customer.createdAt)}</dd><dt>Last sign-in</dt><dd>{formatDateTime(customer.lastLoginAt)}</dd><dt>Sign-in methods</dt><dd>{customer.methods.map(method => method === 'google' ? 'Google' : 'Email + password').join(' · ') || 'None'}</dd><dt>Password</dt><dd>{customer.methods.includes('password') ? (customer.mustChangePassword ? 'Set by Admin, must be changed at next sign-in' : 'Set by the customer') : 'No password (Google only)'}</dd>{locked && <><dt>Lock reason</dt><dd>{customer.lockedReason || '—'}</dd></>}</dl>
+        <dl className="account-details"><dt>Joined</dt><dd>{formatDateTime(customer.createdAt)}</dd><dt>Last sign-in</dt><dd>{formatDateTime(customer.lastLoginAt)}</dd><dt>Sign-in methods</dt><dd>{customer.methods.map(method => methodLabels[method] ?? method).join(' · ') || 'None'}</dd>{customer.discordUsername && <><dt>Discord</dt><dd>@{customer.discordUsername}</dd></>}<dt>Password</dt><dd>{customer.methods.includes('password') ? (customer.mustChangePassword ? 'Set by Admin, must be changed at next sign-in' : 'Set by the customer') : 'No password (signs in with Google or Discord)'}</dd>{locked && <><dt>Lock reason</dt><dd>{customer.lockedReason || '—'}</dd></>}</dl>
       </section>
 
       <section className="card admin-panel"><h2>Set a new password</h2>

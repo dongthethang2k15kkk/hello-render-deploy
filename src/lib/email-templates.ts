@@ -25,11 +25,11 @@ const plain = (title: string, lines: string[], links: {label: string; url: strin
 
 type Slot = {start: Date | string; end: Date | string};
 
-export function adminPaymentReported(input: {code: string; customerName: string; customerEmail: string; totalVnd: number; crypto?: {amount: string; address: string; txid: string | null} | null; items: string[]; slots: Slot[]; orderUrl: string}): EmailContent {
-  const title = `Đơn ${input.code} đã báo ${input.crypto ? 'gửi Litecoin' : 'chuyển khoản'}`;
+export function adminPaymentReported(input: {code: string; customerName: string; customerEmail: string; totalVnd: number; crypto?: {amount: string; coin: string; network: string; address: string; txid: string | null} | null; items: string[]; slots: Slot[]; orderUrl: string}): EmailContent {
+  const title = `Đơn ${input.code} đã báo ${input.crypto ? `gửi ${input.crypto.coin}` : 'chuyển khoản'}`;
   const lines = [
     input.crypto
-      ? `Khách <strong>${escapeHtml(input.customerName)}</strong> (${escapeHtml(input.customerEmail)}) báo đã gửi <strong>${escapeHtml(input.crypto.amount)} LTC</strong> (≈ ${formatVnd(input.totalVnd)}) tới ví <strong>${escapeHtml(input.crypto.address)}</strong>.${input.crypto.txid ? ` TXID: ${escapeHtml(input.crypto.txid)}` : ''}`
+      ? `Khách <strong>${escapeHtml(input.customerName)}</strong> (${escapeHtml(input.customerEmail)}) báo đã gửi <strong>${escapeHtml(input.crypto.amount)} ${input.crypto.coin}</strong> (mạng ${escapeHtml(input.crypto.network)}, ≈ ${formatVnd(input.totalVnd)}) tới ví <strong>${escapeHtml(input.crypto.address)}</strong>.${input.crypto.txid ? ` TXID: ${escapeHtml(input.crypto.txid)}` : ''}`
       : `Khách <strong>${escapeHtml(input.customerName)}</strong> (${escapeHtml(input.customerEmail)}) báo đã chuyển <strong>${formatVnd(input.totalVnd)}</strong> với nội dung <strong>${input.code}</strong>.`,
     `Sản phẩm: ${input.items.map(escapeHtml).join('; ')}`,
     `Khung giờ khách rảnh (giờ Việt Nam):<br>${input.slots.map(slot => `• ${escapeHtml(formatRange(slot.start, slot.end, VN_TIME_ZONE))}`).join('<br>')}`,
@@ -37,7 +37,7 @@ export function adminPaymentReported(input: {code: string; customerName: string;
   ];
   lines.push('Admin nào bấm <strong>Nhận đơn</strong> trong Workspace trước sẽ phụ trách khách này (chat, xác nhận tiền, giao hàng).');
   const link = {label: 'Nhận đơn trong Workspace', url: input.orderUrl};
-  return {subject: `[Jewish Horse] ${title} ${input.crypto ? `${input.crypto.amount} LTC` : formatVnd(input.totalVnd)}`, html: layout(title, lines, link), text: plain(title, lines, [link])};
+  return {subject: `[Jewish Horse] ${title} ${input.crypto ? `${input.crypto.amount} ${input.crypto.coin}` : formatVnd(input.totalVnd)}`, html: layout(title, lines, link), text: plain(title, lines, [link])};
 }
 
 export function adminAppointmentAssigned(input: {code: string; customerName: string; start: Date; end: Date; orderUrl: string; calendarUrl: string}): EmailContent {
@@ -91,11 +91,12 @@ export function adminTestEmail(input: {sender: string; adminUrl: string}): Email
 
 // ---------- Automatic payment detection, ASAP appointments and reminders ----------
 
-export function adminPaymentDetected(input: {code: string; customerName: string; amountLabel: string; slots: Slot[]; asap: boolean; orderUrl: string}): EmailContent {
+export function adminPaymentDetected(input: {code: string; customerName: string; amountLabel: string; network: string; slots: Slot[]; asap: boolean; orderUrl: string}): EmailContent {
   const title = `Đơn ${input.code} đã thanh toán (tự động)`;
   const lines = [
-    `Hệ thống đã tự nhận giao dịch Litecoin trên blockchain: <strong>${escapeHtml(input.amountLabel)}</strong> từ khách <strong>${escapeHtml(input.customerName)}</strong>.`,
-    input.asap ? '<strong>Khách đang rảnh NGAY BÂY GIỜ.</strong> Nếu bạn rảnh, mở đơn và bấm "Start now".' : input.slots.length ? `Khung giờ khách rảnh (giờ Việt Nam):<br>${input.slots.map(slot => `• ${escapeHtml(formatRange(slot.start, slot.end, VN_TIME_ZONE))}`).join('<br>')}` : 'Khách chưa chọn giờ; web đã nhắc khách chọn.',
+    `Hệ thống đã tự nhận giao dịch ${escapeHtml(input.network)} trên blockchain: <strong>${escapeHtml(input.amountLabel)}</strong> từ khách <strong>${escapeHtml(input.customerName)}</strong>.`,
+    ...(input.asap ? ['<strong>Khách muốn giao dịch NGAY BÂY GIỜ.</strong> Nếu bạn rảnh, nhận đơn trong Workspace và bấm "Start now".'] : []),
+    input.slots.length ? `Khung giờ khách rảnh (giờ Việt Nam):<br>${input.slots.map(slot => `• ${escapeHtml(formatRange(slot.start, slot.end, VN_TIME_ZONE))}`).join('<br>')}` : 'Khách chưa chọn giờ; web đã nhắc khách chọn.',
     'Hãy chốt lịch hẹn trong trang đơn.'
   ];
   const link = {label: 'Mở đơn', url: input.orderUrl};

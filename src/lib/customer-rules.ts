@@ -10,7 +10,7 @@ export const MAX_FAILURES_PER_IP = 20;
 export const MAX_REGISTRATIONS_PER_IP_HOUR = 5;
 export const FAILED_OUTCOMES = ['wrong_password', 'unknown_email', 'no_password'] as const;
 
-export type LoginMethod = 'password' | 'google' | 'register';
+export type LoginMethod = 'password' | 'google' | 'discord' | 'register';
 export type LoginOutcome = 'success' | 'wrong_password' | 'unknown_email' | 'no_password' | 'locked' | 'rate_limited';
 
 export const emailSchema = z.string().trim().toLowerCase().max(254).regex(/^[^\s@]+@[^\s@]+\.[^\s@]+$/, 'Enter a valid email address.');
@@ -92,12 +92,22 @@ export function decideGoogleLink(bySub: ExistingCustomer | null, byEmail: Existi
   return {action: 'link', customerId: account.id, dropPassword: Boolean(account.passwordHash) && !account.emailVerified};
 }
 
+/** Same rules for Discord: the linked Discord id wins, then an unlinked account with the same verified email. */
+export function decideDiscordLink(byId: (Omit<ExistingCustomer, 'googleSub'> & {discordId: string | null}) | null, byEmail: (Omit<ExistingCustomer, 'googleSub'> & {discordId: string | null}) | null): GoogleLinkDecision {
+  const account = byId ?? byEmail;
+  if (!account) return {action: 'create'};
+  if (account.status === 'locked') return {action: 'locked', customerId: account.id};
+  if (byId) return {action: 'sign-in', customerId: byId.id};
+  if (account.discordId) return {action: 'conflict'};
+  return {action: 'link', customerId: account.id, dropPassword: Boolean(account.passwordHash) && !account.emailVerified};
+}
+
 const dateParam = z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().catch(undefined);
 const pageParam = z.coerce.number().int().min(1).max(10000).catch(1);
 export const customerFilterSchema = z.object({
   q: z.string().trim().max(100).catch(''),
   status: z.enum(['all', 'active', 'locked']).catch('all'),
-  method: z.enum(['all', 'google', 'password']).catch('all'),
+  method: z.enum(['all', 'google', 'discord', 'password']).catch('all'),
   from: dateParam,
   to: dateParam,
   page: pageParam
@@ -105,7 +115,7 @@ export const customerFilterSchema = z.object({
 export const loginEventFilterSchema = z.object({
   q: z.string().trim().max(100).catch(''),
   outcome: z.enum(['all', 'success', 'failed', 'rate_limited', 'locked']).catch('all'),
-  method: z.enum(['all', 'password', 'google', 'register']).catch('all'),
+  method: z.enum(['all', 'password', 'google', 'discord', 'register']).catch('all'),
   from: dateParam,
   to: dateParam,
   customerId: z.string().max(40).optional().catch(undefined),

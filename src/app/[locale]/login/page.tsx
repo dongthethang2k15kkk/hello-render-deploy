@@ -11,6 +11,13 @@ const oauthErrors: Record<string, string> = {
   google_failed: 'Could not complete Google sign-in. Please try again.',
   google_unverified: 'This Google email is not verified.',
   google_conflict: 'This email is already linked to a different Google account. Contact the shop on Discord.',
+  discord_not_configured: 'Discord sign-in is not configured yet.',
+  discord_cancelled: 'Discord sign-in was cancelled.',
+  discord_invalid_state: 'Discord sign-in expired. Please try again.',
+  discord_failed: 'Could not complete Discord sign-in. Please try again.',
+  discord_unverified: 'Verify the email on your Discord account first (Discord settings → My Account), then try again. We send order updates to that email.',
+  discord_conflict: 'This email is already linked to a different Discord account. Contact the shop on Discord.',
+  discord_admin: 'Store staff sign in with Google.',
   account_locked: 'This account is locked. Contact the shop on Discord.',
   accounts_unavailable: 'Accounts are unavailable right now. Please try again shortly.'
 };
@@ -27,7 +34,7 @@ export default function LoginPage() {
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const [next, setNext] = useState('');
-  const [providers, setProviders] = useState<{google: boolean; devAdmin: boolean} | null>(null);
+  const [providers, setProviders] = useState<{google: boolean; discord?: boolean; devAdmin: boolean} | null>(null);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -62,10 +69,15 @@ export default function LoginPage() {
   }
 
   const googleHref = `/api/auth/google/start${next === 'checkout' || next.startsWith('/en/admin') ? `?next=${encodeURIComponent(next)}` : ''}`;
+  const discordHref = `/api/auth/discord/start${next === 'checkout' ? '?next=checkout' : ''}`;
   return <div className="auth-page page-heading"><p className="eyebrow">ACCOUNT ACCESS</p><h1>{register ? 'Create an account' : 'Welcome back'}</h1><p className="muted">Sign in to chat with support and continue shopping.</p>
     <section className="auth-card card"><div className="auth-tabs" aria-label="Choose account action"><button type="button" className={!register ? 'active' : ''} aria-pressed={!register} onClick={() => {setRegister(false); setError('');}}>Sign in</button><button type="button" className={register ? 'active' : ''} aria-pressed={register} onClick={() => {setRegister(true); setError('');}}>Register</button></div>
       {/* Plain link: OAuth needs a full-page navigation, not client routing. */}
-      {providers?.google && <><a className="button secondary full-width google-signin" href={googleHref}>Continue with Google</a><p className="auth-divider"><span>or use your email</span></p></>}
+      {(providers?.google || providers?.discord) && <div className="oauth-buttons">
+        {providers.discord && <a className="button full-width discord-signin" href={discordHref}>Continue with Discord</a>}
+        {providers.google && <a className="button secondary full-width google-signin" href={googleHref}>Continue with Google</a>}
+        <p className="auth-divider"><span>or use your email</span></p>
+      </div>}
       <form onSubmit={event => void submit(event)}>
         {register && <label>Full name<input value={name} onChange={event => setName(event.target.value)} autoComplete="name" required maxLength={80}/></label>}
         <label>Email<input type="email" value={email} onChange={event => setEmail(event.target.value)} autoComplete="email" required maxLength={254}/></label>

@@ -49,7 +49,7 @@ export function WorkspaceQueues({locale}: {locale: string}) {
 
   const card = (order: QueueOrder, kind: 'waiting' | 'mine' | 'others') => <li key={order.id} className={`workspace-card ${order.asap && order.status !== 'scheduled' ? 'asap' : ''}`}>
     <div className="workspace-card-head"><strong>{order.customer.name}</strong><span className={`badge ${statusTone[order.status]}`}>{statusLabels[order.status]}</span>{order.asap && order.status !== 'scheduled' && <span className="asap-badge">Free now</span>}</div>
-    <p className="workspace-card-meta">{order.code} · {order.items.map(item => `${item.title} × ${item.quantity}`).join(', ')} · {formatVnd(order.totalVnd)}{order.paymentMethod === 'ltc' ? ' · Litecoin' : ''}</p>
+    <p className="workspace-card-meta">{order.code} · {order.items.map(item => `${item.title} × ${item.quantity}`).join(', ')} · {formatVnd(order.totalVnd)}{order.paymentMethod === 'ltc' ? ' · Litecoin' : order.paymentMethod === 'usdt' ? ' · USDT' : ''}</p>
     <p className="workspace-card-time">{order.appointmentStart && order.appointmentEnd ? <>Appointment {formatRange(order.appointmentStart, order.appointmentEnd, VN_TIME_ZONE)}</> : <>Reported {ago(order.reportedAt ?? order.createdAt)}</>}{kind === 'others' && order.assignedAdmin ? ` · handled by ${order.assignedAdmin}` : ''}</p>
     <div className="workspace-card-actions">
       {kind === 'waiting' ? <button type="button" disabled={busy === order.id} onClick={() => void take(order)}>{busy === order.id ? 'Taking…' : 'Take this customer'}</button>

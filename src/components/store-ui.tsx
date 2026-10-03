@@ -5,6 +5,8 @@ import {useLocale, useTranslations} from 'next-intl';
 import {useCallback, useDeferredValue, useEffect, useMemo, useState} from 'react';
 import {type CatalogProduct, type CatalogSource, Locale} from '@/lib/catalog';
 import Price from './price';
+import {AmountSliderCard} from './amount-slider';
+import {stockText, type AmountSlider} from '@/lib/amount-slider-rules';
 import {InboxPopover, OrdersPopover} from './header-popover';
 import {filterCatalog, type CatalogSort} from '@/lib/catalog-view';
 import {clearChatDrafts} from '@/lib/chat-drafts';
@@ -79,8 +81,11 @@ const comparison: Record<string, string[]> = {
   'sample-plus': ['Higher sample price', 'Recipient name plus an optional delivery note']
 };
 
-export function Catalog({products, source, vndPerUsd, vndPerLtc = null}: {products: CatalogProduct[]; source: CatalogSource; vndPerUsd: number; vndPerLtc?: number | null}) {
+export function Catalog({products: allProducts, source, vndPerUsd, vndPerLtc = null, slider = null}: {products: CatalogProduct[]; source: CatalogSource; vndPerUsd: number; vndPerLtc?: number | null; slider?: AmountSlider | null}) {
   const locale = useLocale() as Locale; const t = useTranslations();
+  // The slider sells its per-unit package by amount; that package can stay out of the grid.
+  const sliderProduct = slider?.enabled ? allProducts.find(product => product.id === slider.packageId) : undefined;
+  const products = useMemo(() => sliderProduct && slider?.hideFromGrid ? allProducts.filter(product => product.id !== sliderProduct.id) : allProducts, [allProducts, sliderProduct, slider?.hideFromGrid]);
   const [query, setQuery] = useState('');
   const [inStock, setInStock] = useState(false);
   const [sort, setSort] = useState<CatalogSort>('featured');
@@ -88,7 +93,8 @@ export function Catalog({products, source, vndPerUsd, vndPerLtc = null}: {produc
   const shown = useMemo(() => filterCatalog(products, deferredQuery, inStock, sort), [products, deferredQuery, inStock, sort]);
   const reset = () => {setQuery(''); setInStock(false); setSort('featured');};
   return <section id="catalog" className="section">
-    <div className="section-heading"><div><p className="eyebrow">THE COLLECTION</p><h2>Choose a package</h2><p className="muted">{products.length ? `${products.length} package${products.length === 1 ? '' : 's'} available. Review the details before continuing.` : 'No packages are currently available.'}</p></div><span className="pill">{vndPerLtc ? 'Prices in USD · paid in VND or LTC' : 'Prices in USD · paid in VND'}</span></div>
+    <div className="section-heading"><div><p className="eyebrow">THE COLLECTION</p><h2>Choose a package</h2><p className="muted">{products.length ? `${products.length} package${products.length === 1 ? '' : 's'} available. Review the details before continuing.` : 'No packages are currently available.'}</p></div><span className="pill">Prices in USD</span></div>
+    {slider && sliderProduct && <AmountSliderCard slider={slider} product={sliderProduct} vndPerUsd={vndPerUsd} vndPerLtc={vndPerLtc}/>}
     {source === 'fallback' && <p className="catalog-status" role="status">The catalog is temporarily unavailable. Please refresh in a moment.</p>}
     {!products.length && <div className="empty-state"><div className="empty-icon">◇</div><h3>Catalog coming soon</h3><p className="muted">The store has no active packages right now. Please check again later or ask support.</p></div>}
     {products.length > 0 && <div className="package-tools">
@@ -104,10 +110,10 @@ export function Catalog({products, source, vndPerUsd, vndPerLtc = null}: {produc
         <div className="row"><span className="eyebrow">DIGITAL PACKAGE</span><span className="sample-tag">{p.stock ? 'Available' : 'Out of stock'}</span></div>
         <h3>{p.title[locale]}</h3>
         <p className="muted">{p.description[locale]}</p>
-        <ul className="compare-list">{(comparison[p.id] ?? [p.stock ? `${p.stock} currently available` : 'Currently out of stock', p.fields.length ? `${p.fields.filter(field => field.required).length} required delivery field${p.fields.filter(field => field.required).length === 1 ? '' : 's'}` : 'No delivery details required']).map(item => <li key={item}>{item}</li>)}</ul>
+        <ul className="compare-list">{(comparison[p.id] ?? [stockText(p.stock), p.fields.length ? `${p.fields.filter(field => field.required).length} required delivery field${p.fields.filter(field => field.required).length === 1 ? '' : 's'}` : 'No delivery details required']).map(item => <li key={item}>{item}</li>)}</ul>
         <div className="product-bottom"><div><small>{p.salePriceVnd ? 'Sale price' : 'Price'}</small>{p.salePriceVnd && <del>{formatUsdFromVnd(p.basePriceVnd, vndPerUsd)}</del>}<Price vnd={p.priceVnd} vndPerUsd={vndPerUsd} vndPerLtc={vndPerLtc}/></div><Link className={`button ${!p.stock ? 'disabled-link' : ''}`} aria-disabled={!p.stock} tabIndex={p.stock ? undefined : -1} href={p.stock ? `/${locale}/products/${p.id}` : '#catalog'}>{p.stock ? t('detail') : 'Out of stock'} <span aria-hidden="true">→</span></Link></div>
       </div>
     </article>)}</div>
-    <div className="after-purchase card"><p className="eyebrow">WHAT YOU GET AFTER PURCHASE</p><h3>Pay by bank transfer, then pick a time</h3><p className="muted">Place your order and transfer the VND amount within 30 minutes using the QR code. Then choose the times you are free. We confirm your payment, book one of your times and send the details to your email and Inbox. At the appointment we deliver through the site chat.</p></div>
+    <div className="after-purchase card"><p className="eyebrow">WHAT YOU GET AFTER PURCHASE</p><h3>Pick a time, pay, then trade in the chat</h3><p className="muted">At checkout choose “Trade now” while a trader is online, or a few times you are free. Then pay within 30 minutes using the QR code. We confirm your payment and your time by email and in your Inbox, and deliver with you through the site chat.</p></div>
   </section>;
 }

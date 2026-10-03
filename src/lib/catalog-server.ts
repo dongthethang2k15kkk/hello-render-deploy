@@ -19,6 +19,12 @@ async function storeLtcRate() {
   }
 }
 
+/** Whether checkout offers USDT (an active TRON wallet), for the store's payment copy. */
+export async function usdtCheckout() {
+  if (!process.env.DATABASE_URL) return false;
+  try { return (await getPaymentDb().cryptoWallet.count({where: {active: true, network: 'TRC20'}})) > 0; } catch { return false; }
+}
+
 async function readDatabaseCatalog(): Promise<CatalogProduct[]> {
   const records = await getPaymentDb().product.findMany({
     where: {active: true},

@@ -23,3 +23,9 @@ services:
         sync: false
       - key: APP_URL
         sync: false
+      - key: DISCORD_CLIENT_ID
+        sync: false
+      - key: DISCORD_CLIENT_SECRET
+        sync: false
+      - key: TRONGRID_API_KEY
+        sync: false

@@ -39,6 +39,14 @@ export function googleConfig() {
   return clientId && clientSecret ? {clientId, clientSecret} : null;
 }
 
+export function discordConfig() {
+  const clientId = process.env.DISCORD_CLIENT_ID ?? '';
+  const clientSecret = process.env.DISCORD_CLIENT_SECRET ?? '';
+  return clientId && clientSecret ? {clientId, clientSecret} : null;
+}
+export const discordCookie = {state: 'discord_state', next: 'discord_next'} as const;
+export const discordCookiePath = '/api/auth/discord';
+
 /** APP_URL keeps the redirect URI identical to the one registered in Google behind Render's proxy. */
 export function appOrigin(requestUrl: string) {
   return (process.env.APP_URL || new URL(requestUrl).origin).replace(/\/$/, '');
@@ -46,4 +54,8 @@ export function appOrigin(requestUrl: string) {
 
 export function redirectUri(requestUrl: string) {
   return `${appOrigin(requestUrl)}/api/auth/google/callback`;
+}
+
+export function discordRedirectUri(requestUrl: string) {
+  return `${appOrigin(requestUrl)}/api/auth/discord/callback`;
 }

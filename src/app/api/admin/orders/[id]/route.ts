@@ -2,9 +2,9 @@ import {z} from 'zod';
 import {getSession} from '@/lib/auth';
 import {sameOrigin} from '@/lib/customer-rules';
 import {appOrigin} from '@/lib/oauth-helpers';
-import {vietnamLocalToDate} from '@/lib/order-rules';
+import {isCrypto, vietnamLocalToDate} from '@/lib/order-rules';
 import {addInternalNote, adminOrder, assertHandles, cancelByAdmin, claimOrder, completeOrder, confirmPayment, OrderError, resendEmail, scheduleAppointment} from '@/lib/order-store';
-import {checkLtcOrder} from '@/lib/payment-detection';
+import {checkCryptoOrder} from '@/lib/payment-detection';
 
 export const runtime = 'nodejs';
 const json = (data: unknown, status = 200) => Response.json(data, {status, headers: {'Cache-Control': 'no-store'}});
@@ -18,7 +18,7 @@ export async function GET(request: Request, {params}: {params: Promise<{id: stri
   if (!validId(id)) return json({error: 'Order not found'}, 404);
   try {
     let order = await adminOrder(id);
-    if (order?.paymentMethod === 'ltc' && ['awaiting_payment', 'payment_reported'].includes(order.status) && (await checkLtcOrder(id, appOrigin(request.url)))?.seen) order = await adminOrder(id);
+    if (order && isCrypto(order.paymentMethod) && ['awaiting_payment', 'payment_reported'].includes(order.status) && (await checkCryptoOrder(id, appOrigin(request.url)))?.seen) order = await adminOrder(id);
     return order ? json({order, me: admin.email}) : json({error: 'Order not found'}, 404);
   } catch { return json({error: 'Order could not be loaded.'}, 503); }
 }
@@ -62,7 +62,7 @@ export async function POST(request: Request, {params}: {params: Promise<{id: str
     else if (input.action === 'note') await addInternalNote(admin.email, id, input.note);
     else if (input.action === 'resend') await resendEmail(admin.email, id, input.kind, origin);
     else if (input.action === 'start-now') await scheduleAppointment(admin.email, id, {start: new Date(), end: new Date(Date.now() + input.minutes * 60_000)}, origin);
-    else await checkLtcOrder(id, origin, {force: true});
+    else await checkCryptoOrder(id, origin, {force: true});
     return json({ok: true, order: await adminOrder(id), me: admin.email});
   } catch (error) {
     if (error instanceof OrderError) return json({error: error.message}, error.status);

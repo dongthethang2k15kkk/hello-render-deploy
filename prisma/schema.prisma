@@ -132,6 +132,8 @@ model Customer {
   name               String
   passwordHash       String?
   googleSub          String?           @unique
+  discordId          String?           @unique
+  discordUsername    String?
   emailVerified      Boolean           @default(false)
   status             String            @default("active")
   lockedReason       String?

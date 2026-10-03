@@ -3,11 +3,11 @@ import {z} from 'zod';
 import {getSession} from '@/lib/auth';
 import {sameOrigin} from '@/lib/customer-rules';
 import {appOrigin} from '@/lib/oauth-helpers';
-import {orderCodePattern, reportSchema} from '@/lib/order-rules';
+import {isCrypto, orderCodePattern, reportSchema, timingSchema} from '@/lib/order-rules';
 import {cancelByCustomer, customerOrder, OrderError, reportTransfer, updateTimes} from '@/lib/order-store';
 import {litecoinUri} from '@/lib/ltc-format';
 import {vietQrPayload} from '@/lib/vietqr';
-import {checkLtcOrder} from '@/lib/payment-detection';
+import {checkCryptoOrder} from '@/lib/payment-detection';
 import {mailStatus} from '@/lib/mailer';
 
 export const runtime = 'nodejs';
@@ -21,17 +21,18 @@ export async function GET(request: Request, {params}: {params: Promise<{code: st
   try {
     let order = await customerOrder(account.id, code);
     if (!order) return json({error: 'Order not found.'}, 404);
-    if (order.paymentMethod === 'ltc' && ['awaiting_payment', 'payment_reported'].includes(order.status)) {
-      const check = await checkLtcOrder(order.id, appOrigin(request.url));
+    if (isCrypto(order.paymentMethod) && ['awaiting_payment', 'payment_reported'].includes(order.status)) {
+      const check = await checkCryptoOrder(order.id, appOrigin(request.url));
       if (check?.seen) order = (await customerOrder(account.id, code)) ?? order;
     }
-    // Litecoin payments are detected on the blockchain, so the page updates by itself when the money arrives.
-    const autoDetect = order.paymentMethod === 'ltc';
+    // Crypto payments are detected on the blockchain, so the page updates by itself when the money arrives.
+    const autoDetect = isCrypto(order.paymentMethod);
     let qrSvg: string | null = null;
     let paymentUri: string | null = null;
     if (order.status === 'awaiting_payment') {
       const snapshot = order.bankSnapshot;
-      if ('address' in snapshot) paymentUri = litecoinUri(snapshot.address, order.cryptoAmount ?? '', order.code);
+      // TRON wallets scan a plain address (the amount is typed in); Litecoin wallets read the amount from the link.
+      if ('address' in snapshot) paymentUri = order.paymentMethod === 'usdt' ? snapshot.address : litecoinUri(snapshot.address, order.cryptoAmount ?? '', order.code);
       const payload = 'address' in snapshot ? paymentUri! : vietQrPayload({bankBin: snapshot.bankBin, accountNumber: snapshot.accountNumber, amountVnd: order.totalVnd, note: order.code});
       qrSvg = await QRCode.toString(payload, {type: 'svg', margin: 1, errorCorrectionLevel: 'M'});
     }
@@ -46,7 +47,7 @@ export async function GET(request: Request, {params}: {params: Promise<{code: st
 
 const action = z.discriminatedUnion('action', [
   reportSchema.extend({action: z.literal('report')}),
-  reportSchema.extend({action: z.literal('update-times')}),
+  timingSchema.extend({action: z.literal('update-times')}),
   z.object({action: z.literal('cancel')})
 ]);
 

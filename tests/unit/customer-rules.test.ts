@@ -1,6 +1,6 @@
 import {describe, expect, it} from 'vitest';
 import {
-  clientIp, customerFilterSchema, dateRange, decideGoogleLink, hashPassword, hashToken, isRateLimited, loginEventFilterSchema,
+  clientIp, customerFilterSchema, dateRange, decideDiscordLink, decideGoogleLink, hashPassword, hashToken, isRateLimited, loginEventFilterSchema,
   newSessionToken, readFilters, registerSchema, safeNext, sameOrigin, verifyPassword
 } from '../../src/lib/customer-rules';
 import {describeUserAgent, generatePassword} from '../../src/lib/customer-labels';
@@ -65,6 +65,20 @@ describe('google account linking', () => {
   });
   it('refuses an email already linked to another Google account', () => expect(decideGoogleLink(null, account({googleSub: 'other'}))).toEqual({action: 'conflict'}));
   it('keeps locked accounts out', () => expect(decideGoogleLink(account({googleSub: 'g1', status: 'locked'}), null)).toEqual({action: 'locked', customerId: 'c1'}));
+});
+
+describe('Discord account linking', () => {
+  const discord = (patch: Partial<{id: string; discordId: string | null; passwordHash: string | null; emailVerified: boolean; status: string}> = {}) =>
+    ({id: 'c1', discordId: null, passwordHash: null, emailVerified: false, status: 'active', ...patch});
+  it('creates, signs in and links like Google', () => {
+    expect(decideDiscordLink(null, null)).toEqual({action: 'create'});
+    expect(decideDiscordLink(discord({discordId: 'd1'}), null)).toEqual({action: 'sign-in', customerId: 'c1'});
+    expect(decideDiscordLink(null, discord({passwordHash: 'x:y'}))).toEqual({action: 'link', customerId: 'c1', dropPassword: true});
+  });
+  it('refuses an email linked to another Discord account and keeps locked accounts out', () => {
+    expect(decideDiscordLink(null, discord({discordId: 'other'}))).toEqual({action: 'conflict'});
+    expect(decideDiscordLink(null, discord({status: 'locked'}))).toEqual({action: 'locked', customerId: 'c1'});
+  });
 });
 
 describe('redirects, filters and origin', () => {

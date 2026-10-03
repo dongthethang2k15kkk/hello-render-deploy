@@ -26,7 +26,7 @@ export default async function LocaleLayout({children, params}: {
         <StoreHeader/>
         <main className="shell">{children}</main>
         <ChatWidget/>
-        <footer className="site-footer"><div className="shell footer-grid"><div><Link className="brand" href={`/${locale}`}>Jewish Horse</Link><p>Digital packages, delivered by appointment.</p></div><div><strong>Explore</strong><Link href={`/${locale}#catalog`}>{t.catalog}</Link><Link href={`/${locale}#faq`}>FAQ</Link><Link href={`/${locale}/privacy`}>Privacy Policy</Link><a href={SHOP_DISCORD_URL} target="_blank" rel="noreferrer">Contact on Discord</a></div><div><strong>GOOD TO KNOW</strong><p>{t.privacy}</p><p>{t.storage}</p></div></div><div className="shell footer-bottom">JEWISH HORSE <span>PAY BY BANK TRANSFER · VIETQR</span></div></footer>
+        <footer className="site-footer"><div className="shell footer-grid"><div><Link className="brand" href={`/${locale}`}>Jewish Horse</Link><p>Digital packages, delivered by appointment.</p></div><div><strong>Explore</strong><Link href={`/${locale}#catalog`}>{t.catalog}</Link><Link href={`/${locale}#faq`}>FAQ</Link><Link href={`/${locale}/privacy`}>Privacy Policy</Link><a href={SHOP_DISCORD_URL} target="_blank" rel="noreferrer">Contact on Discord</a></div><div><strong>GOOD TO KNOW</strong><p>{t.privacy}</p><p>{t.storage}</p></div></div><div className="shell footer-bottom">JEWISH HORSE <span>PAY WITH A QR CODE · TRADE IN THE SITE CHAT</span></div></footer>
       </CartProvider></CatalogProvider>
     </NextIntlClientProvider>;
 }

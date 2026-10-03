@@ -1763,3 +1763,92 @@ button.header-pill:hover:not(:disabled) {transform:translateY(-1px); background:
   .workspace-chat-column .chat-caption {display:none;}
   .workspace-chat-column .chat-messages {padding:12px;}
 }
+
+/* ---------- Online to trade now ----------
+   Admins switch themselves online with one big button (off only by hand); the store shows a glass status pill and
+   checkout offers "Trade now" while at least one Admin is online. */
+.availability-toggle {display:inline-flex; align-items:center; gap:12px; min-height:52px; padding:9px 18px 9px 14px; border-radius:999px; border:2px solid #cfd5df; background:#fff; color:#3d4555; font-size:14px; line-height:1.2; text-align:left; box-shadow:0 4px 14px rgba(30,40,60,.08);}
+.availability-text {display:grid; gap:2px;}
+.availability-text strong {font-size:15px;}
+.availability-text small {font-size:11px; font-weight:400; color:#6b7385;}
+.availability-dot {flex:none; width:14px; height:14px; border-radius:50%; background:#b5bac6;}
+.availability-toggle.off:hover:not(:disabled) {background:#f2faf4; border-color:#1f8f4a; color:#1f6f3c; transform:translateY(-1px); box-shadow:0 6px 18px rgba(31,143,74,.15);}
+.availability-toggle.on, .availability-toggle.on:hover:not(:disabled) {background:#1f8f4a; border-color:#1f8f4a; color:#fff; box-shadow:0 6px 20px rgba(31,143,74,.35);}
+.availability-toggle.on small {color:#d9f5e3;}
+.availability-toggle.on .availability-dot {background:#b8ffcf; animation:live-pulse 2s ease-out infinite;}
+.availability-toggle.loading {display:inline-block; width:170px; height:52px; padding:0; border-radius:999px; background:#eef0f4;}
+.admin-surface .availability-toggle:disabled {background:#eef0f4; color:#6b7385; border:2px solid #d6d9e2;}
+
+.live-status {display:inline-flex; align-items:center; gap:10px; max-width:100%; margin:0 0 6px; padding:9px 16px; border-radius:999px; font-size:14px; line-height:1.4; color:var(--text);
+  background:linear-gradient(160deg, rgba(255,255,255,.14), rgba(255,255,255,.04)), rgba(30,34,44,.45); -webkit-backdrop-filter:var(--glass-filter); backdrop-filter:var(--glass-filter);
+  border:1px solid var(--glass-edge); box-shadow:inset 0 1px 0 rgba(255,255,255,.18);}
+.live-status.pending {width:min(420px, 100%); min-height:42px; visibility:hidden;}
+.live-status.online {border-color:rgba(149,212,122,.5);}
+.live-status.online strong {color:var(--brand);}
+.live-status.offline strong {color:var(--amber);}
+.live-status.compact {font-size:13px; padding:7px 13px;}
+.live-status-dot {display:inline-block; flex:none; width:10px; height:10px; border-radius:50%; background:var(--amber); box-shadow:0 0 0 3px rgba(242,191,107,.18);}
+.live-status.online .live-status-dot, .live-status-dot.on {background:var(--brand); animation:live-pulse 2s ease-out infinite;}
+@keyframes live-pulse {0% {box-shadow:0 0 0 0 rgba(149,212,122,.6);} 100% {box-shadow:0 0 0 10px rgba(149,212,122,0);}}
+@media (prefers-reduced-motion: reduce) {.live-status-dot, .availability-dot {animation:none!important;}}
+
+/* Checkout: when to trade (before paying), shown like the payment options. */
+.timing-options {grid-template-columns:repeat(auto-fit, minmax(230px, 1fr));}
+.timing-option {align-items:flex-start;}
+.timing-option input {margin-top:4px;}
+.timing-title {display:flex!important; align-items:center; gap:8px; font-weight:700; font-size:16px;}
+.timing-option.disabled {opacity:.6; cursor:not-allowed;}
+.checkout-layout .asap-notice {background:rgba(242,191,107,.14); border-color:rgba(242,191,107,.5); color:#f6dcae;}
+.timing-card .slot-rows {margin-top:6px;}
+.timing-card .slot-row {border-color:var(--glass-edge); background:rgba(255,255,255,.03);}
+.timing-card .slot-row legend, .timing-card .slot-row label {color:var(--text-muted);}
+.summary-timing {display:flex; align-items:center; gap:8px; margin:14px 0 0; font-size:14px; color:var(--text-muted);}
+.pay-times {margin:14px 0 0; padding:12px 14px; border-radius:12px; background:rgba(255,255,255,.05); border:1px solid var(--glass-edge); font-size:14px;}
+.pay-times strong, .pay-times small {display:block;}
+.pay-times small {color:var(--text-muted); margin-top:2px;}
+.pay-times .slot-list {margin:6px 0 0;}
+.network-warning {margin:10px 0 0; padding:10px 12px; border-radius:10px; background:rgba(242,191,107,.14); border:1px solid rgba(242,191,107,.5); color:#f6dcae; font-size:13px; line-height:1.55;}
+.network-warning strong {color:#ffe2b0;}
+.pay-card .txid-field {color:var(--text);}
+.pay-card .txid-field small {color:var(--text-muted);}
+
+/* ---------- Amount slider above the packages (glass card, live price) ---------- */
+.amount-slider {display:grid; gap:18px; margin:0 0 26px; padding:24px 26px; border-radius:20px; color:var(--text);}
+.amount-slider-head {display:flex; justify-content:space-between; align-items:flex-start; gap:20px; flex-wrap:wrap;}
+.amount-slider-head h3 {margin:0 0 4px; font-size:24px;}
+.amount-slider-head .muted {margin:0; font-size:14px;}
+.amount-slider-price {display:grid; justify-items:end; gap:2px; text-align:right;}
+.amount-slider-amount {font-size:15px; font-weight:700; color:var(--accent);}
+.amount-slider-amount small {font-weight:600; opacity:.85;}
+.amount-slider-price strong {font-size:34px; line-height:1.1; letter-spacing:-.6px; color:#f0fae8;}
+.amount-slider-price > small {font-size:13px; color:#c9e3b5;}
+.amount-slider-control {display:grid; grid-template-columns:minmax(0, 1fr) 170px; gap:18px; align-items:center;}
+.amount-slider input[type=range] {-webkit-appearance:none; appearance:none; width:100%; height:10px; margin:0; padding:0; border:0; border-radius:999px; cursor:pointer; box-shadow:inset 0 1px 2px rgba(0,0,0,.35);
+  background:linear-gradient(90deg, var(--brand) 0, #c5f7a3 var(--fill, 50%), rgba(255,255,255,.14) var(--fill, 50%));}
+.amount-slider input[type=range]::-webkit-slider-thumb {-webkit-appearance:none; appearance:none; width:26px; height:26px; border-radius:50%; background:#f4fbef; border:3px solid var(--brand); box-shadow:0 2px 10px rgba(0,0,0,.4), 0 0 0 6px rgba(149,212,122,.18); transition:transform .12s ease;}
+.amount-slider input[type=range]::-moz-range-thumb {width:22px; height:22px; border-radius:50%; background:#f4fbef; border:3px solid var(--brand); box-shadow:0 2px 10px rgba(0,0,0,.4), 0 0 0 6px rgba(149,212,122,.18);}
+.amount-slider input[type=range]:active::-webkit-slider-thumb {transform:scale(1.12);}
+.amount-slider input[type=range]:focus-visible {outline:2px solid var(--accent); outline-offset:6px;}
+.amount-slider-input {display:flex; align-items:center; gap:8px; margin:0; padding:4px 12px 4px 4px; border-radius:12px; background:rgba(255,255,255,.06); border:1px solid var(--glass-edge);}
+.amount-slider-input input {width:100%; min-width:0; margin:0; padding:9px 10px; border:0; background:transparent; color:var(--text); font-size:17px; font-weight:700; box-shadow:none;}
+.amount-slider-input small {flex:none; font-size:12px; color:var(--text-muted); white-space:nowrap;}
+.amount-slider-presets {display:flex; flex-wrap:wrap; gap:8px;}
+.amount-slider-presets button {padding:7px 14px; font-size:13px; border-radius:999px; color:var(--text);}
+.amount-slider-presets button.active {border-color:var(--brand); color:var(--brand);}
+.amount-slider-fields {display:grid; grid-template-columns:repeat(auto-fit, minmax(220px, 1fr)); gap:12px;}
+.amount-slider-fields label {display:grid; gap:6px; margin:0; font-size:13px; font-weight:600; color:var(--text-muted);}
+.amount-slider-actions {display:flex; align-items:center; gap:16px; flex-wrap:wrap;}
+.amount-slider-actions .form-status {margin:0; min-height:0;}
+@media (max-width:640px) {
+  .amount-slider {padding:20px 18px;}
+  .amount-slider-price {justify-items:start; text-align:left;}
+  .amount-slider-control {grid-template-columns:1fr;}
+  .amount-slider-actions button {width:100%;}
+}
+.slider-settings select {width:100%;}
+.slider-preview {margin:12px 0;}
+
+/* Discord sign-in: Discord's blurple, above the Google button. */
+.oauth-buttons {display:grid; gap:10px;}
+.discord-signin {display:block; text-align:center; text-decoration:none; background:#5865f2; color:#fff;}
+.discord-signin:hover {background:#4752c4; color:#fff;}

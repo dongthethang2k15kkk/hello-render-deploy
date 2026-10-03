@@ -63,6 +63,10 @@ test('full order: checkout, VietQR, times, admin confirms and books, customer is
   await expect(page).toHaveURL(/\/en\/cart$/);
   await page.goto('/en/checkout');
   await expect(page.getByText('You pay by bank transfer')).toBeVisible();
+  // The time is chosen before paying: schedule two windows (Trade now needs an Admin online).
+  await page.getByRole('radio', {name: /Schedule a time/}).check();
+  await page.getByRole('button', {name: '+ Add another time'}).click();
+  await expect(page.locator('.summary-timing')).toHaveText('Scheduled · 2 times chosen');
   // Customers see USD first; the VND charge stays in small type.
   await expect(page.locator('.summary-total .pay-amount')).toHaveText('$10.00');
   await expect(page.locator('.summary-total .pay-secondary')).toContainText('260.000 ₫');
@@ -74,6 +78,7 @@ test('full order: checkout, VietQR, times, admin confirms and books, customer is
   await expect(page.getByRole('img', {name: /VietQR code: 260\.000 ₫ to Vietcombank/})).toBeVisible();
   await expect(page.locator('.pay-row', {hasText: 'Transfer content'})).toContainText(code);
   await expect(page.locator('.pay-row', {hasText: 'Account holder'})).toContainText('NGUYEN VAN TEST');
+  await expect(page.locator('.pay-times li')).toHaveCount(2);
   expect(await stockOf(page.request, 'SAMPLE_BASIC')).toBe(stockBefore - 1);
 
   // The button stays locked for a minute so customers pay first; the server refuses early reports too.
@@ -83,11 +88,10 @@ test('full order: checkout, VietQR, times, admin confirms and books, customer is
   expect(early.status()).toBe(409);
   await olderOrder(code);
   await page.reload();
+  // The times came with the order, so "I've transferred" reports at once without asking again.
   await page.getByRole('button', {name: 'I’ve transferred →'}).click();
-  await expect(page.getByRole('dialog', {name: 'When can you receive your order?'})).toBeVisible();
-  await page.getByRole('button', {name: '+ Add another time'}).click();
-  await page.getByRole('button', {name: 'Send my times'}).click();
-  await expect(page.getByText('We received your times')).toBeVisible();
+  await expect(page.getByText('Thanks! We are confirming your payment')).toBeVisible();
+  await expect(page.getByRole('dialog', {name: 'When can you receive your order?'})).toHaveCount(0);
   await expect(page.getByRole('heading', {name: 'Thanks! We are confirming your transfer'})).toBeVisible();
   await expect(page.locator('.slot-list li')).toHaveCount(2);
 
@@ -196,10 +200,11 @@ test('orders cannot be placed without signing in or with a stale cart', async ({
 
 test('Litecoin: wallet with checksum, unique amounts per order, litecoin: QR, TXID and confirmation', async ({browser}) => {
   test.setTimeout(120000);
-  const {createHash} = await import('node:crypto');
+  const {createHash, randomBytes} = await import('node:crypto');
   const {base58Encode} = await import('../../src/lib/ltc');
   const sha = (data: Uint8Array) => createHash('sha256').update(data).digest();
-  const body = Uint8Array.from([0x30, ...Array.from({length: 20}, (_, i) => (Date.now() + i) % 256)]);
+  // Random bytes: earlier runs leave their (inactive) wallets behind, so the address must be new every time.
+  const body = Uint8Array.from([0x30, ...randomBytes(20)]);
   const address = base58Encode(Uint8Array.from([...body, ...sha(sha(body)).subarray(0, 4)]));
 
   const adminContext = await admin(browser);
@@ -212,7 +217,7 @@ test('Litecoin: wallet with checksum, unique amounts per order, litecoin: QR, TX
   expect((await adminContext.request.post(settings, {data: {action: 'ltc-rate', mode: 'fixed', vndPerLtc: 2000000}})).ok()).toBe(true);
   // Only the E2E wallet is active while this test runs.
   const state = await (await adminContext.request.get(settings)).json();
-  for (const wallet of state.wallets) if (wallet.id !== walletId && wallet.active) await adminContext.request.post(settings, {data: {action: 'save-wallet', id: wallet.id, address: wallet.address, label: wallet.label, active: false}});
+  for (const wallet of state.wallets) if (wallet.id !== walletId && wallet.active) await adminContext.request.post(settings, {data: {action: 'save-wallet', id: wallet.id, network: wallet.network, address: wallet.address, label: wallet.label, active: false}});
 
   const customerContext = await browser.newContext();
   await registerCustomer(customerContext.request, 'LTC Customer');
@@ -249,7 +254,7 @@ test('Litecoin: wallet with checksum, unique amounts per order, litecoin: QR, TX
   await olderOrder(first.code);
   await page.reload();
   await page.getByRole('button', {name: 'I’ve sent the LTC →'}).click();
-  await page.getByLabel('Litecoin transaction ID (optional)').fill('ab'.repeat(32));
+  await page.getByLabel('Transaction ID (optional)').fill('ab'.repeat(32));
   await page.getByRole('button', {name: 'Send my times'}).click();
   await expect(page.getByText('We received your times')).toBeVisible();
 

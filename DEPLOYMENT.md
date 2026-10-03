@@ -137,6 +137,26 @@ sau 20 giây; chỉ đúng khi chạy **một instance** (đúng với Render Fr
 - **Rảnh ngay**: khách tích *I'm free right now* khi báo đã chuyển khoản hoặc khi chọn giờ sau khi đã thanh toán. Admin thấy
   nhãn *Free now*, bấm **Start now** (30 phút–2 giờ) → khách nhận ngay tin trong Chat, Inbox và email.
 
+## USDT (TRC20), nút Online, thanh kéo số lượng và Discord (2026-10-03)
+
+- **Migration**: `20261003090000_discord_login` (thêm 2 cột vào `Customer`) chạy tự động khi Render khởi động.
+- **USDT (TRC20)**: Admin → Settings → Payments → *Crypto wallets* → *Network: USDT on TRON (TRC20)* → dán địa chỉ ví TRON
+  (bắt đầu bằng T, 34 ký tự) → Save → **Test QR** bằng app ví và so địa chỉ hiện ra. Nhận USDT không cần TRX; khi chuyển
+  USDT đi từ ví đó thì ví cần TRX trả phí mạng. Không cần cài gì thêm: web tự dò qua TronGrid. Nếu nhiều đơn và bị giới hạn
+  tốc độ, tạo key miễn phí tại trongrid.io rồi đặt `TRONGRID_API_KEY` trên Render (không bắt buộc). Khách rút từ sàn mà bị
+  trừ phí nên tiền về thiếu: web không tự nhận; Admin mở link Tronscan trong đơn, kiểm tra rồi bấm Confirm payment như
+  chuyển khoản.
+- **Nút Online**: trong header Admin. Mỗi Admin tự bật khi sẵn sàng giao dịch và nhớ **tự tắt** khi rời đi (không tự tắt).
+- **Thanh kéo số lượng**: Settings → Products: tạo (hoặc dùng) một gói giá cho **1 đơn vị**, tồn kho `100000000` để không
+  giới hạn → Settings → **Amount slider**: chọn gói, đơn vị, khoảng, bước → bật *Show the slider on the store* → Save
+  (cửa hàng cập nhật trong khoảng 30 giây).
+- **Đăng nhập Discord (miễn phí, không cần xác minh app)**:
+  1. Mở https://discord.com/developers/applications → **New Application** (tên: Jewish Horse) → đồng ý điều khoản.
+  2. Mục **OAuth2**: chép **Client ID**; bấm **Reset Secret** → chép **Client Secret** (chỉ hiện một lần, không gửi cho ai).
+  3. Cũng trong OAuth2 → **Redirects** → *Add Redirect*: `https://jewish-horse.onrender.com/api/auth/discord/callback` → **Save Changes**.
+  4. Render → service → **Environment** → thêm `DISCORD_CLIENT_ID` và `DISCORD_CLIENT_SECRET` → Save (Render tự deploy lại).
+  5. Mở trang đăng nhập: có nút *Continue with Discord*. Discord của khách phải có email đã xác minh.
+
 ## Chạy Docker trên máy
 
 Cài Docker Desktop tương thích kiến trúc máy và bật Linux containers. Máy đã

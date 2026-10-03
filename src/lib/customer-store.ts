@@ -66,7 +66,7 @@ export async function listCustomers(filters: z.infer<typeof customerFilterSchema
   const where: Prisma.CustomerWhereInput = {
     ...(filters.q ? {OR: [{email: {contains: filters.q, mode: 'insensitive'}}, {name: {contains: filters.q, mode: 'insensitive'}}]} : {}),
     ...(filters.status !== 'all' ? {status: filters.status} : {}),
-    ...(filters.method === 'google' ? {googleSub: {not: null}} : filters.method === 'password' ? {passwordHash: {not: null}} : {}),
+    ...(filters.method === 'google' ? {googleSub: {not: null}} : filters.method === 'discord' ? {discordId: {not: null}} : filters.method === 'password' ? {passwordHash: {not: null}} : {}),
     ...(dateRange(filters.from, filters.to) ? {createdAt: dateRange(filters.from, filters.to)} : {})
   };
   const db = getPaymentDb();
@@ -74,17 +74,17 @@ export async function listCustomers(filters: z.infer<typeof customerFilterSchema
     db.customer.count({where}),
     db.customer.findMany({
       where, orderBy: [{lastLoginAt: {sort: 'desc', nulls: 'last'}}, {createdAt: 'desc'}], skip: (filters.page - 1) * pageSize, take: pageSize,
-      select: {id: true, email: true, name: true, emailVerified: true, status: true, createdAt: true, lastLoginAt: true, googleSub: true, passwordHash: true}
+      select: {id: true, email: true, name: true, emailVerified: true, status: true, createdAt: true, lastLoginAt: true, googleSub: true, discordId: true, discordUsername: true, passwordHash: true}
     })
   ]);
-  return {total, page: filters.page, pageSize, customers: rows.map(({googleSub, passwordHash, ...row}) => ({...row, methods: [googleSub ? 'google' : null, passwordHash ? 'password' : null].filter(Boolean) as string[]}))};
+  return {total, page: filters.page, pageSize, customers: rows.map(({googleSub, discordId, passwordHash, ...row}) => ({...row, methods: [googleSub ? 'google' : null, discordId ? 'discord' : null, passwordHash ? 'password' : null].filter(Boolean) as string[]}))};
 }
 
 export async function customerDetail(id: string) {
   const db = getPaymentDb();
   const customer = await db.customer.findUnique({where: {id}, select: {
     id: true, email: true, name: true, emailVerified: true, status: true, lockedReason: true, mustChangePassword: true,
-    createdAt: true, lastLoginAt: true, googleSub: true, passwordHash: true, _count: {select: {chatMessages: true}}
+    createdAt: true, lastLoginAt: true, googleSub: true, discordId: true, discordUsername: true, passwordHash: true, _count: {select: {chatMessages: true}}
   }});
   if (!customer) return null;
   const [sessions, audit, orders] = await Promise.all([
@@ -92,8 +92,8 @@ export async function customerDetail(id: string) {
     db.auditLog.findMany({where: {customerId: id}, orderBy: {createdAt: 'desc'}, take: 50, select: {id: true, actorEmail: true, action: true, summary: true, createdAt: true}}),
     db.order.findMany({where: {customerId: id}, orderBy: {createdAt: 'desc'}, take: 50, select: {id: true, code: true, status: true, totalVnd: true, createdAt: true}})
   ]);
-  const {googleSub, passwordHash, _count, ...profile} = customer;
-  return {customer: {...profile, methods: [googleSub ? 'google' : null, passwordHash ? 'password' : null].filter(Boolean) as string[], chatMessages: _count.chatMessages}, sessions, audit, orders};
+  const {googleSub, discordId, passwordHash, _count, ...profile} = customer;
+  return {customer: {...profile, methods: [googleSub ? 'google' : null, discordId ? 'discord' : null, passwordHash ? 'password' : null].filter(Boolean) as string[], chatMessages: _count.chatMessages}, sessions, audit, orders};
 }
 
 export async function listLoginEvents(filters: z.infer<typeof loginEventFilterSchema>, pageSize = 100) {
@@ -156,7 +156,7 @@ export async function deleteCustomer(actorEmail: string, id: string) {
       await tx.loginEvent.deleteMany({where: {customerId: id}});
       await tx.notification.deleteMany({where: {customerId: id}});
       await tx.customerSession.deleteMany({where: {customerId: id}});
-      await tx.customer.update({where: {id}, data: {email: `deleted-${id}@deleted.invalid`, name: 'Deleted customer', passwordHash: null, googleSub: null, emailVerified: false, status: 'locked', lockedReason: 'Account deleted on request', mustChangePassword: false}});
+      await tx.customer.update({where: {id}, data: {email: `deleted-${id}@deleted.invalid`, name: 'Deleted customer', passwordHash: null, googleSub: null, discordId: null, discordUsername: null, emailVerified: false, status: 'locked', lockedReason: 'Account deleted on request', mustChangePassword: false}});
     }, {maxWait: 10000, timeout: 20000});
     forgetCustomer(id);
     await audit(actorEmail, id, 'anonymize', 'Deleted personal data; orders kept for records');

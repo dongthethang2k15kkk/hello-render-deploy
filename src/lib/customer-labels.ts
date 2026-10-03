@@ -9,7 +9,7 @@ export const outcomeLabels: Record<string, string> = {
   rate_limited: 'Blocked: too many attempts'
 };
 
-export const methodLabels: Record<string, string> = {password: 'Email + password', google: 'Google', register: 'Registered'};
+export const methodLabels: Record<string, string> = {password: 'Email + password', google: 'Google', discord: 'Discord', register: 'Registered'};
 
 export function outcomeTone(outcome: string) {
   return outcome === 'success' ? 'ok' : outcome === 'rate_limited' || outcome === 'locked' ? 'danger' : 'warn';

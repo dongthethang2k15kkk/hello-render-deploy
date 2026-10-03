@@ -46,7 +46,7 @@ export default function AdminCustomers() {
       <form className="admin-filters" onSubmit={event => {event.preventDefault(); setPage(1); setFilters(draft);}}>
         <label>Search<input type="search" value={draft.q} onChange={event => setDraft({...draft, q: event.target.value})} placeholder="Name or email"/></label>
         <label>Status<select value={draft.status} onChange={event => setDraft({...draft, status: event.target.value})}><option value="all">All</option><option value="active">Active</option><option value="locked">Locked</option></select></label>
-        <label>Sign-in method<select value={draft.method} onChange={event => setDraft({...draft, method: event.target.value})}><option value="all">All</option><option value="google">Google</option><option value="password">Email + password</option></select></label>
+        <label>Sign-in method<select value={draft.method} onChange={event => setDraft({...draft, method: event.target.value})}><option value="all">All</option><option value="google">Google</option><option value="discord">Discord</option><option value="password">Email + password</option></select></label>
         <label>Joined from<input type="date" value={draft.from} onChange={event => setDraft({...draft, from: event.target.value})}/></label>
         <label>Joined to<input type="date" value={draft.to} onChange={event => setDraft({...draft, to: event.target.value})}/></label>
         <div className="admin-filter-actions"><button type="submit">Apply</button><button type="button" className="secondary" onClick={() => {setDraft(emptyFilters); setFilters(emptyFilters); setPage(1);}}>Reset</button></div>

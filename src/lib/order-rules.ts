@@ -11,6 +11,14 @@ export function asapProblem(asap: boolean | undefined, slots: unknown[]) {
   return asap && slots.length < 2 ? ASAP_NOTICE : null;
 }
 export const MAX_SLOTS = 5;
+
+/** Crypto payment methods: the coin customers send and the network it travels on. */
+export const CRYPTO_METHODS = {ltc: {coin: 'LTC', network: 'Litecoin'}, usdt: {coin: 'USDT', network: 'TRON (TRC20)'}} as const;
+export type CryptoMethod = keyof typeof CRYPTO_METHODS;
+export const isCrypto = (method: string): method is CryptoMethod => Object.hasOwn(CRYPTO_METHODS, method);
+/** Block explorer page for a crypto transaction. */
+export const explorerTx = (method: string, txid: string) => method === 'usdt' ? `https://tronscan.org/#/transaction/${txid}` : `https://litecoinspace.org/tx/${txid}`;
+export const explorerAddress = (method: string, address: string) => method === 'usdt' ? `https://tronscan.org/#/address/${address}` : `https://litecoinspace.org/address/${address}`;
 export const ORDER_STATUSES = ['awaiting_payment', 'payment_reported', 'paid', 'scheduled', 'completed', 'cancelled', 'expired'] as const;
 export type OrderStatus = typeof ORDER_STATUSES[number];
 
@@ -65,10 +73,14 @@ export function validTimeZone(value: string) {
 }
 
 const slot = z.object({start: z.string().datetime({offset: true}), end: z.string().datetime({offset: true})}).strict();
+const slotList = z.array(slot).min(1, 'Add at least one time.').max(MAX_SLOTS, `Add at most ${MAX_SLOTS} times.`);
+/** When the customer can trade: chosen at checkout, or changed later until the appointment is booked. */
+export const timingSchema = z.object({timeZone: z.string().max(64), slots: slotList, asap: z.boolean().optional()}).strict();
 export const reportSchema = z.object({
-  timeZone: z.string().max(64),
-  slots: z.array(slot).min(1, 'Add at least one time.').max(MAX_SLOTS, `Add at most ${MAX_SLOTS} times.`),
-  // Optional Litecoin transaction id so the shop can find the payment quickly.
+  // Orders placed with times at checkout keep them; older orders send their times with the report.
+  timeZone: z.string().max(64).optional(),
+  slots: slotList.optional(),
+  // Optional crypto transaction id (Litecoin or TRON) so the shop can find the payment quickly.
   txid: z.string().trim().regex(/^[0-9a-fA-F]{64}$/, 'The transaction ID is 64 letters and digits (0-9, a-f).').optional().or(z.literal('').transform(() => undefined)),
   // "I am free right now": the shop can start as soon as an Admin is available.
   asap: z.boolean().optional()

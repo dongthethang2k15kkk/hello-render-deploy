@@ -6,7 +6,9 @@ import {formatUsdFromVnd} from '@/lib/money';
 import {LoadingRows} from '@/components/loading-state';
 
 type Account = {id: string; bankBin: string; bankName: string; accountNumber: string; accountHolder: string; active: boolean};
-type Wallet = {id: string; address: string; label: string; active: boolean};
+type Wallet = {id: string; network: string; address: string; label: string; active: boolean};
+const networkLabel = (network: string) => network === 'TRC20' ? 'USDT · TRC20' : 'Litecoin';
+const walletExplorer = (wallet: {network: string; address: string}) => wallet.network === 'TRC20' ? `https://tronscan.org/#/address/${wallet.address}` : `https://litecoinspace.org/address/${wallet.address}`;
 type Mode = 'auto' | 'fixed';
 type UsdRate = {vndPerUsd: number; source: string; updatedAt: string | null};
 type LtcRate = {vndPerLtc: number; source: string; updatedAt: string | null};
@@ -20,8 +22,8 @@ function rateSource(rate: {source: string; updatedAt: string | null}) {
   if (rate.source === 'fallback') return 'the fixed rate below, because no market rate could be fetched right now';
   return `live from ${providers[rate.source] ?? rate.source}${rate.updatedAt ? `, checked ${new Date(rate.updatedAt).toLocaleTimeString('en-GB', {hour: '2-digit', minute: '2-digit'})}` : ''}`;
 }
-type WalletDraft = {id?: string; address: string; label: string; active: boolean};
-const emptyWallet: WalletDraft = {address: '', label: '', active: true};
+type WalletDraft = {id?: string; network: 'LTC' | 'TRC20'; address: string; label: string; active: boolean};
+const emptyWallet: WalletDraft = {network: 'LTC', address: '', label: '', active: true};
 type Draft = {id?: string; bankBin: string; customBin: string; accountNumber: string; accountHolder: string; active: boolean};
 const emptyDraft: Draft = {bankBin: '970436', customBin: '', accountNumber: '', accountHolder: '', active: true};
 
@@ -85,18 +87,19 @@ export default function PaymentSettings() {
       </form>
     </section>
 
-    <section className="card admin-panel"><h2>Litecoin wallets</h2>
+    <section className="card admin-panel"><h2>Crypto wallets</h2><p className="field-caption">Litecoin and USDT on TRON (TRC20). Each order gets its own exact amount, and the site watches the blockchain and confirms the payment by itself.</p>
       <p className="field-caption">Customers can also pay in Litecoin (LTC). Each order gets its own LTC amount (the last digits differ). The site watches the Litecoin network and marks an order paid by itself after 2 confirmations (about 5 minutes); customers may also paste their transaction ID.</p>
-      {state.wallets.length === 0 ? <p className="admin-empty">No Litecoin wallet: checkout offers bank transfer only.</p> : <div className="admin-table-wrap"><table className="admin-table"><thead><tr><th>Label</th><th>Address</th><th>Status</th><th/></tr></thead><tbody>{state.wallets.map(item => <tr key={item.id}>
-        <td>{item.label}</td><td className="admin-mono">{item.address}</td>
+      {state.wallets.length === 0 ? <p className="admin-empty">No crypto wallet: checkout offers bank transfer only.</p> : <div className="admin-table-wrap"><table className="admin-table"><thead><tr><th>Label</th><th>Network</th><th>Address</th><th>Status</th><th/></tr></thead><tbody>{state.wallets.map(item => <tr key={item.id}>
+        <td>{item.label}</td><td>{networkLabel(item.network)}</td><td className="admin-mono">{item.address}</td>
         <td><span className={`badge ${item.active ? 'ok' : ''}`}>{item.active ? 'Active' : 'Off'}</span></td>
-        <td className="row-actions"><button type="button" className="secondary" onClick={() => setWallet({id: item.id, address: item.address, label: item.label, active: item.active})}>Edit</button><button type="button" className="secondary" disabled={busy} onClick={() => void post({action: 'test-wallet-qr', id: item.id}, '').then(data => data?.qrSvg && setQr({id: item.id, svg: data.qrSvg}))}>Test QR</button><a className="button secondary" href={`https://litecoinspace.org/address/${item.address}`} target="_blank" rel="noreferrer">Explorer</a><button type="button" className="admin-remove-link" disabled={busy} onClick={() => { if (window.confirm(`Remove wallet ${item.label}? Existing orders keep their copy of the address.`)) void post({action: 'delete-wallet', id: item.id}, 'Wallet removed.'); }}>Remove</button></td>
+        <td className="row-actions"><button type="button" className="secondary" onClick={() => setWallet({id: item.id, network: item.network === 'TRC20' ? 'TRC20' : 'LTC', address: item.address, label: item.label, active: item.active})}>Edit</button><button type="button" className="secondary" disabled={busy} onClick={() => void post({action: 'test-wallet-qr', id: item.id}, '').then(data => data?.qrSvg && setQr({id: item.id, svg: data.qrSvg}))}>Test QR</button><a className="button secondary" href={walletExplorer(item)} target="_blank" rel="noreferrer">Explorer</a><button type="button" className="admin-remove-link" disabled={busy} onClick={() => { if (window.confirm(`Remove wallet ${item.label}? Existing orders keep their copy of the address.`)) void post({action: 'delete-wallet', id: item.id}, 'Wallet removed.'); }}>Remove</button></td>
       </tr>)}</tbody></table></div>}
       {qr && state.wallets.some(item => item.id === qr.id) && <div className="test-qr"><img src={`data:image/svg+xml;utf8,${encodeURIComponent(qr.svg)}`} alt="Test Litecoin QR code for 0.001 LTC"/><div><strong>Test before going live</strong><p className="field-caption">Scan with your Litecoin wallet app (Send → scan). It should fill in this address and 0.001 LTC. You do not need to send it.</p><button type="button" className="secondary" onClick={() => setQr(null)}>Close</button></div></div>}
       <h3>{wallet.id ? 'Edit wallet' : 'Add a wallet'}</h3>
-      <form className="bank-form" onSubmit={event => {event.preventDefault(); void post({action: 'save-wallet', ...(wallet.id ? {id: wallet.id} : {}), address: wallet.address.trim(), label: wallet.label, active: wallet.active}, wallet.id ? 'Wallet updated.' : 'Wallet added. Scan the Test QR with your wallet app to double-check.').then(data => data && setWallet(emptyWallet));}}>
+      <form className="bank-form" onSubmit={event => {event.preventDefault(); void post({action: 'save-wallet', ...(wallet.id ? {id: wallet.id} : {}), network: wallet.network, address: wallet.address.trim(), label: wallet.label, active: wallet.active}, wallet.id ? 'Wallet updated.' : 'Wallet added. Scan the Test QR with your wallet app to double-check.').then(data => data && setWallet(emptyWallet));}}>
         <div className="admin-field-row">
-          <label>Litecoin address<input className="admin-mono" value={wallet.address} required placeholder="ltc1… / L… / M…" onChange={event => setWallet({...wallet, address: event.target.value})}/><small>Copy it from your wallet’s Receive screen. The checksum is verified.</small></label>
+          <label>Network<select value={wallet.network} onChange={event => setWallet({...wallet, network: event.target.value as WalletDraft['network']})}><option value="LTC">Litecoin (LTC)</option><option value="TRC20">USDT on TRON (TRC20)</option></select></label>
+          <label>{wallet.network === 'TRC20' ? 'TRON address (USDT)' : 'Litecoin address'}<input className="admin-mono" value={wallet.address} required placeholder={wallet.network === 'TRC20' ? 'T…' : 'ltc1… / L… / M…'} onChange={event => setWallet({...wallet, address: event.target.value})}/><small>Copy it from your wallet’s Receive screen. The checksum is verified.</small></label>
           <label>Label<input value={wallet.label} maxLength={60} placeholder="e.g. Trust Wallet" onChange={event => setWallet({...wallet, label: event.target.value})}/></label>
         </div>
         <label className="admin-compact-check"><input type="checkbox" checked={wallet.active} onChange={event => setWallet({...wallet, active: event.target.checked})}/> Active (offered at checkout)</label>
