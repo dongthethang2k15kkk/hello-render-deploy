@@ -19,6 +19,7 @@ import {uniqueLitoshi} from './ltc';
 import {formatLtc, parseLtc} from './ltc-format';
 import {getLtcRate} from './exchange-rates';
 import {usdtAmount} from './usdt';
+import {DEFAULT_LUCKY_PRIZES} from './lucky-wheel';
 
 export class OrderError extends Error {
   constructor(message: string, readonly status = 400) { super(message); }
@@ -359,6 +360,10 @@ export async function confirmPayment(adminEmail: string, id: string, input: {amo
       ...(input.appointment ? {appointmentStart: input.appointment.start, appointmentEnd: input.appointment.end} : {})
     }});
     if (changed.count !== 1) throw new OrderError('The order changed meanwhile. Reload and try again.', 409);
+    if ((await tx.luckyWheelPrize.count()) === 0) {
+      await tx.luckyWheelPrize.createMany({data: DEFAULT_LUCKY_PRIZES.map(prize => ({...prize, active: true}))});
+    }
+    await tx.luckySpin.create({data: {customerId: order.customerId, orderId: id}});
     await tx.orderEvent.create({data: {orderId: id, actor: adminEmail, action: 'payment_confirmed', note: `Received ${formatVnd(input.amountVnd)}${input.amountVnd !== order.totalVnd ? ` (order total ${formatVnd(order.totalVnd)})` : ''}`}});
     if (input.appointment) await tx.orderEvent.create({data: {orderId: id, actor: adminEmail, action: 'scheduled', note: 'Appointment booked'}});
   }, txOptions);

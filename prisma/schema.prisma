@@ -148,6 +148,7 @@ model Customer {
   auditLogs          AuditLog[]
   orders             Order[]
   notifications      Notification[]
+  luckySpins         LuckySpin[]
 
   @@index([createdAt])
   @@index([lastLoginAt])
@@ -290,6 +291,7 @@ model Order {
   slots              OrderSlot[]
   events             OrderEvent[]
   notifications      Notification[]
+  luckySpin          LuckySpin?
 
   @@index([status, createdAt])
   @@index([customerId, createdAt])
@@ -334,6 +336,40 @@ model OrderEvent {
 
   @@index([orderId, createdAt])
 }
+
+// A paid order grants exactly one spin. Results are selected on the server and retained
+// as snapshots so later prize-setting changes never rewrite a customer's result.
+model LuckyWheelPrize {
+  id         String      @id @default(cuid())
+  label      String
+  coinAmount Int
+  weight     Int         @default(1)
+  active     Boolean     @default(true)
+  sortOrder  Int         @default(0)
+  createdAt  DateTime    @default(now())
+  updatedAt  DateTime    @updatedAt
+  spins      LuckySpin[]
+
+  @@index([active, sortOrder])
+}
+
+model LuckySpin {
+  id          String            @id @default(cuid())
+  customerId  String
+  customer    Customer          @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  orderId     String            @unique
+  order       Order             @relation(fields: [orderId], references: [id], onDelete: Restrict)
+  prizeId     String?
+  prize       LuckyWheelPrize? @relation(fields: [prizeId], references: [id], onDelete: SetNull)
+  prizeLabel  String?
+  coinAmount  Int?
+  spunAt      DateTime?
+  createdAt   DateTime          @default(now())
+
+  @@index([customerId, spunAt])
+  @@index([prizeId, spunAt])
+}
+
 
 model Notification {
   id         String    @id @default(cuid())

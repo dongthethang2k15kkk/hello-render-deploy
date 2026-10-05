@@ -64,7 +64,7 @@ nav a:hover {
   text-shadow: none;
 }
 
-/* Background images (Admin → Settings → Background): fixed behind the page on their own layers. */
+/* Background images (Admin â†’ Settings â†’ Background): fixed behind the page on their own layers. */
 .bg-scene {position:fixed; inset:0; z-index:-1; pointer-events:none; overflow:hidden;}
 .bg-layer {position:absolute; will-change:transform;}
 .bg-floating img {display:block; width:100%; height:auto; border-radius:20px; box-shadow:0 8px 32px rgba(0,0,0,.4); will-change:transform;}
@@ -1588,7 +1588,7 @@ body {background: transparent;}
 }
 .mail-notice {margin-top:20px; font-size:14px;}
 
-/* ---------- Admin → Settings → Background editor ---------- */
+/* ---------- Admin â†’ Settings â†’ Background editor ---------- */
 .bg-editor {display:grid; grid-template-columns:minmax(0, 1.35fr) minmax(330px, 1fr); gap:22px; align-items:start; margin-top:18px;}
 .bg-preview-wrap {position:sticky; top:118px;}
 .bg-preview {position:relative; width:100%; aspect-ratio:16/10; overflow:hidden; border-radius:14px; touch-action:none; isolation:isolate;
@@ -1921,3 +1921,10 @@ button.header-pill:hover:not(:disabled) {transform:translateY(-1px); background:
 .notification-toast-close {flex:none; width:36px; height:36px; margin:8px 8px 0 0; padding:0; border-radius:10px; font-size:20px; line-height:1; background:rgba(255,255,255,.08)!important; color:var(--text); box-shadow:none!important;}
 @keyframes toast-in {from {opacity:0; transform:translateY(-12px) scale(.96);} to {opacity:1; transform:none;}}
 @media (max-width:900px) {.notification-toast {top:auto; bottom:90px; right:16px;}}
+
+/* Lucky wheel */
+.lucky-wheel-section {margin:4rem 0;padding:2.25rem;border:1px solid rgba(217,248,90,.22);border-radius:28px;background:radial-gradient(circle at 15% 10%,rgba(217,248,90,.13),transparent 38%),linear-gradient(135deg,rgba(20,35,27,.96),rgba(10,17,14,.96));overflow:hidden}
+.lucky-wheel-heading {display:flex;justify-content:space-between;align-items:end;gap:1.5rem;margin-bottom:1.75rem}.lucky-wheel-heading h2 {max-width:650px;margin:.35rem 0}.lucky-wheel-count {border:1px solid rgba(217,248,90,.35);color:#d9f85a;padding:.65rem .9rem;border-radius:999px;white-space:nowrap;font-weight:700}
+.lucky-wheel-card {display:grid;grid-template-columns:minmax(280px,1fr) minmax(260px,.8fr);align-items:center;gap:2rem;padding:1.5rem;background:rgba(255,255,255,.045);border-color:rgba(255,255,255,.12)}.lucky-wheel-login {padding:2rem}.wheel-stage {position:relative;width:min(100%,430px);aspect-ratio:1;margin:auto;display:grid;place-items:center}.wheel-disc {width:92%;height:92%;border-radius:50%;position:relative;overflow:hidden;border:10px solid #d9f85a;box-shadow:0 0 0 8px rgba(217,248,90,.15),0 18px 50px rgba(0,0,0,.4);transition:transform 4.2s cubic-bezier(.12,.78,.16,1);background:#17251d}.wheel-slice {position:absolute;inset:0;clip-path:polygon(50% 50%,50% 0,100% 0);transform-origin:50% 50%;display:flex;justify-content:center;padding-top:12%;color:#fff;font-size:clamp(.65rem,2vw,.95rem);font-weight:800}.wheel-slice span {display:block;color:inherit;white-space:nowrap}.wheel-pointer {position:absolute;z-index:3;top:-2px;width:0;height:0;border-left:17px solid transparent;border-right:17px solid transparent;border-top:38px solid #ffcf5a;filter:drop-shadow(0 4px 4px rgba(0,0,0,.4))}.wheel-core {position:absolute;z-index:4;width:74px;height:74px;display:grid;place-items:center;border-radius:50%;background:#d9f85a;color:#17251d;border:8px solid #101a14;font-size:1.8rem;box-shadow:0 0 25px rgba(217,248,90,.35)}.lucky-wheel-copy h3 {font-size:clamp(1.8rem,4vw,3rem);margin:.3rem 0 1rem}.lucky-result {display:block;color:#d9f85a;font-size:clamp(2rem,5vw,4rem);line-height:1;margin:.6rem 0 1rem}.lucky-spin-button {margin-top:1rem}.lucky-history {margin-top:1.25rem}.lucky-history summary {cursor:pointer;color:#d9f85a}.lucky-history ul {list-style:none;margin:1rem 0 0;padding:0;display:grid;gap:.5rem}.lucky-history li {display:flex;justify-content:space-between;gap:1rem;padding:.7rem 0;border-bottom:1px solid rgba(255,255,255,.1)}.lucky-history li span {color:rgba(255,255,255,.6);font-size:.85rem}
+.lucky-admin-grid {display:grid;gap:1.5rem;margin-top:2rem}.admin-panel-heading {display:flex;justify-content:space-between;gap:1rem;align-items:start}.lucky-prize-row {display:grid;grid-template-columns:2fr 1fr 1fr auto auto;gap:.75rem;align-items:end;padding:1rem 0;border-bottom:1px solid rgba(255,255,255,.1)}.admin-form-actions {display:flex;align-items:center;gap:1rem;margin-top:1.25rem}.lucky-admin-grid .admin-table td span {display:block;color:rgba(255,255,255,.6);font-size:.8rem}.lucky-admin-grid .admin-table td {vertical-align:top}
+@media(max-width:760px){.lucky-wheel-section{padding:1.2rem;margin:2.5rem 0}.lucky-wheel-heading{display:block}.lucky-wheel-count{display:inline-block;margin-top:1rem}.lucky-wheel-card{grid-template-columns:1fr}.lucky-prize-row{grid-template-columns:1fr 1fr}.lucky-prize-row label:first-child{grid-column:1/-1}.lucky-prize-row .admin-compact-check{align-self:center}.lucky-prize-row button{align-self:end}}
