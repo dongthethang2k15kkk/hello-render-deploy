@@ -10,6 +10,8 @@ import {googleCalendarLink} from '@/lib/calendar';
 import {formatUsdFromVnd, formatVnd} from '@/lib/money';
 import {CRYPTO_METHODS, explorerTx, formatRange, isCrypto, REPORT_DELAY_SECONDS, statusLabels, statusTone, type OrderStatus} from '@/lib/order-rules';
 import {LoadingRows} from '@/components/loading-state';
+import {formatCoins} from '@/lib/coin-format';
+import {invalidateJson} from '@/lib/client-data-cache';
 
 type Order = {
   id: string; code: string; status: OrderStatus; totalVnd: number; vndPerUsd: number; holdExpiresAt: string; createdAt: string;
@@ -17,6 +19,7 @@ type Order = {
   asap: boolean; paymentSource: string | null; paymentSeenAt: string | null; txConfirmations: number | null;
   bankSnapshot: {bankName: string; accountNumber: string; accountHolder: string} | {network: 'LTC' | 'TRC20'; address: string; label: string};
   appointmentStart: string | null; appointmentEnd: string | null; deliveryNote: string | null; cancelReason: string | null;
+  redeemWheelCoins: boolean; wheelCoins: string; wheelCoinsReleasedAt: string | null;
   items: {title: string; sku: string; unitPriceVnd: number; quantity: number; delivery: Record<string, string>}[];
   slots: {startsAt: string; endsAt: string}[];
   events: {action: string; note: string | null; createdAt: string}[];
@@ -69,6 +72,7 @@ export default function OrderPage({params}: {params: Promise<{locale: string; co
     const response = await fetch(`/api/orders/${code}`, {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body)});
     const data = await response.json().catch(() => ({}));
     if (!response.ok) return data.error ?? 'The action could not be completed.';
+    invalidateJson('/api/orders', '/api/notifications', '/api/auth/session');
     await load();
     return null;
   }
@@ -173,6 +177,7 @@ export default function OrderPage({params}: {params: Promise<{locale: string; co
       <aside className="card order-summary">
         <h2>Items</h2>
         {order.items.map((item, index) => <div className="summary-item" key={index}><div className="summary-line"><span>{item.title} × {item.quantity}</span><span className="summary-amount"><strong>{formatUsdFromVnd(item.unitPriceVnd * item.quantity, order.vndPerUsd)}</strong><small>{formatVnd(item.unitPriceVnd * item.quantity)}</small></span></div>{Object.entries(item.delivery).filter(([, value]) => value).map(([key, value]) => <small key={key}>{key}: {value}</small>)}</div>)}
+        {order.redeemWheelCoins && <div className="summary-wheel-coins"><span>Wheel coins with this delivery</span><strong>{BigInt(order.wheelCoins) > BigInt(0) ? `+ ${formatCoins(order.wheelCoins)}` : order.wheelCoinsReleasedAt ? 'Returned to balance' : 'No balance reserved'}</strong></div>}
         <div className="summary-total"><small>Total</small><p className="pay-amount">{formatUsdFromVnd(order.totalVnd, order.vndPerUsd)}</p><small className="pay-secondary">{formatVnd(order.totalVnd)}{order.cryptoAmount ? ` · paid as ${order.cryptoAmount} ${crypto?.coin ?? 'LTC'}` : ''}</small></div>
         <p className="field-caption">Placed {new Date(order.createdAt).toLocaleString('en-GB')}</p>
         {order.status !== 'awaiting_payment' && <button type="button" className="full-width buy-again" onClick={buyAgain}>Buy again <span aria-hidden="true">→</span></button>}

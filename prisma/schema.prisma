@@ -9,22 +9,22 @@ datasource db {
 
 // Staging only: manual reconciliation, no live inventory or automated settlement.
 model PaymentReceiver {
-  id           String   @id @default(cuid())
+  id           String         @id @default(cuid())
   label        String
   method       String
   destination  String
   bank         String
   holder       String
   qrPath       String
-  active       Boolean  @default(false)
-  pendingLimit Int      @default(10)
-  lastAssigned DateTime @default(now())
+  active       Boolean        @default(false)
+  pendingLimit Int            @default(10)
+  lastAssigned DateTime       @default(now())
   orders       PaymentOrder[]
 }
 
 model PaymentOrder {
-  id               String   @id @default(cuid())
-  requestKey       String   @unique
+  id               String          @id @default(cuid())
+  requestKey       String          @unique
   receiverId       String
   receiver         PaymentReceiver @relation(fields: [receiverId], references: [id])
   receiverSnapshot Json
@@ -33,23 +33,24 @@ model PaymentOrder {
   amountMinor      BigInt
   unitsPerUsd      BigInt
   method           String
-  status           String   @default("PENDING")
-  reference        String   @unique
-  transactionKey   String?  @unique
+  status           String          @default("PENDING")
+  reference        String          @unique
+  transactionKey   String?         @unique
   deliveryNote     String?
   expiresAt        DateTime
-  createdAt        DateTime @default(now())
+  createdAt        DateTime        @default(now())
   events           PaymentEvent[]
+
   @@index([receiverId, status])
 }
 
 model PaymentEvent {
-  id        String   @id @default(cuid())
+  id        String       @id @default(cuid())
   orderId   String
   order     PaymentOrder @relation(fields: [orderId], references: [id])
   actor     String
   action    String
-  createdAt DateTime @default(now())
+  createdAt DateTime     @default(now())
 }
 
 model Product {
@@ -86,21 +87,22 @@ model ProductTranslation {
 }
 
 model Package {
-  id                    String             @id @default(cuid())
-  productId             String
-  sku                   String             @unique
+  id            String               @id @default(cuid())
+  productId     String
+  sku           String               @unique
   // Prices are entered and charged in VND; the USD columns are legacy (phase 2) and unused.
-  baseUsdCents          Int                @default(0)
-  saleUsdCents          Int?
-  priceVnd              Int                @default(0)
-  salePriceVnd          Int?
-  stockOnHand           Int                @default(0)
-  active                Boolean            @default(false)
-  createdAt             DateTime           @default(now())
-  updatedAt             DateTime           @updatedAt
-  product               Product            @relation(fields: [productId], references: [id], onDelete: Cascade)
-  translations          PackageTranslation[]
-  deliveryForms         DeliveryForm[]
+  baseUsdCents  Int                  @default(0)
+  saleUsdCents  Int?
+  priceVnd      Int                  @default(0)
+  salePriceVnd  Int?
+  stockOnHand   Int                  @default(0)
+  active        Boolean              @default(false)
+  createdAt     DateTime             @default(now())
+  updatedAt     DateTime             @updatedAt
+  product       Product              @relation(fields: [productId], references: [id], onDelete: Cascade)
+  translations  PackageTranslation[]
+  deliveryForms DeliveryForm[]
+
   @@index([productId, active])
 }
 
@@ -190,17 +192,17 @@ model LoginEvent {
 }
 
 model ChatMessage {
-  id         String     @id @default(cuid())
-  requestKey String?    @unique
+  id              String     @id @default(cuid())
+  requestKey      String?    @unique
   clientMessageId String?
-  customerId String
-  customer   Customer   @relation(fields: [customerId], references: [id], onDelete: Cascade)
-  authorRole String
-  authorName String
-  body       String
-  imageId    String?    @unique
-  image      ChatImage? @relation(fields: [imageId], references: [id], onDelete: SetNull)
-  createdAt  DateTime   @default(now())
+  customerId      String
+  customer        Customer   @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  authorRole      String
+  authorName      String
+  body            String
+  imageId         String?    @unique
+  image           ChatImage? @relation(fields: [imageId], references: [id], onDelete: SetNull)
+  createdAt       DateTime   @default(now())
 
   @@index([customerId, createdAt])
 }
@@ -255,45 +257,48 @@ model BankAccount {
 }
 
 model Order {
-  id                 String         @id @default(cuid())
-  code               String         @unique
-  customerId         String
-  customer           Customer       @relation(fields: [customerId], references: [id], onDelete: Restrict)
-  status             String
-  totalVnd           Int
-  vndPerUsd          Int
-  paymentMethod      String         @default("bank")
-  bankSnapshot       Json
-  cryptoAmount       String?
-  cryptoRateVnd      Int?
-  customerTxid       String?
-  asap               Boolean        @default(false)
-  paymentSource      String?
-  paymentSeenAt      DateTime?
-  txConfirmations    Int?
-  reminderSentAt     DateTime?
-  holdExpiresAt      DateTime
-  reportedAt         DateTime?
-  customerTimeZone   String?
-  paidAt             DateTime?
-  paidAmountVnd      Int?
-  paymentReference   String?
-  paymentConfirmedBy String?
-  assignedAdmin      String?
-  appointmentStart   DateTime?
-  appointmentEnd     DateTime?
-  deliveryNote       String?
-  completedAt        DateTime?
-  cancelledAt        DateTime?
-  cancelReason       String?
-  internalNote       String?
-  createdAt          DateTime       @default(now())
-  updatedAt          DateTime       @updatedAt
-  items              OrderItem[]
-  slots              OrderSlot[]
-  events             OrderEvent[]
-  notifications      Notification[]
-  luckySpin          LuckySpin?
+  id                   String         @id @default(cuid())
+  code                 String         @unique
+  customerId           String
+  customer             Customer       @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  status               String
+  totalVnd             Int
+  redeemWheelCoins     Boolean        @default(false)
+  wheelCoins           BigInt         @default(0)
+  wheelCoinsReleasedAt DateTime?
+  vndPerUsd            Int
+  paymentMethod        String         @default("bank")
+  bankSnapshot         Json
+  cryptoAmount         String?
+  cryptoRateVnd        Int?
+  customerTxid         String?
+  asap                 Boolean        @default(false)
+  paymentSource        String?
+  paymentSeenAt        DateTime?
+  txConfirmations      Int?
+  reminderSentAt       DateTime?
+  holdExpiresAt        DateTime
+  reportedAt           DateTime?
+  customerTimeZone     String?
+  paidAt               DateTime?
+  paidAmountVnd        Int?
+  paymentReference     String?
+  paymentConfirmedBy   String?
+  assignedAdmin        String?
+  appointmentStart     DateTime?
+  appointmentEnd       DateTime?
+  deliveryNote         String?
+  completedAt          DateTime?
+  cancelledAt          DateTime?
+  cancelReason         String?
+  internalNote         String?
+  createdAt            DateTime       @default(now())
+  updatedAt            DateTime       @updatedAt
+  items                OrderItem[]
+  slots                OrderSlot[]
+  events               OrderEvent[]
+  notifications        Notification[]
+  luckySpin            LuckySpin?
 
   @@index([status, createdAt])
   @@index([customerId, createdAt])
@@ -373,22 +378,21 @@ model LuckyWheelPrize {
 }
 
 model LuckySpin {
-  id          String            @id @default(cuid())
-  customerId  String
-  customer    Customer          @relation(fields: [customerId], references: [id], onDelete: Restrict)
-  orderId     String            @unique
-  order       Order             @relation(fields: [orderId], references: [id], onDelete: Restrict)
-  prizeId     String?
-  prize       LuckyWheelPrize? @relation(fields: [prizeId], references: [id], onDelete: SetNull)
-  prizeLabel  String?
-  coinAmount  Int?
-  spunAt      DateTime?
-  createdAt   DateTime          @default(now())
+  id         String           @id @default(cuid())
+  customerId String
+  customer   Customer         @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  orderId    String           @unique
+  order      Order            @relation(fields: [orderId], references: [id], onDelete: Restrict)
+  prizeId    String?
+  prize      LuckyWheelPrize? @relation(fields: [prizeId], references: [id], onDelete: SetNull)
+  prizeLabel String?
+  coinAmount Int?
+  spunAt     DateTime?
+  createdAt  DateTime         @default(now())
 
   @@index([customerId, spunAt])
   @@index([prizeId, spunAt])
 }
-
 
 model Notification {
   id         String    @id @default(cuid())

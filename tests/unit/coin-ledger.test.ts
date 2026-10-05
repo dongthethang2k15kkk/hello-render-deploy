@@ -29,7 +29,7 @@ describe('coin ledger idempotency', () => {
     const createMany = vi.fn().mockResolvedValueOnce({count: 1}).mockResolvedValueOnce({count: 0});
     const update = vi.fn().mockResolvedValue({});
     const tx = {coinLedger: {createMany}, customer: {update}} as unknown as Prisma.TransactionClient;
-    const input = {customerId: 'customer-1', amount: BigInt(100_000_000), kind: 'order_payment', sourceKey: 'order-paid:order-1', orderId: 'order-1'};
+    const input = {customerId: 'customer-1', amount: BigInt(100_000_000), kind: 'lucky_spin', sourceKey: 'lucky-spin:spin-1', spinId: 'spin-1'};
 
     expect(await creditCoins(tx, input)).toBe(true);
     expect(await creditCoins(tx, input)).toBe(false);

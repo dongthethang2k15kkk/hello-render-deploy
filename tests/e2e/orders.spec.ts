@@ -37,6 +37,44 @@ async function placeOrderByApi(request: APIRequestContext) {
   return (await response.json()).code as string;
 }
 
+test('wheel coins are reserved for delivery, restored on cancellation, and purchases only grant a spin', async ({browser}) => {
+  test.setTimeout(120000);
+  const adminContext = await admin(browser);
+  await ensureBankAccount(adminContext.request);
+  const customerContext = await browser.newContext();
+  const account = await registerCustomer(customerContext.request, 'Wheel Redemption Customer');
+  const customer = await db.customer.update({where: {email: account.email}, data: {coinBalance: BigInt(50_000_000)}, select: {id: true}});
+  const productId = await catalogId(customerContext.request, 'SAMPLE_PLUS');
+  const line = {productId, quantity: 1, delivery: {recipient: 'Wheel buyer', note: ''}};
+
+  try {
+    const reservedResponse = await customerContext.request.post('/api/orders', {data: {lines: [line], redeemWheelCoins: true}});
+    expect(reservedResponse.status(), await reservedResponse.text()).toBe(201);
+    const reservedCode = (await reservedResponse.json()).code as string;
+    const reserved = await db.order.findUniqueOrThrow({where: {code: reservedCode}, select: {wheelCoins: true, redeemWheelCoins: true}});
+    expect(reserved).toMatchObject({wheelCoins: BigInt(50_000_000), redeemWheelCoins: true});
+    expect((await db.customer.findUniqueOrThrow({where: {id: customer.id}, select: {coinBalance: true}})).coinBalance).toBe(BigInt(0));
+    const visible = await (await customerContext.request.get(`/api/orders/${reservedCode}`)).json();
+    expect(visible.order.wheelCoins).toBe('50000000');
+
+    expect((await customerContext.request.post(`/api/orders/${reservedCode}`, {data: {action: 'cancel'}})).ok()).toBe(true);
+    expect((await db.customer.findUniqueOrThrow({where: {id: customer.id}, select: {coinBalance: true}})).coinBalance).toBe(BigInt(50_000_000));
+    expect((await db.order.findUniqueOrThrow({where: {code: reservedCode}, select: {wheelCoins: true}})).wheelCoins).toBe(BigInt(0));
+
+    const paidResponse = await customerContext.request.post('/api/orders', {data: {lines: [line], redeemWheelCoins: false}});
+    expect(paidResponse.status(), await paidResponse.text()).toBe(201);
+    const paidCode = (await paidResponse.json()).code as string;
+    const paidOrder = await db.order.findUniqueOrThrow({where: {code: paidCode}, select: {id: true, totalVnd: true}});
+    const confirmed = await adminContext.request.post(`/api/admin/orders/${paidOrder.id}`, {data: {action: 'confirm-payment', amountVnd: paidOrder.totalVnd, reference: 'WHEEL-E2E'}});
+    expect(confirmed.ok(), await confirmed.text()).toBe(true);
+    expect((await db.customer.findUniqueOrThrow({where: {id: customer.id}, select: {coinBalance: true}})).coinBalance).toBe(BigInt(50_000_000));
+    expect(await db.luckySpin.count({where: {orderId: paidOrder.id, customerId: customer.id}})).toBe(1);
+  } finally {
+    await customerContext.close();
+    await adminContext.close();
+  }
+});
+
 test('bank account setup stores the holder the way banks print it and offers a test QR', async ({browser}) => {
   const context = await admin(browser);
   await ensureBankAccount(context.request);

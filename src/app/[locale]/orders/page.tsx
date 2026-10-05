@@ -7,6 +7,7 @@ import {formatUsdFromVnd, formatVnd} from '@/lib/money';
 import {useCatalog} from '@/components/catalog-provider';
 import {formatRange, statusLabels, statusTone, type OrderStatus} from '@/lib/order-rules';
 import {LoadingRows} from '@/components/loading-state';
+import {loadJson} from '@/lib/client-data-cache';
 
 type OrderRow = {code: string; status: OrderStatus; totalVnd: number; createdAt: string; appointmentStart: string | null; appointmentEnd: string | null; items: {title: string; quantity: number}[]};
 
@@ -19,11 +20,10 @@ export default function MyOrders() {
   const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
 
   useEffect(() => {
-    fetch('/api/orders', {cache: 'no-store'}).then(async response => {
+    loadJson<{orders: OrderRow[]; error?: string}>('/api/orders', {maxAgeMs: 30_000}).then(response => {
       if (response.status === 401) { router.replace(`/${locale}/login?next=account`); return; }
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.error);
-      setOrders(data.orders);
+      if (!response.ok) throw new Error(response.data.error);
+      setOrders(response.data.orders);
     }).catch(cause => setError(cause instanceof Error ? cause.message : 'Orders could not be loaded.'));
   }, [locale, router]);
 

@@ -6,6 +6,7 @@ import {mergeMessages, watchChat, type LocalMessage} from '@/lib/chat-client';
 import {readChatCache, readDrafts, saveChatCache, saveDrafts} from '@/lib/chat-drafts';
 import {LoadingRows} from './loading-state';
 import {PresenceBadges, useAdminPresence} from './admin-presence';
+import {invalidateJson, loadJson} from '@/lib/client-data-cache';
 
 type Room = {id: string; name: string; unread?: number; lastMessage?: {body: string; createdAt: string; role: Role} | null; booking?: {code: string; appointmentStart: string | null} | null};
 
@@ -146,9 +147,17 @@ export default function ChatPanel({role, accountId, compact = false, initialRoom
         const query = new URLSearchParams({rooms: '0', read: '0'});
         if (role === 'admin') query.set('room', requested);
         if (cursor) query.set('after', cursor);
-        const response = await fetch(`/api/chat?${query}`, {cache: 'no-store', signal: task.controller.signal});
-        if (!response.ok) throw new Error('Could not load messages.');
-        const data = await response.json();
+        const url = `/api/chat?${query}`;
+        let data: any;
+        if (role === 'user' && !requested && !cursor) {
+          const response = await loadJson<any>(url, {maxAgeMs: 20_000});
+          if (!response.ok) throw new Error('Could not load messages.');
+          data = response.data;
+        } else {
+          const response = await fetch(url, {cache: 'no-store', signal: task.controller.signal});
+          if (!response.ok) throw new Error('Could not load messages.');
+          data = await response.json();
+        }
         if (!mounted.current || task.controller.signal.aborted || roomRef.current !== requested) return;
         if (!requested && role === 'user') {roomRef.current = data.room; setRoom(data.room);}
         const key = data.room;
@@ -257,7 +266,7 @@ export default function ChatPanel({role, accountId, compact = false, initialRoom
     if (role === 'admin' && showRoomList && window.matchMedia('(max-width: 480px)').matches) return;
     const controller = new AbortController();
     void fetch('/api/chat', {method: 'PATCH', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({room, id: latestReply}), signal: controller.signal})
-      .then(response => {if (response.ok) {readIds.current.set(room, latestReply); setRooms(current => current.map(item => item.id === room ? {...item, unread: 0} : item));}}).catch(() => {});
+      .then(response => {if (response.ok) {invalidateJson('/api/chat', '/api/auth/session'); readIds.current.set(room, latestReply); setRooms(current => current.map(item => item.id === room ? {...item, unread: 0} : item));}}).catch(() => {});
     return () => controller.abort();
   }, [latestReply, room, role, showRoomList, viewVersion]);
 
@@ -302,6 +311,7 @@ export default function ChatPanel({role, accountId, compact = false, initialRoom
         const response = await fetch('/api/chat', {method: 'POST', signal: controller.signal, ...(item.file ? {body: payload} : {headers: {'Content-Type': 'application/json'}, body: JSON.stringify(values)})});
         const data = await response.json();
         if (!response.ok) throw new Error(data.error || 'Could not send message.');
+        invalidateJson('/api/chat', '/api/auth/session');
         if (!mounted.current) return;
         setMessages(current => mergeMessages(current, [data.message]));
         outgoing.current.delete(id);

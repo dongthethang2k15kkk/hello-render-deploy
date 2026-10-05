@@ -6,6 +6,7 @@ import {useLocale} from 'next-intl';
 import {usePathname} from 'next/navigation';
 import ChatPanel from './chat-panel';
 import {watchChat} from '@/lib/chat-client';
+import {loadJson} from '@/lib/client-data-cache';
 
 type Session = {id: string; name: string; role: 'admin' | 'user'; chatUnread?: number} | null;
 
@@ -20,12 +21,12 @@ export default function ChatWidget() {
   const dialog = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    const controller = new AbortController();
     setLoading(true);
-    fetch('/api/auth/session', {cache: 'no-store', signal: controller.signal})
-      .then(response => response.json()).then(data => {setAccount(data.account); setLoading(false);})
-      .catch(() => {if (!controller.signal.aborted) setLoading(false);});
-    return () => controller.abort();
+    let active = true;
+    loadJson<{account: Session}>('/api/auth/session', {maxAgeMs: 15_000})
+      .then(({data}) => {if (active) {setAccount(data.account); setLoading(false);}})
+      .catch(() => {if (active) setLoading(false);});
+    return () => {active = false;};
   }, [path]);
 
   useEffect(() => {
@@ -33,7 +34,7 @@ export default function ChatWidget() {
     let timer: ReturnType<typeof setTimeout> | undefined;
     const stop = watchChat(event => {
       if (event.kind === 'disconnected') return;
-      if (!timer) timer = setTimeout(() => {timer = undefined; void fetch('/api/auth/session', {cache: 'no-store'}).then(r => r.json()).then(data => setAccount(data.account)).catch(() => {});}, 300);
+      if (!timer) timer = setTimeout(() => {timer = undefined; void loadJson<{account: Session}>('/api/auth/session', {force: true}).then(({data}) => setAccount(data.account)).catch(() => {});}, 300);
     });
     return () => {stop(); clearTimeout(timer);};
   }, [account?.id]);

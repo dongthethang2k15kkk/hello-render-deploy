@@ -1,6 +1,7 @@
 'use client';
 import {useCallback, useEffect, useState} from 'react';
 import Link from 'next/link';
+import {loadJson} from '@/lib/client-data-cache';
 
 /** Big header switch: an Admin tells customers they are online and can trade right now (only turned off by hand). */
 export function AvailabilityToggle() {
@@ -33,9 +34,9 @@ export function AvailabilityToggle() {
 export function useOnlineAdmins() {
   const [online, setOnline] = useState<number | null>(null);
   useEffect(() => {
-    const load = () => fetch('/api/availability', {cache: 'no-store'}).then(response => response.json()).then(data => setOnline(typeof data.online === 'number' ? data.online : 0)).catch(() => setOnline(current => current ?? 0));
+    const load = (force = false) => loadJson<{online?: number}>('/api/availability', {maxAgeMs: 15_000, force}).then(response => setOnline(typeof response.data?.online === 'number' ? response.data.online : 0)).catch(() => setOnline(current => current ?? 0));
     void load();
-    const timer = window.setInterval(() => { if (document.visibilityState === 'visible') void load(); }, 30000);
+    const timer = window.setInterval(() => { if (document.visibilityState === 'visible') void load(true); }, 30000);
     return () => window.clearInterval(timer);
   }, []);
   return online;

@@ -16,7 +16,7 @@ export async function GET() {
 }
 
 // Checkout sends when the customer wants to trade (now and/or later times) together with the order.
-const body = z.object({lines: z.array(cartLineSchema).min(1).max(20), method: z.enum(['bank', 'ltc', 'usdt']).default('bank'), timing: timingSchema.optional()}).strict();
+const body = z.object({lines: z.array(cartLineSchema).min(1).max(20), method: z.enum(['bank', 'ltc', 'usdt']).default('bank'), timing: timingSchema.optional(), redeemWheelCoins: z.boolean().default(false)}).strict();
 
 export async function POST(request: Request) {
   if (!sameOrigin(request.headers)) return json({error: 'Invalid request origin.'}, 403);
@@ -26,7 +26,7 @@ export async function POST(request: Request) {
   const parsed = body.safeParse(await request.json().catch(() => ({})));
   if (!parsed.success) return json({error: parsed.error.issues.some(issue => issue.path[0] === 'timing') ? parsed.error.issues[0].message : 'Your cart is invalid. Please review it.'}, 400);
   try {
-    const order = await createOrder(account, parsed.data.lines, parsed.data.method, parsed.data.timing);
+    const order = await createOrder(account, parsed.data.lines, parsed.data.method, parsed.data.timing, parsed.data.redeemWheelCoins);
     return json({code: order.code}, 201);
   } catch (error) {
     if (error instanceof OrderError) return json({error: error.message}, error.status);

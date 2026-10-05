@@ -2004,3 +2004,26 @@ button.header-pill:hover:not(:disabled) {transform:translateY(-1px); background:
   .site-header .cart-link b {min-width:28px;border-radius:999px;}
   .account-balance {padding:18px;}
 }
+
+/* Wheel winnings are a separate delivery line, never part of the payment price. */
+.wheel-coin-option {display:flex;align-items:flex-start;gap:12px;margin-top:16px;padding:16px;border:1px solid rgba(217,248,90,.4);border-radius:14px;background:rgba(217,248,90,.08);cursor:pointer;}
+.wheel-coin-option input {flex:none;margin-top:4px;accent-color:#d9f85a;}
+.wheel-coin-option span {display:grid;gap:4px;}
+.wheel-coin-option strong {color:#f1ffbd;}
+.wheel-coin-option small {color:#bdd0b9;line-height:1.5;}
+.summary-wheel-coins {display:flex;justify-content:space-between;gap:14px;margin:14px 0 0;padding:12px 0;border-top:1px dashed rgba(217,248,90,.34);color:#d8e8d2;}
+.summary-wheel-coins strong {color:#e8ff91;text-align:right;}
+.admin-coin-calculation {display:grid;gap:6px;margin-top:14px;padding:14px;border:1px solid rgba(98,183,116,.55);border-radius:10px;background:rgba(76,151,91,.1);}
+.admin-coin-calculation span {display:flex;justify-content:space-between;gap:12px;color:#526354;}
+.admin-coin-calculation b {display:flex;justify-content:space-between;gap:12px;padding-top:7px;border-top:1px solid #c9d9c8;color:#1d4d2a;}
+.admin-coin-calculation.released {border-color:#d6d9d3;background:#f5f6f3;color:#687168;}
+
+/* iPhone chat composer: message gets a full row; image and Send share a second row without horizontal clipping. */
+@media(max-width:700px) {
+  :is(.chat-page,.support-window,.workspace-chat-column) .chat-compose {display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;padding:10px 12px max(10px,env(safe-area-inset-bottom));}
+  :is(.chat-page,.support-window,.workspace-chat-column) .chat-compose-fields {display:contents;}
+  :is(.chat-page,.support-window,.workspace-chat-column) .chat-compose textarea {grid-column:1/-1;grid-row:1;width:100%;min-width:0;box-sizing:border-box;}
+  :is(.chat-page,.support-window,.workspace-chat-column) .chat-image-picker {grid-column:1;grid-row:2;min-width:0;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;box-sizing:border-box;}
+  :is(.chat-page,.support-window,.workspace-chat-column) .chat-image-selected {grid-column:1/-1;grid-row:3;min-width:0;}
+  :is(.chat-page,.support-window,.workspace-chat-column) .chat-compose > button[type=submit] {grid-column:2;grid-row:2;align-self:stretch;min-width:72px;padding-inline:14px;}
+}

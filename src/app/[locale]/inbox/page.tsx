@@ -5,6 +5,7 @@ import {useLocale} from 'next-intl';
 import {useRouter} from 'next/navigation';
 import {formatRange} from '@/lib/order-rules';
 import {LoadingRows} from '@/components/loading-state';
+import {invalidateJson, loadJson} from '@/lib/client-data-cache';
 
 type Item = {id: string; title: string; body: string; link: string; readAt: string | null; createdAt: string};
 type Appointment = {code: string; appointmentStart: string; appointmentEnd: string};
@@ -18,9 +19,9 @@ export default function Inbox() {
   const [error, setError] = useState('');
 
   const load = useCallback(async () => {
-    const response = await fetch('/api/notifications', {cache: 'no-store'}).catch(() => null);
+    const response = await loadJson<{notifications: Item[]; unread: number; appointments?: Appointment[]; error?: string}>('/api/notifications', {maxAgeMs: 20_000}).catch(() => null);
     if (response?.status === 401) { router.replace(`/${locale}/login?next=account`); return; }
-    const data = await response?.json().catch(() => null);
+    const data = response?.data;
     if (!response?.ok || !data) { setError(data?.error ?? 'Your Inbox could not be loaded.'); return; }
     setItems(data.notifications); setUnread(data.unread); setAppointments(data.appointments ?? []);
   }, [locale, router]);
@@ -28,6 +29,7 @@ export default function Inbox() {
 
   async function markRead(ids?: string[]) {
     await fetch('/api/notifications', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({action: 'read', ...(ids ? {ids} : {})})}).catch(() => null);
+    invalidateJson('/api/notifications', '/api/auth/session');
   }
 
   return <div className="page-heading inbox-page"><p className="eyebrow">YOUR ACCOUNT</p><h1>Inbox</h1>

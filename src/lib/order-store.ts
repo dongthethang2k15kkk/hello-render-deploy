@@ -19,7 +19,8 @@ import {uniqueLitoshi} from './ltc';
 import {formatLtc, parseLtc} from './ltc-format';
 import {getLtcRate} from './exchange-rates';
 import {usdtAmount} from './usdt';
-import {grantPaidOrderRewards} from './lucky-wheel';
+import {grantPaidOrderSpin} from './lucky-wheel';
+import {refundReservedCoins, reserveAllCoins} from './coin-ledger';
 
 export class OrderError extends Error {
   constructor(message: string, readonly status = 400) { super(message); }
@@ -39,6 +40,13 @@ const customerLink = (code: string) => `/en/orders/${code}`;
 
 const restock = restockItems;
 
+async function releaseWheelCoins(tx: Tx, order: {id: string; code?: string; customerId: string; wheelCoins: bigint; wheelCoinsReleasedAt: Date | null}, reason: string) {
+  if (order.wheelCoins <= BigInt(0) || order.wheelCoinsReleasedAt) return;
+  await refundReservedCoins(tx, {customerId: order.customerId, orderId: order.id, amount: order.wheelCoins, sourceKey: `order-redeem-release:${order.id}`, note: `${reason}${order.code ? ` · ${order.code}` : ''}`});
+  await tx.order.update({where: {id: order.id}, data: {wheelCoins: BigInt(0), wheelCoinsReleasedAt: new Date()}});
+  await tx.orderEvent.create({data: {orderId: order.id, actor: 'system', action: 'wheel_coins_released', note: `${order.wheelCoins.toString()} wheel coins returned to balance`}});
+}
+
 const expiryState = globalThis as unknown as {orderExpiryAt?: number};
 /** Expires unpaid orders past their 30-minute hold and returns their stock. Render Free has no scheduler, so reads call this. */
 export async function expireStaleOrders(throttleMs = 0) {
@@ -46,12 +54,13 @@ export async function expireStaleOrders(throttleMs = 0) {
   if (throttleMs && expiryState.orderExpiryAt && Date.now() - expiryState.orderExpiryAt < throttleMs) return;
   expiryState.orderExpiryAt = Date.now();
   const db = getPaymentDb();
-  const stale = await db.order.findMany({where: {status: 'awaiting_payment', holdExpiresAt: {lt: new Date()}}, select: {id: true, code: true, customerId: true}, take: 50});
+  const stale = await db.order.findMany({where: {status: 'awaiting_payment', holdExpiresAt: {lt: new Date()}}, select: {id: true, code: true, customerId: true, wheelCoins: true, wheelCoinsReleasedAt: true}, take: 50});
   for (const order of stale) {
     const expired = await db.$transaction(async tx => {
       const changed = await tx.order.updateMany({where: {id: order.id, status: 'awaiting_payment'}, data: {status: 'expired', cancelledAt: new Date(), cancelReason: `Not paid within ${HOLD_MINUTES} minutes`}});
       if (changed.count !== 1) return false;
       await restock(tx, order.id);
+      await releaseWheelCoins(tx, order, 'Payment window expired');
       await tx.orderEvent.create({data: {orderId: order.id, actor: 'system', action: 'expired', note: `Not reported as paid within ${HOLD_MINUTES} minutes; items returned to stock`}});
       return true;
     }, txOptions);
@@ -61,7 +70,7 @@ export async function expireStaleOrders(throttleMs = 0) {
 
 // ---------- Customer side ----------
 
-export async function createOrder(customer: {id: string}, lines: CartLine[], method: PaymentMethod = 'bank', timing?: Timing) {
+export async function createOrder(customer: {id: string}, lines: CartLine[], method: PaymentMethod = 'bank', timing?: Timing, redeemWheelCoins = false) {
   if (!lines.length) throw new OrderError('Your cart is empty.');
   const timingProblem = timing && (slotProblem(timing.slots) ?? asapProblem(timing.asap, timing.slots));
   if (timingProblem) throw new OrderError(timingProblem);
@@ -110,8 +119,9 @@ export async function createOrder(customer: {id: string}, lines: CartLine[], met
     }
     const coin = isCrypto(method) ? CRYPTO_METHODS[method].coin : '';
     const chosen = timing ? ` · ${timing.asap ? 'trade now, ' : ''}${timing.slots.length} time${timing.slots.length === 1 ? '' : 's'} chosen` : '';
-    return tx.order.create({data: {
+    const order = await tx.order.create({data: {
       code, customerId: customer.id, status: 'awaiting_payment', totalVnd, vndPerUsd: catalog.vndPerUsd, bankSnapshot: snapshot,
+      redeemWheelCoins,
       paymentMethod: method, cryptoAmount, cryptoRateVnd: method === 'usdt' ? catalog.vndPerUsd : ltcRate?.vndPerLtc ?? null,
       holdExpiresAt: new Date(Date.now() + HOLD_MINUTES * 60_000),
       ...(timing ? {
@@ -120,6 +130,14 @@ export async function createOrder(customer: {id: string}, lines: CartLine[], met
       } : {}),
       items: {create: items}, events: {create: {actor: 'customer', action: 'created', note: `Order placed · ${formatVnd(totalVnd)}${cryptoAmount ? ` · pay ${cryptoAmount} ${coin}` : ''}${chosen}`}}
     }, select: {id: true, code: true}});
+    if (redeemWheelCoins) {
+      const wheelCoins = await reserveAllCoins(tx, {customerId: customer.id, orderId: order.id, sourceKey: `order-redeem:${order.id}`, note: `Reserved for order ${code}`});
+      if (wheelCoins > BigInt(0)) {
+        await tx.order.update({where: {id: order.id}, data: {wheelCoins}});
+        await tx.orderEvent.create({data: {orderId: order.id, actor: 'customer', action: 'wheel_coins_reserved', note: `${wheelCoins.toString()} wheel coins added to delivery`}});
+      }
+    }
+    return order;
   }, txOptions);
 }
 
@@ -143,7 +161,7 @@ export async function customerOrder(customerId: string, code: string) {
   if (!order) return null;
   // Internal Admin notes and the paying Admin's identity are never shown to customers.
   const {internalNote: _internal, paymentConfirmedBy: _confirmedBy, assignedAdmin: _assigned, customerId: _customer, ...visible} = order;
-  return {...visible, paymentMethod: order.paymentMethod as PaymentMethod, bankSnapshot: order.bankSnapshot as PaymentSnapshot};
+  return {...visible, wheelCoins: order.wheelCoins.toString(), paymentMethod: order.paymentMethod as PaymentMethod, bankSnapshot: order.bankSnapshot as PaymentSnapshot};
 }
 
 export async function customerOrders(customerId: string) {
@@ -206,13 +224,14 @@ export async function updateTimes(customerId: string, code: string, input: {time
 
 export async function cancelByCustomer(customerId: string, code: string) {
   const db = getPaymentDb();
-  const order = await db.order.findFirst({where: {code, customerId}, select: {id: true, status: true}});
+  const order = await db.order.findFirst({where: {code, customerId}, select: {id: true, code: true, customerId: true, status: true, wheelCoins: true, wheelCoinsReleasedAt: true}});
   if (!order) throw new OrderError('Order not found.', 404);
   if (!nextStatus(order.status, 'cancel-customer')) throw new OrderError('This order can no longer be cancelled online. Message us in Chat.', 409);
   await db.$transaction(async tx => {
     const changed = await tx.order.updateMany({where: {id: order.id, status: 'awaiting_payment'}, data: {status: 'cancelled', cancelledAt: new Date(), cancelReason: 'Cancelled by customer'}});
     if (changed.count !== 1) throw new OrderError('This order can no longer be cancelled online.', 409);
     await restock(tx, order.id);
+    await releaseWheelCoins(tx, order, 'Order cancelled by customer');
     await tx.orderEvent.create({data: {orderId: order.id, actor: 'customer', action: 'cancelled', note: 'Cancelled before payment; items returned to stock'}});
   }, txOptions);
 }
@@ -250,7 +269,7 @@ export async function adminOrder(id: string) {
   if (order && await expireIfDue(order)) order = await db.order.findUnique({where: {id}, include});
   if (!order) return null;
   const emails = await db.emailLog.findMany({where: {orderId: id}, orderBy: {createdAt: 'desc'}, take: 20, select: {id: true, recipient: true, subject: true, kind: true, status: true, error: true, createdAt: true}});
-  return {...order, paymentMethod: order.paymentMethod as PaymentMethod, bankSnapshot: order.bankSnapshot as PaymentSnapshot, emails};
+  return {...order, wheelCoins: order.wheelCoins.toString(), paymentMethod: order.paymentMethod as PaymentMethod, bankSnapshot: order.bankSnapshot as PaymentSnapshot, emails};
 }
 
 export async function needsActionCount() {
@@ -360,7 +379,7 @@ export async function confirmPayment(adminEmail: string, id: string, input: {amo
       ...(input.appointment ? {appointmentStart: input.appointment.start, appointmentEnd: input.appointment.end} : {})
     }});
     if (changed.count !== 1) throw new OrderError('The order changed meanwhile. Reload and try again.', 409);
-    await grantPaidOrderRewards(tx, order);
+    await grantPaidOrderSpin(tx, order);
     await tx.orderEvent.create({data: {orderId: id, actor: adminEmail, action: 'payment_confirmed', note: `Received ${formatVnd(input.amountVnd)}${input.amountVnd !== order.totalVnd ? ` (order total ${formatVnd(order.totalVnd)})` : ''}`}});
     if (input.appointment) await tx.orderEvent.create({data: {orderId: id, actor: adminEmail, action: 'scheduled', note: 'Appointment booked'}});
   }, txOptions);
@@ -412,6 +431,7 @@ export async function cancelByAdmin(adminEmail: string, id: string, reason: stri
     const changed = await tx.order.updateMany({where: {id, status: order.status}, data: {status: 'cancelled', cancelledAt: new Date(), cancelReason: reason.trim().slice(0, 500) || 'Cancelled by the shop'}});
     if (changed.count !== 1) throw new OrderError('The order changed meanwhile. Reload and try again.', 409);
     await restock(tx, id);
+    await releaseWheelCoins(tx, order, 'Order cancelled by shop');
     await tx.orderEvent.create({data: {orderId: id, actor: adminEmail, action: 'cancelled', note: reason.trim() || 'Cancelled by the shop'}});
   }, txOptions);
   await recordAudit({actorEmail: adminEmail, action: 'order.cancelled', summary: `Cancelled ${order.code}${reason.trim() ? `: ${reason.trim()}` : ''}`, entityType: 'order', entityId: id, customerId: order.customerId});

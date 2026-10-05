@@ -5,6 +5,8 @@ import {formatDateTime} from '@/lib/customer-labels';
 import {formatVnd} from '@/lib/money';
 import {CRYPTO_METHODS, dateToVietnamLocal, explorerAddress, explorerTx, formatRange, isCrypto, statusLabels, statusTone, VN_TIME_ZONE, type OrderStatus} from '@/lib/order-rules';
 import {LoadingRows} from '@/components/loading-state';
+import {formatCoins} from '@/lib/coin-format';
+import {coinsFromOrderItems} from '@/lib/coin-rules';
 
 export type AdminOrder = {
   id: string; code: string; status: OrderStatus; totalVnd: number; createdAt: string; holdExpiresAt: string; reportedAt: string | null; customerTimeZone: string | null;
@@ -12,6 +14,7 @@ export type AdminOrder = {
   appointmentStart: string | null; appointmentEnd: string | null; deliveryNote: string | null; cancelReason: string | null;
   paymentMethod: 'bank' | 'ltc' | 'usdt'; cryptoAmount: string | null; cryptoRateVnd: number | null; customerTxid: string | null;
   asap: boolean; paymentSource: string | null; paymentSeenAt: string | null; txConfirmations: number | null;
+  redeemWheelCoins: boolean; wheelCoins: string; wheelCoinsReleasedAt: string | null;
   bankSnapshot: {bankName: string; accountNumber: string; accountHolder: string} | {network: 'LTC' | 'TRC20'; address: string; label: string};
   customer: {id: string; name: string; email: string; status: string; discordUsername?: string | null};
   items: {id: string; title: string; sku: string; unitPriceVnd: number; quantity: number; delivery: Record<string, string>}[];
@@ -84,6 +87,9 @@ export default function AdminOrderView({locale, id, variant = 'page', onLoaded}:
   const otherHandler = order.assignedAdmin && me && order.assignedAdmin !== me ? order.assignedAdmin : null;
   const open = ['awaiting_payment', 'payment_reported', 'paid', 'scheduled'].includes(order.status);
   const crypto = isCrypto(order.paymentMethod) ? CRYPTO_METHODS[order.paymentMethod] : null;
+  const packageCoins = coinsFromOrderItems(order.items);
+  const wheelCoins = /^\d+$/.test(order.wheelCoins) ? BigInt(order.wheelCoins) : BigInt(0);
+  const deliveryCoins = packageCoins + wheelCoins;
   const coin = crypto?.coin ?? 'LTC';
   const canConfirm = !otherHandler && ['awaiting_payment', 'payment_reported', 'expired'].includes(order.status);
   const canSchedule = !otherHandler && (order.status === 'paid' || order.status === 'scheduled');
@@ -113,6 +119,7 @@ export default function AdminOrderView({locale, id, variant = 'page', onLoaded}:
       </section>
       <section className="card admin-panel"><h2>Items</h2>
         {order.items.map(item => <div className="admin-order-item" key={item.id}><strong>{item.title} × {item.quantity}</strong><span>{item.sku} · {formatVnd(item.unitPriceVnd * item.quantity)}</span>{Object.entries(item.delivery).filter(([, value]) => value).map(([key, value]) => <small key={key}>{key}: {value}</small>)}</div>)}
+        {order.redeemWheelCoins && <div className={`admin-coin-calculation ${wheelCoins > BigInt(0) ? '' : 'released'}`}><strong>{wheelCoins > BigInt(0) ? 'Add wheel winnings to delivery' : 'Wheel winnings are not reserved'}</strong>{wheelCoins > BigInt(0) ? <><span>Package amount: {formatCoins(packageCoins)}</span><span>Wheel balance: + {formatCoins(wheelCoins)}</span><b>Admin delivers: {formatCoins(deliveryCoins)}</b></> : <span>{order.wheelCoinsReleasedAt ? 'The reserved balance was returned when this order ended.' : 'The customer selected the option with an empty balance.'}</span>}</div>}
         <p className="admin-order-total">Total <strong>{formatVnd(order.totalVnd)}</strong></p>
       </section>
     </div>
@@ -142,7 +149,7 @@ export default function AdminOrderView({locale, id, variant = 'page', onLoaded}:
     </section>}
 
     {canComplete && <section className="card admin-panel action-panel complete-panel"><h2>Complete the transaction</h2>
-      <p className="field-caption">Press this once the customer has everything. Only then does the site record the sale and the money received (Overview revenue). Write what the customer receives (codes, links, instructions): only this customer sees it on their order page; the email does not include it.</p>
+      <p className="field-caption">Press this once the customer has everything.{wheelCoins > BigInt(0) ? ` This delivery includes ${formatCoins(wheelCoins)} from the wheel, for ${formatCoins(deliveryCoins)} total coins.` : ''} Only then does the site record the sale and the money received (Overview revenue). Write what the customer receives (codes, links, instructions): only this customer sees it on their order page; the email does not include it.</p>
       <form onSubmit={event => {event.preventDefault(); if (window.confirm('Complete this transaction? The sale is recorded and the customer is told the order is delivered.')) void act({action: 'complete', deliveryNote: delivery}, 'Transaction completed and recorded; the customer was notified.');}}>
         <label>Delivery details<textarea rows={4} value={delivery} onChange={event => setDelivery(event.target.value)} required maxLength={5000}/></label>
         <button type="submit" disabled={busy}>Complete transaction</button>

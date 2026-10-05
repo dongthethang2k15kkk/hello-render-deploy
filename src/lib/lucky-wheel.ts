@@ -1,6 +1,6 @@
 import {randomInt} from 'node:crypto';
 import type {Prisma} from '@prisma/client';
-import {coinsFromOrderItems, creditCoins} from './coin-ledger';
+import {creditCoins} from './coin-ledger';
 import {getPaymentDb} from './payment-db';
 
 export const DEFAULT_LUCKY_PRIZES = [
@@ -36,27 +36,20 @@ export async function getLuckyWheelState(customerId: string) {
   return {available, history, prizes, coinBalance: (customer?.coinBalance ?? BigInt(0)).toString()};
 }
 
-/** Grants all benefits of a paid order inside the caller's payment transaction. */
-export async function grantPaidOrderRewards(tx: Prisma.TransactionClient, order: {id: string; code: string; customerId: string; items: Array<{title: string; quantity: number}>}) {
+/** A paid order grants one spin. Package contents never change the wheel-coin balance. */
+export async function grantPaidOrderSpin(tx: Prisma.TransactionClient, order: {id: string; customerId: string}) {
   if ((await tx.luckyWheelPrize.count()) === 0) {
     await tx.luckyWheelPrize.createMany({data: DEFAULT_LUCKY_PRIZES.map(prize => ({...prize, active: true}))});
   }
   await tx.luckySpin.upsert({where: {orderId: order.id}, update: {}, create: {customerId: order.customerId, orderId: order.id}});
-  await creditCoins(tx, {
-    customerId: order.customerId,
-    amount: coinsFromOrderItems(order.items),
-    kind: 'order_payment',
-    sourceKey: `order-paid:${order.id}`,
-    orderId: order.id,
-    note: `Coins from paid order ${order.code}`
-  });
 }
 
-function choosePrize(prizes: {id: string; label: string; coinAmount: number; weight: number}[]) {
+export function chooseWeightedPrize<T extends {weight: number}>(prizes: readonly T[], roll: number): T {
   const eligible = prizes.filter(prize => prize.weight > 0);
   const total = eligible.reduce((sum, prize) => sum + prize.weight, 0);
   if (!total) throw new Error('No active lucky wheel prizes are configured.');
-  let cursor = randomInt(total);
+  if (!Number.isInteger(roll) || roll < 0 || roll >= total) throw new RangeError(`Roll must be an integer from 0 to ${total - 1}.`);
+  let cursor = roll;
   for (const prize of eligible) {
     if (cursor < prize.weight) return prize;
     cursor -= prize.weight;
@@ -71,7 +64,9 @@ export async function spinLuckyWheel(customerId: string, spinId: string) {
     if (!spin) throw new Error('Spin not found.');
     if (spin.spunAt) throw new Error('This spin has already been used.');
     const prizes = await tx.luckyWheelPrize.findMany({where: {active: true}, orderBy: [{sortOrder: 'asc'}, {createdAt: 'asc'}], select: {id: true, label: true, coinAmount: true, weight: true}});
-    const prize = choosePrize(prizes);
+    const totalWeight = prizes.reduce((sum, prize) => sum + Math.max(0, prize.weight), 0);
+    if (!totalWeight) throw new Error('No active lucky wheel prizes are configured.');
+    const prize = chooseWeightedPrize(prizes, randomInt(totalWeight));
     const updated = await tx.luckySpin.updateMany({where: {id: spinId, customerId, spunAt: null}, data: {prizeId: prize.id, prizeLabel: prize.label, coinAmount: prize.coinAmount, spunAt: new Date()}});
     if (updated.count !== 1) throw new Error('This spin was already used.');
     await creditCoins(tx, {customerId, amount: BigInt(prize.coinAmount), kind: 'lucky_spin', sourceKey: `lucky-spin:${spinId}`, spinId, note: prize.label});

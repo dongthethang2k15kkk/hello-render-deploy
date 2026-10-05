@@ -16,6 +16,7 @@ import {watchChat} from '@/lib/chat-client';
 import {formatUsdFromVnd} from '@/lib/money';
 import {useCart} from './cart-provider';
 import {formatCompactCoins} from '@/lib/coin-format';
+import {invalidateJson, loadJson} from '@/lib/client-data-cache';
 
 export function ProductArt({variant = 0}: {variant?: number}) {
   return <div className={`product-art art-${variant}`} aria-hidden="true"><span className="orbit orbit-one"/><span className="orbit orbit-two"/><div className="isometric"><i/><i/><i/></div><span className="art-caption">DIGITAL / {variant ? 'PLUS' : 'ESSENTIAL'}</span><span className="art-number">0{variant + 1}</span></div>;
@@ -57,8 +58,8 @@ export function StoreHeader() {
     if (unreadNow === null || before === null || unreadNow <= before) return;
     setRinging(true);
     playChime();
-    void fetch('/api/notifications', {cache: 'no-store'}).then(response => response.json()).then(data => {
-      const latest = (data.notifications as Notice[] | undefined)?.find(item => !item.readAt);
+    void loadJson<{notifications?: Notice[]}>('/api/notifications', {force: true}).then(response => {
+      const latest = response.data.notifications?.find(item => !item.readAt);
       if (latest) setToast(latest);
     }).catch(() => undefined);
   }, [unreadNow]);
@@ -74,7 +75,7 @@ export function StoreHeader() {
   }, [unreadNow, path]);
   function openToast(notice: Notice) {
     setToast(null);
-    void fetch('/api/notifications', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({action: 'read', ids: [notice.id]})}).then(response => response.json()).then(data => { if (typeof data?.unread === 'number') setUnread(data.unread); }).catch(() => undefined);
+    void fetch('/api/notifications', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({action: 'read', ids: [notice.id]})}).then(response => response.json()).then(data => { invalidateJson('/api/notifications', '/api/auth/session'); if (typeof data?.unread === 'number') setUnread(data.unread); }).catch(() => undefined);
     router.push(notice.link.startsWith('/') ? notice.link : `/${locale}/inbox`);
   }
   useEffect(() => {
@@ -82,21 +83,22 @@ export function StoreHeader() {
   }, []);
   useEffect(() => {
     setMenuOpen(false); setPanel(null);
-    const load = () => fetch('/api/auth/session', {cache: 'no-store'}).then(r => r.json()).then(data => {setAccount(data.account); rememberAccount(data.account);}).catch(() => undefined);
+    const load = (force = false) => loadJson<{account: HeaderAccount | null}>('/api/auth/session', {maxAgeMs: 15_000, force}).then(({data}) => {setAccount(data.account); rememberAccount(data.account);}).catch(() => undefined);
     void load();
     // Keeps Inbox and Chat counts fresh, also in a background tab (browsers slow that down to about once a minute),
     // so the chime can announce a new notification while the customer is elsewhere.
-    const timer = window.setInterval(() => void load(), 20000);
+    const timer = window.setInterval(() => void load(true), 20000);
     // Checkout signs customers in without leaving the page; it announces the new session so the header updates at once.
-    window.addEventListener('jh-account-changed', load);
-    return () => { window.clearInterval(timer); window.removeEventListener('jh-account-changed', load); };
+    const changed = () => {invalidateJson('/api/auth/session'); void load(true);};
+    window.addEventListener('jh-account-changed', changed);
+    return () => { window.clearInterval(timer); window.removeEventListener('jh-account-changed', changed); };
   }, [path]);
   useEffect(() => {
     if (!account) return;
     let timer: ReturnType<typeof setTimeout> | undefined;
     const stop = watchChat(event => {
       if (event.kind === 'disconnected') return;
-      if (!timer) timer = setTimeout(() => {timer = undefined; void fetch('/api/auth/session', {cache: 'no-store'}).then(r => r.json()).then(data => setAccount(data.account)).catch(() => {});}, 250);
+      if (!timer) timer = setTimeout(() => {timer = undefined; void loadJson<{account: HeaderAccount | null}>('/api/auth/session', {force: true}).then(({data}) => setAccount(data.account)).catch(() => {});}, 250);
     });
     return () => {stop(); clearTimeout(timer);};
   }, [account?.role]);

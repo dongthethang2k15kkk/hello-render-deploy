@@ -1,21 +1,6 @@
 import type {Prisma} from '@prisma/client';
 import {getPaymentDb} from './payment-db';
-
-const UNIT_MULTIPLIER: Record<string, bigint> = {K: BigInt(1000), M: BigInt(1000000), B: BigInt(1000000000), T: BigInt(1000000000000)};
-
-export function coinsFromTitle(title: string, quantity: number) {
-  const match = /^\s*(\d+(?:\.\d+)?)\s*([KMBT])\b/i.exec(title);
-  if (!match || !Number.isInteger(quantity) || quantity < 1) return BigInt(0);
-  const [whole, fraction = ''] = match[1].split('.');
-  const multiplier = UNIT_MULTIPLIER[match[2].toUpperCase()];
-  const scale = BigInt(10) ** BigInt(fraction.length);
-  const numeric = BigInt(whole) * scale + BigInt(fraction || '0');
-  return numeric * multiplier * BigInt(quantity) / scale;
-}
-
-export function coinsFromOrderItems(items: Array<{title: string; quantity: number}>) {
-  return items.reduce((sum, item) => sum + coinsFromTitle(item.title, item.quantity), BigInt(0));
-}
+export {coinsFromOrderItems, coinsFromTitle} from './coin-rules';
 
 export async function creditCoins(tx: Prisma.TransactionClient, input: {customerId: string; amount: bigint; kind: string; sourceKey: string; orderId?: string; spinId?: string; note?: string}) {
   if (input.amount <= BigInt(0)) return false;
@@ -25,6 +10,24 @@ export async function creditCoins(tx: Prisma.TransactionClient, input: {customer
   if (inserted.count !== 1) return false;
   await tx.customer.update({where: {id: input.customerId}, data: {coinBalance: {increment: input.amount}}});
   return true;
+}
+
+/** Locks the customer's entire available wheel balance to one order. The row lock prevents two checkouts from spending it twice. */
+export async function reserveAllCoins(tx: Prisma.TransactionClient, input: {customerId: string; orderId: string; sourceKey: string; note?: string}) {
+  await tx.$queryRaw`SELECT "id" FROM "Customer" WHERE "id" = ${input.customerId} FOR UPDATE`;
+  const customer = await tx.customer.findUniqueOrThrow({where: {id: input.customerId}, select: {coinBalance: true}});
+  if (customer.coinBalance <= BigInt(0)) return BigInt(0);
+  const amount = customer.coinBalance;
+  const inserted = await tx.coinLedger.createMany({data: [{customerId: input.customerId, amount: -amount, kind: 'order_redemption', sourceKey: input.sourceKey, orderId: input.orderId, note: input.note}], skipDuplicates: true});
+  if (inserted.count !== 1) return BigInt(0);
+  await tx.customer.update({where: {id: input.customerId}, data: {coinBalance: {decrement: amount}}});
+  return amount;
+}
+
+/** Returns an order's reserved wheel coins once. A unique ledger source keeps retries harmless. */
+export async function refundReservedCoins(tx: Prisma.TransactionClient, input: {customerId: string; orderId: string; amount: bigint; sourceKey: string; note?: string}) {
+  if (input.amount <= BigInt(0)) return false;
+  return creditCoins(tx, {...input, kind: 'order_redemption_refund'});
 }
 
 export async function getCoinBalance(customerId: string) {

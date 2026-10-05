@@ -11,7 +11,7 @@ import {reReserveItems} from './order-stock';
 import {findLtcPayment, REQUIRED_LTC_CONFIRMATIONS} from './payment-match';
 import {getPaymentDb} from './payment-db';
 import {findUsdtPayment, USDT_TRC20_CONTRACT} from './usdt';
-import {grantPaidOrderRewards} from './lucky-wheel';
+import {grantPaidOrderSpin} from './lucky-wheel';
 
 const PAYABLE = ['awaiting_payment', 'payment_reported', 'expired'];
 
@@ -31,7 +31,7 @@ export async function markPaidAutomatically(orderId: string, input: {amountVnd: 
         paymentConfirmedBy: 'auto:blockchain', paymentSource: 'blockchain', cancelledAt: null, cancelReason: null
       }});
       if (changed.count !== 1) throw new Error('Order changed');
-      await grantPaidOrderRewards(tx, order);
+      await grantPaidOrderSpin(tx, order);
       await tx.orderEvent.create({data: {orderId, actor: 'system', action: 'payment_confirmed', note: `Detected automatically on the ${network} blockchain: ${input.amountLabel}`}});
     }, {maxWait: 10000, timeout: 20000});
   } catch (error) {

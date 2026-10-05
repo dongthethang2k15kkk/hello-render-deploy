@@ -27,6 +27,14 @@ test('customers see every team reply as "Admin"; the Admin inbox shows who wrote
   await expect(page.getByText('Happy to help.')).toBeVisible();
   await expect(page.locator('.chat-message', {hasText: 'Happy to help.'}).locator('small').first()).toContainText('Admin');
   await expect.poll(() => page.locator('.chat-compose button[type=submit]').evaluate(element => element.getBoundingClientRect().bottom <= window.innerHeight)).toBe(true);
+  const composerFits = await page.locator('.chat-compose').evaluate(element => {
+    const form = element.getBoundingClientRect();
+    const textarea = element.querySelector('textarea')!.getBoundingClientRect();
+    const picker = element.querySelector('.chat-image-picker')!.getBoundingClientRect();
+    const send = element.querySelector('button[type=submit]')!.getBoundingClientRect();
+    return form.left >= 0 && form.right <= window.innerWidth && textarea.right <= window.innerWidth && picker.right <= send.left && send.right <= window.innerWidth && send.top >= textarea.bottom;
+  });
+  expect(composerFits).toBe(true);
   await customer.close(); await adminContext.close();
 });
 

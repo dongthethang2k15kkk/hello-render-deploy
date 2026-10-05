@@ -5,6 +5,7 @@ import {useRouter} from 'next/navigation';
 import Link from 'next/link';
 import {LoadingRows} from '@/components/loading-state';
 import {formatCoins} from '@/lib/coin-format';
+import {invalidateJson, loadJson} from '@/lib/client-data-cache';
 
 type Profile = {name: string; email: string; emailVerified: boolean; google: boolean; hasPassword: boolean; mustChangePassword: boolean; coinBalance: string; createdAt: string};
 
@@ -21,9 +22,9 @@ export default function AccountPage() {
   const [message, setMessage] = useState('');
 
   async function load() {
-    const response = await fetch('/api/account', {cache: 'no-store'}).catch(() => null);
+    const response = await loadJson<{account?: Profile; error?: string}>('/api/account', {maxAgeMs: 30_000}).catch(() => null);
     if (response?.status === 401) {router.replace(`/${locale}/login?next=account`); return;}
-    const data = await response?.json().catch(() => null);
+    const data = response?.data;
     if (response?.ok && data?.account) setProfile(data.account); else setError('Your account could not be loaded.');
   }
   useEffect(() => {void load();}, []); // eslint-disable-line react-hooks/exhaustive-deps
@@ -34,6 +35,7 @@ export default function AccountPage() {
       const response = await fetch('/api/account', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body)});
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || 'Request failed.');
+      invalidateJson('/api/account', '/api/auth/session');
       return true;
     } catch (cause) { setError(cause instanceof Error ? cause.message : 'Request failed.'); return false; }
     finally { setBusy(false); }
@@ -59,7 +61,7 @@ export default function AccountPage() {
   return <div className="page-heading account-page"><p className="eyebrow">YOUR ACCOUNT</p><h1>Account</h1>
     {required && <p className="notice" role="alert"><strong>Please set a new password.</strong> The shop gave you a temporary password; choose your own before continuing.</p>}
     {message && <p className="account-feedback" role="status">{message}</p>}
-    <section className="account-balance" aria-label="Coin balance"><span>YOUR COIN BALANCE</span><strong>{formatCoins(profile.coinBalance)}</strong><small>Purchases and lucky-wheel prizes are added automatically.</small></section>
+    <section className="account-balance" aria-label="Coin balance"><span>YOUR WHEEL-COIN BALANCE</span><strong>{formatCoins(profile.coinBalance)}</strong><small>Only lucky-wheel prizes are added here. Apply the full balance to a future order when you want it delivered.</small></section>
     <section className="card account-card"><h2>Profile</h2>
       <dl className="account-details"><dt>Name</dt><dd>{profile.name}</dd><dt>Email</dt><dd>{profile.email} {profile.emailVerified ? <span className="badge ok">verified by Google</span> : <span className="badge">not verified</span>}</dd><dt>Sign-in methods</dt><dd>{[profile.google && 'Google', profile.hasPassword && 'Password'].filter(Boolean).join(' · ') || '—'}</dd><dt>Member since</dt><dd>{new Date(profile.createdAt).toLocaleDateString('en-GB')}</dd></dl>
       <p><Link href={`/${locale}/workspace`}>Open chat with support →</Link></p>

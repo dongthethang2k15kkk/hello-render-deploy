@@ -8,6 +8,7 @@ import {formatUsdFromVnd} from '@/lib/money';
 import {formatRange, statusLabels, statusTone, type OrderStatus} from '@/lib/order-rules';
 import {useCatalog} from './catalog-provider';
 import {LoadingRows} from './loading-state';
+import {invalidateJson, loadJson} from '@/lib/client-data-cache';
 
 type OrderRow = {code: string; status: OrderStatus; totalVnd: number; createdAt: string; items: {title: string; quantity: number}[]};
 export type Notice = {id: string; title: string; body: string; link: string; readAt: string | null; createdAt: string};
@@ -68,10 +69,9 @@ export function OrdersPopover({locale, cartCount, open, onOpenChange, icon, badg
   useEffect(() => {
     if (!open) return;
     // Shows the last list at once and refreshes it in the background.
-    fetch('/api/orders', {cache: 'no-store'}).then(async response => {
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.error);
-      setOrders(data.orders); setError('');
+    loadJson<{orders: OrderRow[]; error?: string}>('/api/orders', {maxAgeMs: 30_000}).then(response => {
+      if (!response.ok) throw new Error(response.data.error);
+      setOrders(response.data.orders); setError('');
     }).catch(cause => setError(cause instanceof Error ? cause.message : 'Orders could not be loaded.'));
   }, [open]);
   const close = () => onOpenChange(false);
@@ -100,15 +100,15 @@ export function InboxPopover({locale, unread, onUnreadChange, open, onOpenChange
   const [error, setError] = useState('');
   useEffect(() => {
     if (!open) return;
-    fetch('/api/notifications', {cache: 'no-store'}).then(async response => {
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.error);
-      setItems(data.notifications); setAppointments(data.appointments ?? []); onUnreadChange(data.unread); setError('');
+    loadJson<{notifications: Notice[]; appointments?: Appointment[]; unread: number; error?: string}>('/api/notifications', {maxAgeMs: 20_000}).then(response => {
+      if (!response.ok) throw new Error(response.data.error);
+      setItems(response.data.notifications); setAppointments(response.data.appointments ?? []); onUnreadChange(response.data.unread); setError('');
     }).catch(cause => setError(cause instanceof Error ? cause.message : 'Your Inbox could not be loaded.'));
   }, [open, onUnreadChange]);
   async function markRead(ids?: string[]) {
     const response = await fetch('/api/notifications', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({action: 'read', ...(ids ? {ids} : {})})}).catch(() => null);
     const data = await response?.json().catch(() => null);
+    invalidateJson('/api/notifications', '/api/auth/session');
     if (typeof data?.unread === 'number') onUnreadChange(data.unread);
   }
   function openItem(item: Notice) {
