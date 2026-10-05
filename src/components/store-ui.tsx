@@ -15,11 +15,12 @@ import {clearChatDrafts} from '@/lib/chat-drafts';
 import {watchChat} from '@/lib/chat-client';
 import {formatUsdFromVnd} from '@/lib/money';
 import {useCart} from './cart-provider';
+import {formatCompactCoins} from '@/lib/coin-format';
 
 export function ProductArt({variant = 0}: {variant?: number}) {
   return <div className={`product-art art-${variant}`} aria-hidden="true"><span className="orbit orbit-one"/><span className="orbit orbit-two"/><div className="isometric"><i/><i/><i/></div><span className="art-caption">DIGITAL / {variant ? 'PLUS' : 'ESSENTIAL'}</span><span className="art-number">0{variant + 1}</span></div>;
 }
-type HeaderAccount = {name: string; role: string; unread?: number; chatUnread?: number};
+type HeaderAccount = {name: string; role: string; unread?: number; chatUnread?: number; coinBalance?: string};
 
 const icons = {
   orders: <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 2h12l2 4v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6l2-4Zm0 4h12M9 10h6M9 14h6"/></svg>,
@@ -101,17 +102,25 @@ export function StoreHeader() {
   }, [account?.role]);
   async function logout() {await fetch('/api/auth/logout', {method: 'POST'}); clearChatDrafts(); rememberAccount(null); setAccount(null); window.location.reload();}
   const cartCount = lines.reduce((sum, line) => sum + line.quantity, 0);
-  return <header className="site-header"><div className="shell header"><Link href={`/${locale}`} className="brand"><span className="brand-name">Jewish Horse</span><small className="brand-tagline">Digital package shop</small></Link><button className="mobile-nav-toggle secondary" type="button" aria-expanded={menuOpen} aria-controls="store-navigation" onClick={() => setMenuOpen(value => !value)}><span aria-hidden="true">{menuOpen ? '×' : '☰'}</span><span>{menuOpen ? 'Close' : 'Menu'}</span></button><nav id="store-navigation" className={menuOpen ? 'open' : ''} aria-label="Navigation"><Link onClick={() => setMenuOpen(false)} href={`/${locale}#catalog`}>Packages</Link><Link onClick={() => setMenuOpen(false)} href={`/${locale}#how-it-works`}>How it works</Link>{/* Signed-in customers have the Chat pill (with unread count) instead. */}{account?.role !== 'user' && <Link onClick={() => setMenuOpen(false)} href={`/${locale}/workspace`}>Chat support</Link>}<Link onClick={() => setMenuOpen(false)} href={`/${locale}#faq`}>Help</Link></nav>
+  const accountHref = `/${locale}/${account?.role === 'admin' ? 'admin' : 'account'}`;
+  return <header className="site-header"><div className="shell header">
+    <Link href={`/${locale}`} className="brand"><span className="brand-name">Jewish Horse</span><small className="brand-tagline">Digital package shop</small></Link>
+    <button className="mobile-nav-toggle secondary" type="button" aria-expanded={menuOpen} aria-controls="store-navigation" onClick={() => setMenuOpen(value => !value)}><span aria-hidden="true">{menuOpen ? '×' : '☰'}</span><span>{menuOpen ? 'Close' : 'Menu'}</span></button>
+    <nav id="store-navigation" className={menuOpen ? 'open' : ''} aria-label="Navigation">
+      <Link onClick={() => setMenuOpen(false)} href={`/${locale}#catalog`}>Packages</Link><Link onClick={() => setMenuOpen(false)} href={`/${locale}#how-it-works`}>How it works</Link>{account?.role !== 'user' && <Link onClick={() => setMenuOpen(false)} href={`/${locale}/workspace`}>Chat support</Link>}<Link onClick={() => setMenuOpen(false)} href={`/${locale}#faq`}>Help</Link>
+      <span className="mobile-nav-account">{account ? <><Link onClick={() => setMenuOpen(false)} href={accountHref}>{account.name}</Link><button type="button" onClick={() => void logout()}>Log out</button></> : <Link onClick={() => setMenuOpen(false)} href={`/${locale}/login`}>Sign in / Register</Link>}</span>
+    </nav>
     <HeaderLiveStatus locale={locale}/>
     <div className="header-actions">
-      {/* Orders and Inbox open small windows; chat lives in the floating Chat button (with its unread count). */}
+      {account?.role === 'user' && <Link className="coin-balance-pill" href={`/${locale}/account`} title={`${account.coinBalance ?? '0'} coins`} aria-label={`Coin balance: ${account.coinBalance ?? '0'} coins`}><span aria-hidden="true">✦</span>{account.coinBalance === undefined ? '…' : formatCompactCoins(account.coinBalance)}</Link>}
       {account?.role === 'user' && <div className="header-pills" role="group" aria-label="Your orders and messages">
         <OrdersPopover locale={locale} cartCount={cartCount} open={panel === 'orders'} onOpenChange={open => setPanel(open ? 'orders' : null)} icon={icons.orders} badge={badge(cartCount)}/>
         <InboxPopover locale={locale} unread={account.unread ?? 0} onUnreadChange={setUnread} open={panel === 'inbox'} onOpenChange={open => setPanel(open ? 'inbox' : null)} icon={icons.inbox} badge={badge(account.unread)} ringing={ringing}/>
       </div>}
-      {account ? <span className="account-menu"><Link href={`/${locale}/${account.role === 'admin' ? 'admin' : 'account'}`}>{account.name}</Link><button className="secondary" onClick={() => void logout()}>Log out</button></span> : <Link className="text-link" href={`/${locale}/login`}>Sign in / Register</Link>}
-      <Link className="cart-link" aria-label="Cart" href={`/${locale}/cart`}>Cart <b>{cartCount}</b></Link>
-    </div></div><NotificationToast notice={toast} onOpen={openToast} onClose={closeToast}/></header>;
+      <span className="header-account-control">{account ? <span className="account-menu"><Link href={accountHref}>{account.name}</Link><button className="secondary" onClick={() => void logout()}>Log out</button></span> : <Link className="text-link" href={`/${locale}/login`}>Sign in / Register</Link>}</span>
+      <Link className="cart-link" aria-label={`Cart, ${cartCount} item${cartCount === 1 ? '' : 's'}`} href={`/${locale}/cart`}><span>Cart</span> <b>{cartCount}</b></Link>
+    </div>
+  </div><NotificationToast notice={toast} onOpen={openToast} onClose={closeToast}/></header>;
 }
 
 export function ProductPreview({product, variant = 0}: {product: CatalogProduct; variant?: number}) {

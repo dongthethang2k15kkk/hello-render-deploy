@@ -1928,3 +1928,79 @@ button.header-pill:hover:not(:disabled) {transform:translateY(-1px); background:
 .lucky-wheel-card {display:grid;grid-template-columns:minmax(280px,1fr) minmax(260px,.8fr);align-items:center;gap:2rem;padding:1.5rem;background:rgba(255,255,255,.045);border-color:rgba(255,255,255,.12)}.lucky-wheel-login {padding:2rem}.wheel-stage {position:relative;width:min(100%,430px);aspect-ratio:1;margin:auto;display:grid;place-items:center}.wheel-disc {width:92%;height:92%;border-radius:50%;position:relative;overflow:hidden;border:10px solid #d9f85a;box-shadow:0 0 0 8px rgba(217,248,90,.15),0 18px 50px rgba(0,0,0,.4);transition:transform 4.2s cubic-bezier(.12,.78,.16,1);background:#17251d}.wheel-slice {position:absolute;inset:0;clip-path:polygon(50% 50%,50% 0,100% 0);transform-origin:50% 50%;display:flex;justify-content:center;padding-top:12%;color:#fff;font-size:clamp(.65rem,2vw,.95rem);font-weight:800}.wheel-slice span {display:block;color:inherit;white-space:nowrap}.wheel-pointer {position:absolute;z-index:3;top:-2px;width:0;height:0;border-left:17px solid transparent;border-right:17px solid transparent;border-top:38px solid #ffcf5a;filter:drop-shadow(0 4px 4px rgba(0,0,0,.4))}.wheel-core {position:absolute;z-index:4;width:74px;height:74px;display:grid;place-items:center;border-radius:50%;background:#d9f85a;color:#17251d;border:8px solid #101a14;font-size:1.8rem;box-shadow:0 0 25px rgba(217,248,90,.35)}.lucky-wheel-copy h3 {font-size:clamp(1.8rem,4vw,3rem);margin:.3rem 0 1rem}.lucky-result {display:block;color:#d9f85a;font-size:clamp(2rem,5vw,4rem);line-height:1;margin:.6rem 0 1rem}.lucky-spin-button {margin-top:1rem}.lucky-history {margin-top:1.25rem}.lucky-history summary {cursor:pointer;color:#d9f85a}.lucky-history ul {list-style:none;margin:1rem 0 0;padding:0;display:grid;gap:.5rem}.lucky-history li {display:flex;justify-content:space-between;gap:1rem;padding:.7rem 0;border-bottom:1px solid rgba(255,255,255,.1)}.lucky-history li span {color:rgba(255,255,255,.6);font-size:.85rem}
 .lucky-admin-grid {display:grid;gap:1.5rem;margin-top:2rem}.admin-panel-heading {display:flex;justify-content:space-between;gap:1rem;align-items:start}.lucky-prize-row {display:grid;grid-template-columns:2fr 1fr 1fr auto auto;gap:.75rem;align-items:end;padding:1rem 0;border-bottom:1px solid rgba(255,255,255,.1)}.admin-form-actions {display:flex;align-items:center;gap:1rem;margin-top:1.25rem}.lucky-admin-grid .admin-table td span {display:block;color:rgba(255,255,255,.6);font-size:.8rem}.lucky-admin-grid .admin-table td {vertical-align:top}
 @media(max-width:760px){.lucky-wheel-section{padding:1.2rem;margin:2.5rem 0}.lucky-wheel-heading{display:block}.lucky-wheel-count{display:inline-block;margin-top:1rem}.lucky-wheel-card{grid-template-columns:1fr}.lucky-prize-row{grid-template-columns:1fr 1fr}.lucky-prize-row label:first-child{grid-column:1/-1}.lucky-prize-row .admin-compact-check{align-self:center}.lucky-prize-row button{align-self:end}}
+
+/* Coin balance and the compact storefront header. */
+.mobile-nav-account {display:none;}
+.coin-balance-pill {display:inline-flex;align-items:center;gap:6px;min-height:36px;padding:7px 11px;border:1px solid rgba(217,248,90,.38);border-radius:999px;background:rgba(217,248,90,.1);color:#e8ff91;text-decoration:none;font-size:13px;font-weight:800;white-space:nowrap;}
+.coin-balance-pill:hover,.coin-balance-pill:focus-visible {border-color:#d9f85a;background:rgba(217,248,90,.18);color:#f2ffbd;}
+.coin-balance-pill span {color:#d9f85a;}
+.account-balance {display:grid;gap:5px;margin:0 0 20px;padding:22px 24px;border:1px solid rgba(217,248,90,.34);border-radius:18px;background:radial-gradient(circle at 90% 0,rgba(217,248,90,.2),transparent 42%),rgba(20,35,27,.92);color:#f2faed;box-shadow:0 14px 34px rgba(0,0,0,.2);}
+.account-balance span {color:#d9f85a;font-size:11px;font-weight:800;letter-spacing:1px;}
+.account-balance strong {color:#fff;font-size:clamp(25px,5vw,38px);line-height:1.15;}
+.account-balance small {color:#bdd0b9;}
+
+/* The disc uses one continuous conic surface; labels remain centered in their segment. */
+.lucky-wheel-stats {display:flex;align-items:center;justify-content:flex-end;gap:8px;flex-wrap:wrap;}
+.lucky-wheel-balance {padding:.65rem .9rem;border:1px solid rgba(255,255,255,.18);border-radius:999px;color:#d8e2d4;white-space:nowrap;font-weight:600;}
+.lucky-wheel-balance strong {margin-left:4px;color:#fff;}
+.wheel-slice {clip-path:none;background:transparent!important;padding-top:10%;pointer-events:none;text-shadow:0 1px 3px rgba(0,0,0,.7);}
+.wheel-slice:nth-child(even) {color:#17251d;text-shadow:none;}
+
+@media(max-width:900px) {
+  .site-header .header {display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:8px 10px;padding-block:10px;align-items:center;}
+  .site-header .brand {grid-column:1;grid-row:1;}
+  .site-header .mobile-nav-toggle {grid-column:3;grid-row:1;min-height:38px;padding:7px 10px;}
+  .site-header .header-live {grid-column:2;grid-row:1;width:auto;min-width:0;justify-content:center;padding:7px 10px;gap:7px;box-sizing:border-box;box-shadow:none;}
+  .site-header .header-live.pending {width:78px;height:36px;}
+  .site-header .header-live-text {display:block;}
+  .site-header .header-live-text strong {font-size:12px;}
+  .site-header .header-live-text small {display:none;}
+  .site-header .header-live.online .live-status-dot {width:10px;height:10px;}
+  .site-header .header nav {grid-column:1/-1;grid-row:3;}
+  .site-header .header nav.open {grid-template-columns:repeat(2,minmax(0,1fr));}
+  .mobile-nav-account {grid-column:1/-1;display:flex;align-items:center;gap:8px;padding-top:7px;border-top:1px solid rgba(255,255,255,.1);}
+  .mobile-nav-account a {flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .mobile-nav-account button {min-height:40px;padding:8px 12px;font-size:13px;}
+  .site-header .header-actions {grid-column:1/-1;grid-row:2;justify-content:flex-start;gap:6px;width:100%;padding-top:8px;border-top:1px solid rgba(255,255,255,.08);flex-wrap:nowrap;}
+  .header-account-control {display:none;}
+  .site-header .header-pills {gap:6px;}
+  .site-header .header-pill {min-height:36px;padding:8px 10px;}
+  .site-header .header-pill span {display:none;}
+  .site-header .cart-link {margin-left:auto;min-height:36px;}
+}
+
+@media(max-width:760px) {
+  .lucky-wheel-section {margin:2rem 0;padding:14px;border-radius:20px;}
+  .lucky-wheel-heading {display:grid;gap:12px;margin-bottom:14px;}
+  .lucky-wheel-heading h2 {font-size:clamp(24px,8vw,32px);margin:.2rem 0;}
+  .lucky-wheel-heading .muted {font-size:13px;line-height:1.5;}
+  .lucky-wheel-stats {justify-content:flex-start;}
+  .lucky-wheel-count,.lucky-wheel-balance {display:inline-flex;margin:0;padding:7px 10px;font-size:12px;}
+  .lucky-wheel-card {grid-template-columns:1fr;gap:12px;padding:12px;border-radius:16px;}
+  .wheel-stage {width:min(68vw,240px);}
+  .wheel-disc {border-width:6px;box-shadow:0 0 0 5px rgba(217,248,90,.13),0 12px 30px rgba(0,0,0,.38);}
+  .wheel-pointer {border-left-width:12px;border-right-width:12px;border-top-width:28px;}
+  .wheel-core {width:52px;height:52px;border-width:5px;font-size:1.25rem;}
+  .wheel-slice {padding-top:8%;font-size:11px;}
+  .lucky-wheel-copy {text-align:center;}
+  .lucky-wheel-copy h3 {font-size:24px;margin:.2rem 0 .5rem;}
+  .lucky-result {font-size:32px;margin:.35rem 0 .6rem;}
+  .lucky-spin-button {width:100%;margin-top:.6rem;}
+  .lucky-history {font-size:13px;}
+}
+
+@media(max-width:480px) {
+  .site-header .header {grid-template-columns:minmax(0,1fr) auto auto;padding-inline:14px;}
+  .site-header .brand {font-size:16px;}
+  .site-header .brand-tagline {display:none;}
+  .site-header .mobile-nav-toggle {width:38px;padding:6px;justify-content:center;}
+  .site-header .mobile-nav-toggle span:last-child {display:none;}
+  .site-header .header-live {padding:7px 8px;}
+  .site-header .header-live-text strong {font-size:11px;}
+  .site-header .header-actions {gap:5px;}
+  .coin-balance-pill {min-height:34px;padding:6px 9px;font-size:12px;}
+  .site-header .header-pill {min-height:34px;padding:7px 9px;}
+  .site-header .cart-link span {display:none;}
+  .site-header .cart-link b {min-width:28px;border-radius:999px;}
+  .account-balance {padding:18px;}
+}

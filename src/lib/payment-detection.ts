@@ -11,6 +11,7 @@ import {reReserveItems} from './order-stock';
 import {findLtcPayment, REQUIRED_LTC_CONFIRMATIONS} from './payment-match';
 import {getPaymentDb} from './payment-db';
 import {findUsdtPayment, USDT_TRC20_CONTRACT} from './usdt';
+import {grantPaidOrderRewards} from './lucky-wheel';
 
 const PAYABLE = ['awaiting_payment', 'payment_reported', 'expired'];
 
@@ -19,7 +20,7 @@ const PAYABLE = ['awaiting_payment', 'payment_reported', 'expired'];
 /** Confirms a crypto payment found on the blockchain, then tells the customer and every Admin. */
 export async function markPaidAutomatically(orderId: string, input: {amountVnd: number; reference: string; amountLabel: string}, origin: string) {
   const db = getPaymentDb();
-  const order = await db.order.findUnique({where: {id: orderId}, include: {customer: {select: {id: true, name: true, email: true}}, slots: {orderBy: {startsAt: 'asc'}}}});
+  const order = await db.order.findUnique({where: {id: orderId}, include: {customer: {select: {id: true, name: true, email: true}}, slots: {orderBy: {startsAt: 'asc'}}, items: {select: {title: true, quantity: true}}}});
   if (!order || !PAYABLE.includes(order.status)) return false;
   const network = isCrypto(order.paymentMethod) ? CRYPTO_METHODS[order.paymentMethod].network : 'Litecoin';
   try {
@@ -30,6 +31,7 @@ export async function markPaidAutomatically(orderId: string, input: {amountVnd: 
         paymentConfirmedBy: 'auto:blockchain', paymentSource: 'blockchain', cancelledAt: null, cancelReason: null
       }});
       if (changed.count !== 1) throw new Error('Order changed');
+      await grantPaidOrderRewards(tx, order);
       await tx.orderEvent.create({data: {orderId, actor: 'system', action: 'payment_confirmed', note: `Detected automatically on the ${network} blockchain: ${input.amountLabel}`}});
     }, {maxWait: 10000, timeout: 20000});
   } catch (error) {

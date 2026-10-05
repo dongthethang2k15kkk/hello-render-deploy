@@ -4,8 +4,9 @@ import {useLocale} from 'next-intl';
 import {useRouter} from 'next/navigation';
 import Link from 'next/link';
 import {LoadingRows} from '@/components/loading-state';
+import {formatCoins} from '@/lib/coin-format';
 
-type Profile = {name: string; email: string; emailVerified: boolean; google: boolean; hasPassword: boolean; mustChangePassword: boolean; createdAt: string};
+type Profile = {name: string; email: string; emailVerified: boolean; google: boolean; hasPassword: boolean; mustChangePassword: boolean; coinBalance: string; createdAt: string};
 
 export default function AccountPage() {
   const locale = useLocale();
@@ -58,6 +59,7 @@ export default function AccountPage() {
   return <div className="page-heading account-page"><p className="eyebrow">YOUR ACCOUNT</p><h1>Account</h1>
     {required && <p className="notice" role="alert"><strong>Please set a new password.</strong> The shop gave you a temporary password; choose your own before continuing.</p>}
     {message && <p className="account-feedback" role="status">{message}</p>}
+    <section className="account-balance" aria-label="Coin balance"><span>YOUR COIN BALANCE</span><strong>{formatCoins(profile.coinBalance)}</strong><small>Purchases and lucky-wheel prizes are added automatically.</small></section>
     <section className="card account-card"><h2>Profile</h2>
       <dl className="account-details"><dt>Name</dt><dd>{profile.name}</dd><dt>Email</dt><dd>{profile.email} {profile.emailVerified ? <span className="badge ok">verified by Google</span> : <span className="badge">not verified</span>}</dd><dt>Sign-in methods</dt><dd>{[profile.google && 'Google', profile.hasPassword && 'Password'].filter(Boolean).join(' · ') || '—'}</dd><dt>Member since</dt><dd>{new Date(profile.createdAt).toLocaleDateString('en-GB')}</dd></dl>
       <p><Link href={`/${locale}/workspace`}>Open chat with support →</Link></p>

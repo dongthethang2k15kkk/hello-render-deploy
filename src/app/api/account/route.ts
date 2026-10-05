@@ -9,10 +9,10 @@ const json = (data: unknown, status = 200) => Response.json(data, {status, heade
 export async function GET() {
   const session = await currentCustomerSession();
   if (!session) return json({error: 'Sign in required.'}, 401);
-  const customer = await getPaymentDb().customer.findUnique({where: {id: session.customerId}, select: {name: true, email: true, emailVerified: true, googleSub: true, passwordHash: true, mustChangePassword: true, createdAt: true}});
+  const customer = await getPaymentDb().customer.findUnique({where: {id: session.customerId}, select: {name: true, email: true, emailVerified: true, googleSub: true, passwordHash: true, mustChangePassword: true, coinBalance: true, createdAt: true}});
   if (!customer) return json({error: 'Sign in required.'}, 401);
-  const {googleSub, passwordHash, ...profile} = customer;
-  return json({account: {...profile, google: Boolean(googleSub), hasPassword: Boolean(passwordHash)}});
+  const {googleSub, passwordHash, coinBalance, ...profile} = customer;
+  return json({account: {...profile, coinBalance: coinBalance.toString(), google: Boolean(googleSub), hasPassword: Boolean(passwordHash)}});
 }
 
 const action = z.discriminatedUnion('action', [

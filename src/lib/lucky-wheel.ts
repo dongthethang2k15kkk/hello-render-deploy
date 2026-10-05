@@ -1,5 +1,6 @@
 import {randomInt} from 'node:crypto';
 import type {Prisma} from '@prisma/client';
+import {coinsFromOrderItems, creditCoins} from './coin-ledger';
 import {getPaymentDb} from './payment-db';
 
 export const DEFAULT_LUCKY_PRIZES = [
@@ -26,12 +27,29 @@ export async function listLuckyPrizes() {
 export async function getLuckyWheelState(customerId: string) {
   await ensureLuckyWheelPrizes();
   const db = getPaymentDb();
-  const [available, history, prizes] = await Promise.all([
+  const [available, history, prizes, customer] = await Promise.all([
     db.luckySpin.findMany({where: {customerId, spunAt: null}, orderBy: {createdAt: 'asc'}, select: {id: true, orderId: true, createdAt: true}}),
     db.luckySpin.findMany({where: {customerId, spunAt: {not: null}}, orderBy: {spunAt: 'desc'}, take: 30, select: {id: true, prizeLabel: true, coinAmount: true, spunAt: true, createdAt: true}}),
-    db.luckyWheelPrize.findMany({where: {active: true}, orderBy: [{sortOrder: 'asc'}, {createdAt: 'asc'}], select: {id: true, label: true, coinAmount: true, weight: true, sortOrder: true}})
+    db.luckyWheelPrize.findMany({where: {active: true}, orderBy: [{sortOrder: 'asc'}, {createdAt: 'asc'}], select: {id: true, label: true, coinAmount: true, weight: true, sortOrder: true}}),
+    db.customer.findUnique({where: {id: customerId}, select: {coinBalance: true}})
   ]);
-  return {available, history, prizes};
+  return {available, history, prizes, coinBalance: (customer?.coinBalance ?? BigInt(0)).toString()};
+}
+
+/** Grants all benefits of a paid order inside the caller's payment transaction. */
+export async function grantPaidOrderRewards(tx: Prisma.TransactionClient, order: {id: string; code: string; customerId: string; items: Array<{title: string; quantity: number}>}) {
+  if ((await tx.luckyWheelPrize.count()) === 0) {
+    await tx.luckyWheelPrize.createMany({data: DEFAULT_LUCKY_PRIZES.map(prize => ({...prize, active: true}))});
+  }
+  await tx.luckySpin.upsert({where: {orderId: order.id}, update: {}, create: {customerId: order.customerId, orderId: order.id}});
+  await creditCoins(tx, {
+    customerId: order.customerId,
+    amount: coinsFromOrderItems(order.items),
+    kind: 'order_payment',
+    sourceKey: `order-paid:${order.id}`,
+    orderId: order.id,
+    note: `Coins from paid order ${order.code}`
+  });
 }
 
 function choosePrize(prizes: {id: string; label: string; coinAmount: number; weight: number}[]) {
@@ -56,7 +74,9 @@ export async function spinLuckyWheel(customerId: string, spinId: string) {
     const prize = choosePrize(prizes);
     const updated = await tx.luckySpin.updateMany({where: {id: spinId, customerId, spunAt: null}, data: {prizeId: prize.id, prizeLabel: prize.label, coinAmount: prize.coinAmount, spunAt: new Date()}});
     if (updated.count !== 1) throw new Error('This spin was already used.');
-    return {id: spinId, prize};
+    await creditCoins(tx, {customerId, amount: BigInt(prize.coinAmount), kind: 'lucky_spin', sourceKey: `lucky-spin:${spinId}`, spinId, note: prize.label});
+    const customer = await tx.customer.findUniqueOrThrow({where: {id: customerId}, select: {coinBalance: true}});
+    return {id: spinId, prize, coinBalance: customer.coinBalance.toString()};
   });
 }
 

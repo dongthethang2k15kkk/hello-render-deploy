@@ -148,7 +148,9 @@ model Customer {
   auditLogs          AuditLog[]
   orders             Order[]
   notifications      Notification[]
+  coinBalance        BigInt            @default(0)
   luckySpins         LuckySpin[]
+  coinLedger         CoinLedger[]
 
   @@index([createdAt])
   @@index([lastLoginAt])
@@ -335,6 +337,23 @@ model OrderEvent {
   createdAt DateTime @default(now())
 
   @@index([orderId, createdAt])
+}
+
+model CoinLedger {
+  id         String   @id @default(cuid())
+  customerId String
+  customer   Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  amount     BigInt
+  kind       String
+  sourceKey  String   @unique
+  orderId    String?
+  spinId     String?
+  note       String?
+  createdAt  DateTime @default(now())
+
+  @@index([customerId, createdAt])
+  @@index([orderId])
+  @@index([spinId])
 }
 
 // A paid order grants exactly one spin. Results are selected on the server and retained
