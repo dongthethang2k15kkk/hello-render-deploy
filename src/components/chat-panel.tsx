@@ -1,8 +1,8 @@
 'use client';
 
-import {useCallback, useEffect, useRef, useState} from 'react';
+import {Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type SyntheticEvent} from 'react';
 import type {Role} from '@/lib/admin-session';
-import {mergeMessages, watchChat, type LocalMessage} from '@/lib/chat-client';
+import {chatListTime, chatRows, chatTime, mergeMessages, watchChat, type LocalMessage} from '@/lib/chat-client';
 import {readChatCache, readDrafts, saveChatCache, saveDrafts} from '@/lib/chat-drafts';
 import {LoadingRows} from './loading-state';
 import {PresenceBadges, useAdminPresence} from './admin-presence';
@@ -16,6 +16,8 @@ const bookingLabel = (booking: NonNullable<Room['booking']>) => `${booking.appoi
 const CACHED_ROOMS = 12;
 const CACHED_MESSAGES_PER_ROOM = 60;
 const PREFETCHED_ROOMS = 8;
+const COMPOSER_MAX_HEIGHT = 132;
+const IMAGE_TYPES = ['image/png', 'image/jpeg', 'image/webp'];
 
 /** Confirmed messages of the most recent conversations; pending sends and local image previews are never cached. */
 function cacheSnapshot(rooms: Room[], messages: LocalMessage[], role: Role, current: string) {
@@ -28,8 +30,12 @@ function cacheSnapshot(rooms: Room[], messages: LocalMessage[], role: Role, curr
   return {rooms: rooms.slice(0, 50), messages: [...byRoom.values()].flatMap(list => list.slice(-CACHED_MESSAGES_PER_ROOM))};
 }
 
-/** `lockedRoom` pins an Admin to one customer's conversation (the workspace): no conversation list. */
-export default function ChatPanel({role, accountId, compact = false, initialRoom: requestedRoom = '', lockedRoom, lockedTitle}: {role: Role; accountId: string; compact?: boolean; initialRoom?: string; lockedRoom?: string; lockedTitle?: string}) {
+
+/**
+ * `lockedRoom` pins an Admin to one customer's conversation (the workspace): no conversation list.
+ * `active` is false while the floating window is closed: the panel stays mounted (instant reopen) but marks nothing read.
+ */
+export default function ChatPanel({role, accountId, compact = false, active = true, initialRoom: requestedRoom = '', lockedRoom, lockedTitle}: {role: Role; accountId: string; compact?: boolean; active?: boolean; initialRoom?: string; lockedRoom?: string; lockedTitle?: string}) {
   const initialRoom = lockedRoom ?? requestedRoom;
   const [messages, setMessages] = useState<LocalMessage[]>([]);
   const [rooms, setRooms] = useState<Room[]>([]);
@@ -37,6 +43,7 @@ export default function ChatPanel({role, accountId, compact = false, initialRoom
   const [showRoomList, setShowRoomList] = useState(!initialRoom);
   const [drafts, setDrafts] = useState<Record<string, string>>({});
   const draftsRef = useRef<Record<string, string>>({});
+  const draftTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const composer = useRef<HTMLTextAreaElement>(null);
   const roomSearch = useRef<HTMLInputElement>(null);
   useEffect(() => {
@@ -50,9 +57,13 @@ export default function ChatPanel({role, accountId, compact = false, initialRoom
       if (role === 'user' && !roomRef.current) {roomRef.current = cached.messages[0].room; setRoom(cached.messages[0].room);}
     }
   }, [accountId, role]);
+  // Storage writes are synchronous: save the draft after a pause in typing, and on the way out.
+  useEffect(() => () => {if (draftTimer.current) {clearTimeout(draftTimer.current); saveDrafts(accountId, draftsRef.current);}}, [accountId]);
   function updateDraft(key: string, value: string) {
     draftsRef.current = {...draftsRef.current, [key]: value};
-    setDrafts(draftsRef.current); saveDrafts(accountId, draftsRef.current);
+    setDrafts(draftsRef.current);
+    clearTimeout(draftTimer.current);
+    draftTimer.current = setTimeout(() => {draftTimer.current = undefined; saveDrafts(accountId, draftsRef.current);}, 300);
   }
   useEffect(() => {
     const focusReply = (event: KeyboardEvent) => {
@@ -61,7 +72,7 @@ export default function ChatPanel({role, accountId, compact = false, initialRoom
     };
     window.addEventListener('keydown', focusReply); return () => window.removeEventListener('keydown', focusReply);
   }, [role]);
-  const [image, setImage] = useState<File | null>(null);
+  const [image, setImage] = useState<{file: File; url: string} | null>(null);
   const [roomQuery, setRoomQuery] = useState('');
   const [roomFilter, setRoomFilter] = useState<'all' | 'needs-reply'>('all');
   const [loading, setLoading] = useState(true);
@@ -71,6 +82,7 @@ export default function ChatPanel({role, accountId, compact = false, initialRoom
   const [hasOlder, setHasOlder] = useState(false);
   const [loadingOlder, setLoadingOlder] = useState(false);
   const [newMessages, setNewMessages] = useState(false);
+  const [farFromLatest, setFarFromLatest] = useState(false);
   const [viewVersion, setViewVersion] = useState(0);
   const messageArea = useRef<HTMLDivElement>(null);
   const roomRef = useRef(initialRoom);
@@ -90,8 +102,16 @@ export default function ChatPanel({role, accountId, compact = false, initialRoom
   const inFlight = useRef(new Set<string>());
   const sendControllers = useRef(new Set<AbortController>());
   const objectUrls = useRef(new Set<string>());
+  // A sent image keeps showing its local copy after the server confirms it, so the bubble never flashes while it reloads.
+  const localImages = useRef(new Map<string, string>());
   const prefetched = useRef(false);
   const panel = useRef<HTMLElement>(null);
+  const typingWhenSent = useRef(false);
+  /** Tapping Send must not take focus from the reply box, or the phone keyboard closes after every message. */
+  function keepComposerFocus(event: SyntheticEvent) {
+    typingWhenSent.current = document.activeElement === composer.current;
+    if (typingWhenSent.current) event.preventDefault();
+  }
 
   /** Loads the latest page of a conversation in the background so opening it later is instant. */
   async function prefetchRoom(id: string) {
@@ -218,13 +238,13 @@ export default function ChatPanel({role, accountId, compact = false, initialRoom
       document.removeEventListener('visibilitychange', onVisible);
       activeLoad.current?.controller.abort(); activeLoad.current = null;
       sendControllers.current.forEach(controller => controller.abort());
-      objectUrls.current.forEach(url => URL.revokeObjectURL(url)); objectUrls.current.clear();
+      objectUrls.current.forEach(url => URL.revokeObjectURL(url)); objectUrls.current.clear(); localImages.current.clear();
     };
   }, [load, loadRooms]);
 
   useEffect(() => {
     if (!room) return;
-    nearBottom.current = true; setNewMessages(false); setHasOlder(olderAvailable.current.get(room) ?? false); setLoading(true);
+    nearBottom.current = true; setNewMessages(false); setFarFromLatest(false); setHasOlder(olderAvailable.current.get(room) ?? false); setLoading(true);
     activeLoad.current?.controller.abort(); activeLoad.current = null;
     void load(true);
   }, [load, room]);
@@ -254,21 +274,41 @@ export default function ChatPanel({role, accountId, compact = false, initialRoom
     return () => { observer.disconnect(); window.removeEventListener('resize', fit); };
   }, [compact]);
 
-  const visible = messages.filter(message => message.room === room);
+  const visible = useMemo(() => messages.filter(message => message.room === room), [messages, room]);
+  const rows = useMemo(() => chatRows(visible, role), [visible, role]);
   const draftKey = room;
   const body = drafts[draftKey] ?? '';
   const shownRooms = rooms.filter(item => item.name.toLowerCase().includes(roomQuery.trim().toLowerCase()) && (roomFilter === 'all' || item.lastMessage?.role === 'user'));
-  const latest = visible.at(-1)?.id;
-  useEffect(() => {if (nearBottom.current && messageArea.current) messageArea.current.scrollTop = messageArea.current.scrollHeight;}, [latest, room]);
+
+  const pinToBottom = useCallback(() => {const area = messageArea.current; if (area) area.scrollTop = area.scrollHeight;}, []);
+  // Before paint, so a conversation opens at its latest message and new bubbles never flash above the fold.
+  useLayoutEffect(() => {if (nearBottom.current) pinToBottom();}, [rows, room, pinToBottom]);
+  // The keyboard opening, the reply box growing or the window reopening shrink the list: stay on the latest message.
+  useEffect(() => {
+    const area = messageArea.current;
+    if (!area || typeof ResizeObserver === 'undefined') return;
+    const observer = new ResizeObserver(() => {if (nearBottom.current) pinToBottom();});
+    observer.observe(area);
+    return () => observer.disconnect();
+  }, [pinToBottom]);
+  // The reply box grows with its text up to a few lines, then scrolls.
+  useLayoutEffect(() => {
+    const element = composer.current;
+    if (!element || !active) return;
+    element.style.height = 'auto';
+    element.style.height = `${Math.min(element.scrollHeight, COMPOSER_MAX_HEIGHT)}px`;
+    element.style.overflowY = element.scrollHeight > COMPOSER_MAX_HEIGHT ? 'auto' : 'hidden';
+  }, [body, room, active]);
+
   const latestReply = visible.filter(message => !message.status && message.role !== role).at(-1)?.id;
   useEffect(() => {
-    if (!room || !latestReply || document.visibilityState !== 'visible' || !nearBottom.current || readIds.current.get(room) === latestReply) return;
+    if (!active || !room || !latestReply || document.visibilityState !== 'visible' || !nearBottom.current || readIds.current.get(room) === latestReply) return;
     if (role === 'admin' && showRoomList && window.matchMedia('(max-width: 480px)').matches) return;
     const controller = new AbortController();
     void fetch('/api/chat', {method: 'PATCH', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({room, id: latestReply}), signal: controller.signal})
       .then(response => {if (response.ok) {invalidateJson('/api/chat', '/api/auth/session'); readIds.current.set(room, latestReply); setRooms(current => current.map(item => item.id === room ? {...item, unread: 0} : item));}}).catch(() => {});
     return () => controller.abort();
-  }, [latestReply, room, role, showRoomList, viewVersion]);
+  }, [active, latestReply, room, role, showRoomList, viewVersion]);
 
   async function loadOlder() {
     const requested = room;
@@ -293,6 +333,25 @@ export default function ChatPanel({role, accountId, compact = false, initialRoom
     finally {if (mounted.current) setLoadingOlder(false);}
   }
 
+  function onScroll() {
+    const area = messageArea.current;
+    if (!area) return;
+    const distance = area.scrollHeight - area.scrollTop - area.clientHeight;
+    const atBottom = distance < 80;
+    if (atBottom !== nearBottom.current) setViewVersion(value => value + 1);
+    nearBottom.current = atBottom;
+    if (atBottom) setNewMessages(false);
+    setFarFromLatest(distance > 400);
+    // Older messages load on their own as the top comes into view, like any messaging app.
+    if (area.scrollTop < 160 && hasOlder && !loadingOlder) void loadOlder();
+  }
+
+  function jumpToLatest() {
+    const area = messageArea.current;
+    nearBottom.current = true; setNewMessages(false); setFarFromLatest(false); setViewVersion(value => value + 1);
+    area?.scrollTo({top: area.scrollHeight, behavior: 'smooth'});
+  }
+
   function enqueue(id: string) {
     const item = outgoing.current.get(id);
     if (!item || inFlight.current.has(id)) return;
@@ -313,9 +372,9 @@ export default function ChatPanel({role, accountId, compact = false, initialRoom
         if (!response.ok) throw new Error(data.error || 'Could not send message.');
         invalidateJson('/api/chat', '/api/auth/session');
         if (!mounted.current) return;
+        if (item.message.image) localImages.current.set(data.message.id, item.message.image.url);
         setMessages(current => mergeMessages(current, [data.message]));
         outgoing.current.delete(id);
-        if (item.message.image) {URL.revokeObjectURL(item.message.image.url); objectUrls.current.delete(item.message.image.url);}
         void loadRooms();
       } catch (cause) {
         if (mounted.current) setMessages(current => current.map(message => message.id === id ? {...message, status: 'failed', failure: cause instanceof Error && cause.name !== 'AbortError' ? cause.message : 'Connection interrupted. Retry safely.'} : message));
@@ -324,21 +383,74 @@ export default function ChatPanel({role, accountId, compact = false, initialRoom
     queues.current.set(item.message.room, task);
     void task.finally(() => {if (queues.current.get(item.message.room) === task) queues.current.delete(item.message.room);});
   }
+  const retry = useRef(enqueue);
+  retry.current = enqueue;
+
+  function clearImage() {
+    if (image) {URL.revokeObjectURL(image.url); objectUrls.current.delete(image.url);}
+    setImage(null);
+    if (imageInput.current) imageInput.current.value = '';
+  }
+
+  function pickImage(file: File | null) {
+    if (image) {URL.revokeObjectURL(image.url); objectUrls.current.delete(image.url);}
+    if (file && (file.size > 1024 * 1024 || !IMAGE_TYPES.includes(file.type))) {
+      setError('Only PNG, JPEG, WebP images up to 1 MB.'); setImage(null);
+      if (imageInput.current) imageInput.current.value = '';
+      return;
+    }
+    if (!file) {setImage(null); return;}
+    const url = URL.createObjectURL(file);
+    objectUrls.current.add(url);
+    setImage({file, url}); setError('');
+  }
 
   function send() {
     const text = body.trim();
     if ((!text && !image) || !room) return;
     const id = crypto.randomUUID();
-    const url = image ? URL.createObjectURL(image) : undefined;
-    if (url) objectUrls.current.add(url);
-    const message: LocalMessage = {id, clientMessageId: id, room, role, author: 'You', body: text, createdAt: new Date().toISOString(), status: 'sending', ...(url && image ? {image: {url, name: image.name}} : {})};
-    outgoing.current.set(id, {message, file: image});
-    nearBottom.current = true; setNewMessages(false);
+    const message: LocalMessage = {id, clientMessageId: id, room, role, author: 'You', body: text, createdAt: new Date().toISOString(), status: 'sending', ...(image ? {image: {url: image.url, name: image.file.name}} : {})};
+    outgoing.current.set(id, {message, file: image?.file ?? null});
+    nearBottom.current = true; setNewMessages(false); setFarFromLatest(false);
     setMessages(current => [...current, message]);
+    // The preview URL now belongs to the bubble; it is released when the panel closes.
     updateDraft(draftKey, ''); setImage(null); setError('');
     if (imageInput.current) imageInput.current.value = '';
+    if (typingWhenSent.current) {typingWhenSent.current = false; composer.current?.focus({preventScroll: true});}
     enqueue(id);
   }
+
+  // Bubbles render once per change in the conversation, not on every keystroke in the reply box.
+  const openedRoom = useRef({room: '', at: 0});
+  if (openedRoom.current.room !== room) openedRoom.current = {room, at: Date.now()};
+  const messageList = useMemo(() => {
+    const openedAt = openedRoom.current.at;
+    return rows.map(({message, mine, divider, position}, index) => {
+      const time = chatTime(message.createdAt);
+      const src = message.image ? localImages.current.get(message.id) ?? message.image.url : '';
+      // Only messages that arrive while the conversation is open slide in; history appears at once.
+      const fresh = message.status === 'sending' || Date.parse(message.createdAt) > openedAt;
+      return <Fragment key={`${message.role}:${message.clientMessageId || message.id}`}>
+        {divider && <div className="chat-divider" role="separator"><span>{divider}</span></div>}
+        <article className={`chat-message ${mine ? 'mine' : 'theirs'} ${position}${fresh ? ' fresh' : ''}${message.image && !message.body ? ' image-only' : ''}`}>
+          {!mine && <span className="chat-msg-avatar" aria-hidden="true">{position === 'last' || position === 'single' ? message.author.charAt(0).toUpperCase() : ''}</span>}
+          <div className="chat-msg-content">
+            {!mine && (position === 'first' || position === 'single') && <small className="chat-author">{message.author}</small>}
+            <div className="chat-bubble" title={`${message.author} · ${time}`}>
+              <span className="sr-only">{time}: </span>
+              {message.body && <p>{message.body}</p>}
+              {message.image && <a className="chat-image-link" href={src} target="_blank" rel="noreferrer"><img className="chat-image" src={src} alt={message.image.name} decoding="async"/></a>}
+              {message.imageExpired && <p className="chat-image-expired">Image removed after 90 days</p>}
+            </div>
+            {message.status === 'failed'
+              ? <small className="message-status failed" role="status">{message.failure} <button type="button" onClick={() => retry.current(message.id)}>Retry send</button></small>
+              : message.status === 'sending' ? <small className="message-status sending" role="status">Sending...</small>
+              : mine && index === rows.length - 1 ? <small className="message-status">Sent</small> : null}
+          </div>
+        </article>
+      </Fragment>;
+    });
+  }, [rows]);
 
   const selected = rooms.find(item => item.id === room);
   // Presence is a no-op outside AdminPresenceProvider (customer pages).
@@ -346,6 +458,7 @@ export default function ChatPanel({role, accountId, compact = false, initialRoom
   useEffect(() => { if (role === 'admin') setResource(room ? `chat:${room}` : 'chat'); }, [role, room, setResource]);
   const viewersOf = (id: string) => admins.filter(admin => admin.id !== self && admin.resource === `chat:${id}`);
   const inbox = role === 'admin' && !lockedRoom;
+  const canSend = Boolean(room) && Boolean(body.trim() || image);
   return <section ref={panel} className={`chat-card card ${inbox ? 'admin-inbox' : ''} ${lockedRoom ? 'chat-locked' : ''} ${compact ? 'chat-compact' : ''}`} aria-label={role === 'admin' ? 'Customer inbox' : 'Consultation'}>
     {inbox && <aside className="chat-sidebar">
       <div className="chat-sidebar-tools"><h2>{'Conversations'}</h2>
@@ -355,29 +468,40 @@ export default function ChatPanel({role, accountId, compact = false, initialRoom
       {roomsReady && rooms.length === 0 && <p className="muted">{'No conversations yet.'}</p>}
       {rooms.length > 0 && shownRooms.length === 0 && <p className="muted">No matching conversations.</p>}
       {shownRooms.map(item => {
-        return <button type="button" className={`chat-room ${room === item.id ? 'active' : ''}`} aria-current={room === item.id ? 'true' : undefined} key={item.id} onClick={() => {roomRef.current = item.id; setRoom(item.id); setImage(null); if (imageInput.current) imageInput.current.value = ''; setShowRoomList(false);}}>
+        return <button type="button" className={`chat-room ${room === item.id ? 'active' : ''} ${item.unread ? 'unread' : ''}`} aria-current={room === item.id ? 'true' : undefined} key={item.id} onClick={() => {roomRef.current = item.id; setRoom(item.id); clearImage(); setShowRoomList(false);}}>
           <span className="chat-avatar" aria-hidden="true">{item.name.charAt(0).toUpperCase()}</span>
-          <span className="chat-room-info"><strong>{item.name}{item.unread ? <b className="room-unread" aria-label={`${item.unread} unread`}>{item.unread}</b> : null}</strong>{item.booking && <small className="room-booking">{bookingLabel(item.booking)}</small>}<small>{item.lastMessage?.body ?? (item.booking ? 'No messages yet. Say hello!' : '')}</small><PresenceBadges viewers={viewersOf(item.id)} context={`the chat with ${item.name}`}/></span>
-          <time dateTime={item.lastMessage?.createdAt}>{item.lastMessage ? new Date(item.lastMessage.createdAt).toLocaleTimeString('en-US', {hour: '2-digit', minute: '2-digit'}) : ''}</time>
+          <span className="chat-room-info"><strong>{item.name}{item.unread ? <b className="room-unread" aria-label={`${item.unread} unread`}>{item.unread}</b> : null}</strong>{item.booking && <small className="room-booking">{bookingLabel(item.booking)}</small>}<small className="room-preview">{item.lastMessage ? `${item.lastMessage.role === 'admin' ? 'You: ' : ''}${item.lastMessage.body}` : (item.booking ? 'No messages yet. Say hello!' : '')}</small><PresenceBadges viewers={viewersOf(item.id)} context={`the chat with ${item.name}`}/></span>
+          <time dateTime={item.lastMessage?.createdAt}>{item.lastMessage ? chatListTime(item.lastMessage.createdAt) : ''}</time>
         </button>;
       })}
     </aside>}
     <div className={`chat-main ${showRoomList ? 'show-room-list' : ''}`}>
       <div className="chat-header"><div>{inbox && <button type="button" className="inbox-back secondary" onClick={() => setShowRoomList(true)}>← {'Conversations'}</button>}<span className="eyebrow">{lockedRoom ? 'CHAT WITH CUSTOMER' : role === 'admin' ? 'ADMIN INBOX' : 'DIRECT SUPPORT'}</span><h2>{role === 'admin' ? (lockedTitle ?? selected?.name ?? ('Select a conversation')) : 'Chat with support'}</h2>{role === 'admin' && selected?.booking && <p className="room-booking">{bookingLabel(selected.booking)}</p>}{role === 'admin' && selected && <PresenceBadges viewers={viewersOf(selected.id)} context="this conversation"/>}</div><span className={`live-dot ${connected ? "" : "reconnecting"}`} role="status">{connected ? "Live updates" : "Reconnecting..."}</span></div>
-      <div className="chat-messages" ref={messageArea} onScroll={() => {const area = messageArea.current; if (!area) return; const atBottom = area.scrollHeight - area.scrollTop - area.clientHeight < 80; if (atBottom !== nearBottom.current) setViewVersion(value => value + 1); nearBottom.current = atBottom; if (atBottom) setNewMessages(false);}} role="log" aria-label={'Message history'}>
-        {hasOlder && <button type="button" className="secondary chat-history" disabled={loadingOlder} onClick={() => void loadOlder()}>{loadingOlder ? "Loading..." : "Load earlier messages"}</button>}
-        {loading && !visible.length && <LoadingRows label="Loading messages"/>}
-        {!loading && !visible.length && <div className="chat-empty"><span aria-hidden="true">✦</span><p>{role === 'admin' ? 'Select a customer to get started.' : 'Hello! Send a question and our team will reply here.'}</p></div>}
-        {visible.map(message => <article className={`chat-message ${message.role === role ? 'mine' : ''}`} key={message.id}><small>{message.author} · {new Date(message.createdAt).toLocaleTimeString('en-US', {hour: '2-digit', minute: '2-digit'})}</small>{message.body && <p>{message.body}</p>}{message.image && <img className="chat-image" src={message.image.url} alt={message.image.name}/>}{message.imageExpired && <p className="chat-image-expired">Image removed after 90 days</p>}{message.status && <small className={`message-status ${message.status}`} role="status">{message.status === 'sending' ? 'Sending...' : <>{message.failure} <button type="button" className="secondary" onClick={() => enqueue(message.id)}>Retry send</button></>}</small>}{!message.status && message.role === role && <small className="message-status">Sent</small>}</article>)}
+      <div className="chat-scroll">
+        <div className="chat-messages" ref={messageArea} onScroll={onScroll} role="log" aria-label={'Message history'}>
+          {hasOlder && <button type="button" className="secondary chat-history" disabled={loadingOlder} onClick={() => void loadOlder()}>{loadingOlder ? "Loading..." : "Load earlier messages"}</button>}
+          {loading && !visible.length && <LoadingRows label="Loading messages"/>}
+          {!loading && !visible.length && <div className="chat-empty"><span aria-hidden="true">✦</span><p>{role === 'admin' ? 'Select a customer to get started.' : 'Hello! Send a question and our team will reply here.'}</p></div>}
+          {messageList}
+        </div>
+        {(newMessages || farFromLatest) && <button className={`chat-jump ${newMessages ? 'has-new' : ''}`} type="button" onClick={jumpToLatest} aria-label={newMessages ? 'New messages below' : 'Jump to the latest message'}>{newMessages ? 'New messages ↓' : '↓'}</button>}
       </div>
-      {newMessages && <button className="chat-new secondary" type="button" onClick={() => {nearBottom.current = true; if (messageArea.current) messageArea.current.scrollTop = messageArea.current.scrollHeight; setNewMessages(false); setViewVersion(value => value + 1);}}>New messages below</button>}
       {role === 'admin' && room && <details className="chat-quick-replies"><summary>Quick replies</summary><div>{[
         ['Welcome', 'Hi! How can we help with your package or order?'],
         ['Payment steps', 'Please open your order page for payment instructions. After paying, select your available times there.'],
         ['Appointment', 'We will confirm your appointment on your order page. Please return to this chat at the confirmed time.']
       ].map(([label, text]) => <button type="button" className="secondary" key={label} disabled={body.length + text.length + 1 > 1000} onClick={() => {updateDraft(draftKey, body ? `${body}\n${text}` : text); composer.current?.focus();}}>{label}</button>)}</div></details>}
-      <form className="chat-compose" onSubmit={event => {event.preventDefault(); void send();}}><div className="chat-compose-fields"><textarea disabled={!room} ref={composer} aria-label={'Message'} title="Reply (Alt+R); Enter to send; Shift+Enter for a new line" value={body} onChange={event => updateDraft(draftKey, event.target.value)} placeholder={'Write a message…'} maxLength={1000} onKeyDown={event => {if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) {event.preventDefault(); void send();}}}/><label className="chat-image-picker">{'📷 Choose image (max 1 MB)'}<input ref={imageInput} type="file" accept="image/png,image/jpeg,image/webp" disabled={!room} onChange={event => {const file = event.target.files?.[0] ?? null; if (file && (file.size > 1024 * 1024 || !['image/png', 'image/jpeg', 'image/webp'].includes(file.type))) {setError('Only PNG, JPEG, WebP images up to 1 MB.'); event.target.value = ''; setImage(null);} else {setImage(file); setError('');}}}/></label>{image && <div className="chat-image-selected"><span>{image.name}</span><button type="button" className="secondary" onClick={() => {setImage(null); if (imageInput.current) imageInput.current.value = '';}}>{'Remove image'}</button></div>}</div><button type="submit" disabled={(!body.trim() && !image) || !room}>Send</button></form>
-      {error && <p className="error-text" role="alert">{error} <button className="secondary" type="button" onClick={() => void load(true)}>{'Retry'}</button></p>}
+      {error && <p className="error-text chat-error" role="alert">{error} <button className="secondary" type="button" onClick={() => void load(true)}>{'Retry'}</button></p>}
+      {image && <div className="chat-attachment"><img src={image.url} alt=""/><span>{image.file.name}</span><button type="button" className="chat-attachment-remove" aria-label="Remove image" onClick={clearImage}>×</button></div>}
+      <form className="chat-compose" onSubmit={event => {event.preventDefault(); send();}}>
+        <label className={`chat-image-picker ${room ? '' : 'disabled'}`} title="Send an image (PNG, JPEG or WebP, up to 1 MB)">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4.5" width="18" height="15" rx="3"/><circle cx="9" cy="10" r="1.8"/><path d="m20.5 16.5-5-5-8.5 8.5"/></svg>
+          <span className="sr-only">Choose image (max 1 MB)</span>
+          <input ref={imageInput} type="file" accept={IMAGE_TYPES.join(',')} disabled={!room} onChange={event => pickImage(event.target.files?.[0] ?? null)}/>
+        </label>
+        <textarea disabled={!room} ref={composer} rows={1} aria-label={'Message'} title="Reply (Alt+R); Enter to send; Shift+Enter for a new line" value={body} onChange={event => updateDraft(draftKey, event.target.value)} placeholder={'Message…'} maxLength={1000} enterKeyHint="send" onKeyDown={event => {if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) {event.preventDefault(); send();}}}/>
+        <button type="submit" className="chat-send" aria-label="Send" title="Send (Enter)" disabled={!canSend} onPointerDown={keepComposerFocus} onMouseDown={keepComposerFocus}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4.4 19.6 20.6 12.4c.5-.2.5-.9 0-1.1L4.4 4.1c-.5-.2-1 .2-.9.7l1.3 5.6c.1.3.3.5.6.5l7.1.9c.2 0 .2.3 0 .4l-7.1.9c-.3 0-.5.2-.6.5l-1.3 5.6c-.1.5.4.9.9.7z"/></svg></button>
+      </form>
       {!compact && <p className="field-caption chat-caption">{'Messages are saved with your account. Failed messages can be retried safely.'}</p>}
     </div>
   </section>;

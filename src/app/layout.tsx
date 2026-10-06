@@ -1,9 +1,11 @@
 import './globals.css';
-import type {Metadata} from 'next';
+import type {Metadata, Viewport} from 'next';
 import RouteFeedback from '@/components/route-feedback';
 export const metadata: Metadata = {
   title: 'Jewish Horse', robots: {index: false, follow: false}
 };
+// Android resizes the page when the keyboard opens, so the chat reply box stays above it (iOS is handled in the chat sheet).
+export const viewport: Viewport = {width: 'device-width', initialScale: 1, interactiveWidget: 'resizes-content'};
 export default function RootLayout({children}: {children: React.ReactNode}) {
   // Browser extensions such as Trancy may add attributes to <html> before
   // React hydrates. Ignore those external attribute differences.

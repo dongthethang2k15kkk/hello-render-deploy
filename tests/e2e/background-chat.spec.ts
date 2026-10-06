@@ -32,7 +32,8 @@ test('customers see every team reply as "Admin"; the Admin inbox shows who wrote
     const textarea = element.querySelector('textarea')!.getBoundingClientRect();
     const picker = element.querySelector('.chat-image-picker')!.getBoundingClientRect();
     const send = element.querySelector('button[type=submit]')!.getBoundingClientRect();
-    return form.left >= 0 && form.right <= window.innerWidth && textarea.right <= window.innerWidth && picker.right <= send.left && send.right <= window.innerWidth && send.top >= textarea.bottom;
+    // One row, as in a messaging app: image button, reply box, Send.
+    return form.left >= 0 && form.right <= window.innerWidth && picker.right <= textarea.left && textarea.right <= send.left && send.right <= window.innerWidth;
   });
   expect(composerFits).toBe(true);
   await customer.close(); await adminContext.close();
