@@ -1,7 +1,6 @@
 'use client';
 import {useEffect, useState, type FormEvent} from 'react';
 import {useLocale} from 'next-intl';
-import {useRouter} from 'next/navigation';
 import Link from 'next/link';
 
 const oauthErrors: Record<string, string> = {
@@ -22,9 +21,11 @@ const oauthErrors: Record<string, string> = {
   accounts_unavailable: 'Accounts are unavailable right now. Please try again shortly.'
 };
 
+/** A full page load after signing in: the header, chat and preloaded pages all start from the new session (as after Google sign-in). */
+const openSignedIn = (path: string) => window.location.assign(path);
+
 export default function LoginPage() {
   const locale = useLocale();
-  const router = useRouter();
   const [register, setRegister] = useState(false);
   const [email, setEmail] = useState('');
   const [name, setName] = useState('');
@@ -48,7 +49,7 @@ export default function LoginPage() {
     setBusy(true);
     const response = await fetch('/api/auth/dev-admin', {method: 'POST'}).catch(() => null);
     setBusy(false);
-    if (response?.ok) {router.push(next.startsWith('/en/admin') ? next : `/${locale}/admin`); router.refresh();} else setError('Dev admin login is disabled.');
+    if (response?.ok) openSignedIn(next.startsWith('/en/admin') ? next : `/${locale}/admin`); else setError('Dev admin login is disabled.');
   }
 
   async function submit(event: FormEvent<HTMLFormElement>) {
@@ -60,10 +61,7 @@ export default function LoginPage() {
       const response = await fetch(register ? '/api/auth/register' : '/api/auth/login', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(register ? {email, name, password} : {email, password})});
       const data = await response.json();
       if (!response.ok) setError(data.error || 'Could not complete request.');
-      else {
-        router.push(`/${locale}/${data.mustChangePassword ? 'account?required=1' : next === 'checkout' ? 'checkout' : 'workspace'}`);
-        router.refresh();
-      }
+      else openSignedIn(`/${locale}/${data.mustChangePassword ? 'account?required=1' : next === 'checkout' ? 'checkout' : 'workspace'}`);
     } catch {setError('Could not connect to the server.');}
     finally {setBusy(false);}
   }

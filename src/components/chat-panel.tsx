@@ -57,8 +57,12 @@ export default function ChatPanel({role, accountId, compact = false, active = tr
       if (role === 'user' && !roomRef.current) {roomRef.current = cached.messages[0].room; setRoom(cached.messages[0].room);}
     }
   }, [accountId, role]);
-  // Storage writes are synchronous: save the draft after a pause in typing, and on the way out.
-  useEffect(() => () => {if (draftTimer.current) {clearTimeout(draftTimer.current); saveDrafts(accountId, draftsRef.current);}}, [accountId]);
+  // Storage writes are synchronous: save the draft after a pause in typing, and at once when the page or panel goes away.
+  useEffect(() => {
+    const flush = () => {if (draftTimer.current) {clearTimeout(draftTimer.current); draftTimer.current = undefined; saveDrafts(accountId, draftsRef.current);}};
+    window.addEventListener('pagehide', flush);
+    return () => {window.removeEventListener('pagehide', flush); flush();};
+  }, [accountId]);
   function updateDraft(key: string, value: string) {
     draftsRef.current = {...draftsRef.current, [key]: value};
     setDrafts(draftsRef.current);

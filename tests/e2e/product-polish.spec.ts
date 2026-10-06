@@ -1,7 +1,13 @@
 import {expect, test} from '@playwright/test';
+import {PrismaClient} from '@prisma/client';
 import {registerCustomer} from './helpers';
 
+const db = new PrismaClient({datasourceUrl: process.env.E2E_DATABASE_URL});
+test.afterAll(async () => {await db.$disconnect();});
+
 test('a short catalog skips search and sort; the quick buy box goes straight to checkout', async ({page}) => {
+  // Earlier tests hold seeded packages in unpaid orders; this one needs two of them in stock.
+  await db.package.updateMany({where: {sku: 'SAMPLE_PLUS', stockOnHand: {lt: 2}}, data: {stockOnHand: 2}});
   await page.goto('/en');
   await expect(page.locator('.product-card')).toHaveCount(2);
   await expect(page.getByRole('searchbox', {name: 'Search packages'})).toHaveCount(0);

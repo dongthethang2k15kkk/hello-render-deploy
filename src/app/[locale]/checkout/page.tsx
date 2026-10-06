@@ -41,7 +41,8 @@ export default function Checkout() {
 
   const loadAccount = (force = false) => loadJson<{account?: {name: string; role: string; coinBalance?: string} | null}>('/api/auth/session', {maxAgeMs: 15_000, force}).then(({data}) => setAccount(data.account ?? false)).catch(() => setAccount(false));
   useEffect(() => {
-    void loadAccount();
+    // The cached session shows at once; the server copy confirms it, since placing the order needs the real one.
+    void loadAccount().then(() => loadAccount(true));
     loadJson<Methods>('/api/payment-methods', {maxAgeMs: 60_000}).then(({data}) => {
       setMethods(data);
       if (!data.bank) setMethod(data.usdt ? 'usdt' : 'ltc');

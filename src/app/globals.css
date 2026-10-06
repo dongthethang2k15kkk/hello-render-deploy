@@ -2090,3 +2090,53 @@ html.chat-sheet-open .bg-scene {display:none;}
   .lucky-teaser-actions {width:100%;}
   .lucky-teaser-actions .button, .lucky-teaser-actions button {flex:1; text-align:center;}
 }
+
+/* ---------- Admin on phones ----------
+   Everything fits the screen: a two-row header with a swipeable menu, one card per table row with each value labelled
+   (AdminTableLabels copies the column titles), and filters in two columns. Nothing is cut off at the page edge. */
+.lucky-admin-grid > *, .bg-editor > * {min-width:0;}
+@media (max-width:640px) {
+  .admin-surface .admin-header-inner {display:grid; grid-template-columns:minmax(0,1fr) auto auto; align-items:center; gap:8px; padding-top:8px; padding-bottom:0;}
+  .admin-surface .admin-header-actions {display:contents;}
+  .admin-surface .admin-header .brand {grid-column:1; grid-row:1; min-width:0; font-size:13px; line-height:1.2; white-space:normal;}
+  .admin-surface .availability-toggle {grid-column:2; grid-row:1; min-height:38px; gap:8px; padding:6px 12px 6px 10px; border-width:1.5px; font-size:13px; box-shadow:none;}
+  .admin-surface .availability-toggle.loading {width:96px; height:38px; padding:0;}
+  .admin-surface .availability-text strong {font-size:13px; white-space:nowrap;}
+  .admin-surface .availability-text small {display:none;}
+  .admin-surface .availability-dot {width:10px; height:10px;}
+  .admin-surface .admin-header-actions > button:not(.availability-toggle) {grid-column:3; grid-row:1; min-height:38px; padding:7px 12px; font-size:13px;}
+  /* The menu: one row of tabs that scrolls sideways. */
+  .admin-surface .admin-header-inner nav {position:relative; grid-column:1 / -1; grid-row:2; order:0; display:flex; flex-wrap:nowrap; gap:4px; width:auto; margin:0 -18px; padding:2px 18px 8px; overflow-x:auto; overscroll-behavior-x:contain; scrollbar-width:none; -webkit-overflow-scrolling:touch;}
+  .admin-surface .admin-header-inner nav::-webkit-scrollbar {display:none;}
+  .admin-surface .admin-header nav a {flex:none; min-height:36px; padding:0 13px; border-radius:999px; font-size:14px; white-space:nowrap;}
+  .admin-surface .admin-header nav a.active {background:#e6f0e2; color:#1f4d2e; text-decoration:none;}
+  .admin-surface .admin-content {padding-top:14px;}
+  .admin-surface h1 {font-size:28px;}
+  .admin-page-heading {flex-wrap:wrap; gap:10px;}
+  .admin-surface .admin-panel {padding:14px;}
+
+  /* Filters: search on its own row, the rest in two columns. */
+  .admin-filters {grid-template-columns:repeat(2, minmax(0, 1fr)); gap:8px 10px;}
+  .admin-filters > label:first-child, .admin-filter-actions {grid-column:1 / -1;}
+  .admin-filter-actions {display:flex; gap:8px;}
+  .admin-filter-actions button {flex:1;}
+
+  /* Tables: one card per row; the first column is the card's title. */
+  .admin-surface .admin-table-wrap {overflow:visible; border:0; border-radius:0;}
+  .admin-surface .admin-table, .admin-surface .admin-table tbody, .admin-surface .admin-table tr {display:block; width:100%;}
+  .admin-surface .admin-table thead {display:none;}
+  .admin-surface .admin-table tr {margin:0 0 10px; padding:10px 12px; border:1px solid #e1e5ec; border-radius:12px; background:#fff;}
+  /* The label sits in a fixed left column; the value flows normally, however many parts it has. */
+  .admin-surface .admin-table td {position:relative; display:block; min-height:26px; padding:4px 0 4px calc(32% + 10px); border:0; overflow-wrap:anywhere;}
+  .admin-surface .admin-table td::before {content:attr(data-label); position:absolute; left:0; top:6px; width:32%; font-size:10.5px; font-weight:700; letter-spacing:.02em; line-height:1.3; text-transform:uppercase; overflow-wrap:normal; color:#6b7a70;}
+  .admin-surface .admin-table td:not([data-label]) {padding-left:0;}
+  .admin-surface .admin-table td:not([data-label])::before {content:none;}
+  .admin-surface .admin-table td:first-child {margin-bottom:4px; padding:0 0 8px; border-bottom:1px solid #eef0f4;}
+  .admin-surface .admin-table td:first-child::before {position:static; display:block; width:auto; margin-bottom:2px;}
+  .admin-surface .admin-table td.admin-empty {padding:8px 0;}
+
+  /* Lucky wheel settings: heading and prize fields stack. */
+  .admin-panel-heading {flex-wrap:wrap;}
+  .admin-panel-heading > button {white-space:nowrap;}
+  .lucky-prize-row {align-items:start;}
+}

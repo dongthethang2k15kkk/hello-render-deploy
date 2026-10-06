@@ -232,6 +232,10 @@ test('a new customer buys in three screens: quick buy, checkout with sign-up ins
   await ensureBank(adminContext.request);
   const customer = await browser.newContext();
   const page = await customer.newPage();
+  // A fresh database has no completed trades and the store hides a zero total, so give the counter a value.
+  const counter = '/api/admin/settings/trade-counter';
+  const before = await (await adminContext.request.get(counter)).json();
+  expect((await adminContext.request.post(counter, {data: {historicalCompleted: before.historicalCompleted + 25}})).ok()).toBe(true);
   try {
     // Only the combined completed-trade total appears: no individual delivered amounts or timestamps.
     await page.goto('/en');
@@ -276,6 +280,7 @@ test('a new customer buys in three screens: quick buy, checkout with sign-up ins
     await page.goto('/en/buy/no-such-package');
     await expect(page).toHaveURL(/\/en(#buy)?$/);
   } finally {
+    await adminContext.request.post(counter, {data: {historicalCompleted: before.historicalCompleted}});
     await customer.close(); await adminContext.close();
   }
 });

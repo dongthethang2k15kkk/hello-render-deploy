@@ -1,5 +1,5 @@
 'use client';
-import {useEffect, useState} from 'react';
+import {useEffect, useRef, useState} from 'react';
 import Link from 'next/link';
 import {usePathname} from 'next/navigation';
 
@@ -11,6 +11,14 @@ const POLL_MS = 20000;
 export default function AdminNav({locale, initialOrders}: {locale: string; initialOrders: number}) {
   const pathname = usePathname();
   const [counts, setCounts] = useState({orders: initialOrders, chat: 0, workspace: 0});
+  const strip = useRef<HTMLElement>(null);
+  // On a phone the menu is one swipeable row: bring the current page's tab into view.
+  useEffect(() => {
+    const element = strip.current;
+    const active = element?.querySelector<HTMLElement>('a.active');
+    if (!element || !active || element.scrollWidth <= element.clientWidth) return;
+    element.scrollLeft = active.offsetLeft - (element.clientWidth - active.offsetWidth) / 2;
+  }, [pathname]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -31,7 +39,7 @@ export default function AdminNav({locale, initialOrders}: {locale: string; initi
 
   // Workspace badge: paid or reported orders no Admin has taken yet.
   const links: [string, string, number][] = [['workspace', 'Workspace', counts.workspace], ['overview', 'Overview', 0], ['orders', 'Orders', counts.orders], ['chat', 'Chat', counts.chat], ['customers', 'Customers', 0], ['activity', 'Activity', 0], ['lucky-wheel', 'Lucky wheel', 0], ['settings', 'Settings', 0]];
-  return <nav aria-label="Admin navigation">{links.map(([slug, label, count]) => {
+  return <nav ref={strip} aria-label="Admin navigation">{links.map(([slug, label, count]) => {
     const active = pathname.startsWith(`/${locale}/admin/${slug}`);
     return <Link key={slug} href={`/${locale}/admin/${slug}`} className={active ? 'active' : undefined} aria-current={active ? 'page' : undefined}>{label}{count > 0 && <b className="nav-badge" aria-label={`${count} ${slug === 'chat' ? 'unread' : 'need action'}`}>{count}</b>}</Link>;
   })}</nav>;
