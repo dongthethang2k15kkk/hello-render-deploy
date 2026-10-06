@@ -82,6 +82,18 @@ export function customerCancelled(input: {code: string; name: string; reason: st
   return {subject: `Jewish Horse: ${title}`, html: layout(title, lines, link), text: plain(title, lines, [link])};
 }
 
+export function customerLuckySpinGranted(input: {name: string; wheelUrl: string}): EmailContent {
+  const title = 'Your free spin is ready';
+  const lines = [
+    `Hi ${escapeHtml(input.name)},`,
+    'Thank you for your completed purchase. We have added <strong>one Lucky Wheel spin</strong> to your Jewish Horse account.',
+    'Sign in and open Lucky Drop to use it. Your prize will be added to the wheel-coin balance shown in the header.',
+    'On a future order, choose <strong>“Receive all wheel winnings”</strong> if you want the Admin to include that balance with your package.'
+  ];
+  const link = {label: 'Open the Lucky Wheel', url: input.wheelUrl};
+  return {subject: `Jewish Horse: ${title}`, html: layout(title, lines, link), text: plain(title, lines, [link])};
+}
+
 export function adminTestEmail(input: {sender: string; adminUrl: string}): EmailContent {
   const title = 'Email thử từ Jewish Horse';
   const lines = [`Gmail <strong>${escapeHtml(input.sender)}</strong> đã được kết nối và gửi thư thành công.`, 'Thư báo đơn mới sẽ được gửi tới tất cả email Admin.'];
