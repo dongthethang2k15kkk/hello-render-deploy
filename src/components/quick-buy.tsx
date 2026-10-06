@@ -17,7 +17,7 @@ const CUSTOM = 'custom';
  * The fast way to buy, at the top of the store: pick any amount on the slider or one of the packages, type the delivery
  * details and go straight to checkout (no product page, no cart). "Buy now" checks out exactly this item.
  */
-export function QuickBuy({products, slider, vndPerUsd, vndPerLtc, trades}: {products: CatalogProduct[]; slider: AmountSlider | null; vndPerUsd: number; vndPerLtc: number | null; trades?: {completed: number; recent: {label: string; at: string}[]}}) {
+export function QuickBuy({products, slider, vndPerUsd, vndPerLtc, trades}: {products: CatalogProduct[]; slider: AmountSlider | null; vndPerUsd: number; vndPerLtc: number | null; trades?: {completed: number}}) {
   const locale = useLocale();
   const router = useRouter();
   const {save, ready} = useCart();

@@ -1,25 +1,51 @@
 import 'server-only';
-import {lineAmount} from './amount-slider-rules';
 import {getPaymentDb} from './payment-db';
+import {completedTradeTotal, parseTradeCounterSettings, type TradeCounterSettings} from './trade-counter-rules';
 
-/** Real completed trades for the store's trust line: a count and the latest few, without any customer names. */
-export type TradeStats = {completed: number; recent: {label: string; at: string}[]};
+/** The public trust line combines Admin's historical count with real completed shop orders. */
+export type TradeStats = {completed: number};
+export type TradeCounterState = TradeCounterSettings & {shopCompleted: number; total: number};
 
+const KEY = 'tradeCounter';
 const CACHE_MS = 60_000;
 const store = globalThis as unknown as {tradeStatsCache?: {value: TradeStats; at: number}};
+
+export function invalidateTradeStats() {
+  delete store.tradeStatsCache;
+}
+
+async function readTradeCounterState(): Promise<TradeCounterState> {
+  const db = getPaymentDb();
+  const [row, shopCompleted] = await Promise.all([
+    db.storeSetting.findUnique({where: {key: KEY}, select: {value: true}}),
+    db.order.count({where: {status: 'completed'}})
+  ]);
+  const settings = parseTradeCounterSettings(row?.value);
+  return {...settings, shopCompleted, total: completedTradeTotal(settings.historicalCompleted, shopCompleted)};
+}
+
+export async function getTradeCounterState(): Promise<TradeCounterState> {
+  if (!process.env.DATABASE_URL) return {historicalCompleted: 0, shopCompleted: 0, total: 0};
+  return readTradeCounterState();
+}
+
+export async function setTradeCounterSettings(settings: TradeCounterSettings, actorEmail: string) {
+  await getPaymentDb().storeSetting.upsert({
+    where: {key: KEY},
+    create: {key: KEY, value: settings, updatedBy: actorEmail},
+    update: {value: settings, updatedBy: actorEmail}
+  });
+  invalidateTradeStats();
+}
 
 export async function getTradeStats(): Promise<TradeStats> {
   const hit = store.tradeStatsCache;
   if (hit && Date.now() - hit.at < CACHE_MS) return hit.value;
-  const empty: TradeStats = {completed: 0, recent: []};
+  const empty: TradeStats = {completed: 0};
   if (!process.env.DATABASE_URL) return empty;
   try {
-    const db = getPaymentDb();
-    const [completed, rows] = await Promise.all([
-      db.order.count({where: {status: 'completed'}}),
-      db.order.findMany({where: {status: 'completed', completedAt: {not: null}}, orderBy: {completedAt: 'desc'}, take: 3, select: {completedAt: true, items: {select: {title: true, quantity: true}}}})
-    ]);
-    const value = {completed, recent: rows.map(row => ({label: row.items.map(item => lineAmount(item.title, item.quantity)).join(' + '), at: row.completedAt!.toISOString()}))};
+    const state = await readTradeCounterState();
+    const value = {completed: state.total};
     store.tradeStatsCache = {value, at: Date.now()};
     return value;
   } catch { return hit?.value ?? empty; }

@@ -21,6 +21,7 @@ import {getLtcRate} from './exchange-rates';
 import {usdtAmount} from './usdt';
 import {grantPaidOrderSpin} from './lucky-wheel';
 import {refundReservedCoins, reserveAllCoins} from './coin-ledger';
+import {invalidateTradeStats} from './trade-stats';
 
 export class OrderError extends Error {
   constructor(message: string, readonly status = 400) { super(message); }
@@ -418,6 +419,7 @@ export async function completeOrder(adminEmail: string, id: string, deliveryNote
     await tx.order.update({where: {id}, data: {status: 'completed', completedAt: new Date(), deliveryNote: note.slice(0, 5000), assignedAdmin: order.assignedAdmin ?? adminEmail}});
     await tx.orderEvent.create({data: {orderId: id, actor: adminEmail, action: 'completed', note: 'Delivered'}});
   }, txOptions);
+  invalidateTradeStats();
   await recordAudit({actorEmail: adminEmail, action: 'order.completed', summary: `Completed ${order.code}`, entityType: 'order', entityId: id, customerId: order.customerId});
   await notifyCustomer({customerId: order.customerId, orderId: id, title: `Order complete · ${order.code}`, body: 'Your order has been delivered. Open it to see the delivery details.', link: customerLink(order.code)});
   await sendMail({to: [order.customer.email], ...templates.customerCompleted({code: order.code, name: order.customer.name, orderUrl: `${origin}${customerLink(order.code)}`}), kind: 'customer.completed', orderId: id});

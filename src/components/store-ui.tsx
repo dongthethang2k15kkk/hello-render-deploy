@@ -137,7 +137,7 @@ const comparison: Record<string, string[]> = {
   'sample-plus': ['Higher sample price', 'Recipient name plus an optional delivery note']
 };
 
-export function Catalog({products: allProducts, source, vndPerUsd, vndPerLtc = null, slider = null, trades}: {products: CatalogProduct[]; source: CatalogSource; vndPerUsd: number; vndPerLtc?: number | null; slider?: AmountSlider | null; trades?: {completed: number; recent: {label: string; at: string}[]}}) {
+export function Catalog({products: allProducts, source, vndPerUsd, vndPerLtc = null, slider = null, trades}: {products: CatalogProduct[]; source: CatalogSource; vndPerUsd: number; vndPerLtc?: number | null; slider?: AmountSlider | null; trades?: {completed: number}}) {
   const locale = useLocale() as Locale; const t = useTranslations();
   // The slider sells its per-unit package by amount; that package can stay out of the grid.
   const sliderProduct = slider?.enabled ? allProducts.find(product => product.id === slider.packageId) : undefined;

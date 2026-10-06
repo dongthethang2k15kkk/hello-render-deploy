@@ -188,6 +188,36 @@ test('the amount slider is set up in Admin and sells any amount from the store',
   }
 });
 
+test('Admin can add historical completed trades while shop completions remain automatic', async ({browser}) => {
+  const adminContext = await admin(browser);
+  const url = '/api/admin/settings/trade-counter';
+  const before = await (await adminContext.request.get(url)).json();
+  try {
+    expect((await adminContext.request.post(url, {data: {historicalCompleted: -1}})).status()).toBe(400);
+    const page = await adminContext.newPage();
+    await page.goto('/en/admin/settings/trade-counter');
+    await expect(page.getByLabel('Completed orders before this website')).toHaveValue(String(before.historicalCompleted));
+    await expect(page.getByText('Completed on this shop', {exact: true})).toBeVisible();
+    await page.getByLabel('Completed orders before this website').fill('1234');
+    await page.getByRole('button', {name: 'Save trade counter'}).click();
+    await expect(page.getByText('Saved. The updated total is live on the store.')).toBeVisible();
+
+    const saved = await (await adminContext.request.get(url)).json();
+    expect(saved.historicalCompleted).toBe(1234);
+    expect(saved.total).toBe(1234 + saved.shopCompleted);
+
+    const customer = await browser.newPage({viewport: {width: 390, height: 844}});
+    await customer.goto('/en');
+    await expect(customer.locator('.trade-feed')).toHaveText(`✓ ${saved.total.toLocaleString('en-US')} trades completed`);
+    await expect(customer.locator('.trade-feed')).not.toContainText('delivered');
+    expect(await customer.locator('.quick-buy').evaluate(element => element.scrollWidth <= element.clientWidth + 1)).toBe(true);
+    await customer.close();
+  } finally {
+    await adminContext.request.post(url, {data: {historicalCompleted: before.historicalCompleted}});
+    await adminContext.close();
+  }
+});
+
 test('Discord sign-in stays hidden until it is configured', async ({page}) => {
   expect((await (await page.request.get('/api/auth/providers')).json()).discord).toBe(false);
   await page.goto('/api/auth/discord/start');
@@ -203,9 +233,10 @@ test('a new customer buys in three screens: quick buy, checkout with sign-up ins
   const customer = await browser.newContext();
   const page = await customer.newPage();
   try {
-    // Real completed trades (from earlier tests in this database) appear under the buy box, without names.
+    // Only the combined completed-trade total appears: no individual delivered amounts or timestamps.
     await page.goto('/en');
     await expect(page.locator('.trade-feed')).toContainText(/trades? completed/);
+    await expect(page.locator('.trade-feed')).not.toContainText('delivered');
     const box = page.locator('.quick-buy');
     await box.getByRole('radio', {name: /Basic sample package/}).click();
     await box.getByLabel('Recipient name (test data)').fill('Three screens');
@@ -269,4 +300,3 @@ test('a new Inbox notification rings the bell, pops up and counts in the tab tit
   await expect(bell).toHaveAccessibleName('Inbox, 0 unread');
   await customer.close();
 });
-
