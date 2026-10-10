@@ -93,6 +93,6 @@ export function WorkspaceOrder({locale, id, accountId}: {locale: string; id: str
       <button type="button" role="tab" aria-selected={tab === 'chat'} className={tab === 'chat' ? 'active' : 'secondary'} onClick={() => show('chat')}>Chat{customer ? ` with ${customer.name}` : ''}</button>
     </div>
     <div className="workspace-order-column"><AdminOrderView locale={locale} id={id} variant="workspace" onLoaded={onLoaded}/></div>
-    <div className="workspace-chat-column">{customer ? <ChatPanel accountId={accountId} role="admin" lockedRoom={`user:${customer.id}`} lockedTitle={customer.name}/> : <LoadingRows label="Loading the conversation…"/>}</div>
+    <div className="workspace-chat-column">{customer ? <ChatPanel accountId={accountId} role="admin" lockedRoom={`user:${customer.id}`} lockedTitle={customer.name} onBack={() => show('order')} backLabel="Back to the order"/> : <LoadingRows label="Loading the conversation…"/>}</div>
   </div>;
 }

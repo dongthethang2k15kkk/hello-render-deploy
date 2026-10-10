@@ -2068,6 +2068,23 @@ button.header-pill:hover:not(:disabled) {transform:translateY(-1px); background:
 @media (max-width:700px) {.chat-card .chat-compose textarea {font-size:16px;}}
 html.chat-sheet-open .bg-scene {display:none;}
 
+/* Full-page chat on phones (ChatPanel adds .chat-fullscreen): a full-screen sheet sized to the visible area above the keyboard,
+   so the page behind never moves while typing. The arrow leaves the sheet. */
+.chat-card .chat-back {display:none;}
+@media (max-width:700px) {
+  html .chat-card.chat-fullscreen:not(.chat-compact) {position:fixed; left:0; right:0; top:var(--sheet-top, 0); z-index:60; width:100%; max-width:none; height:var(--sheet-height, 100dvh); margin:0; border:0; border-radius:0; box-shadow:none;}
+  html .chat-card.chat-fullscreen .chat-header {display:flex; flex-direction:row; align-items:center; justify-content:space-between; gap:8px; padding:8px 12px; padding-top:max(8px, env(safe-area-inset-top));}
+  html .chat-card.chat-fullscreen .chat-header > div {display:flex; align-items:center; flex-wrap:wrap; gap:8px; min-width:0;}
+  html .chat-page .chat-card.chat-fullscreen .chat-header .eyebrow {display:none;}
+  html .chat-page .chat-card.chat-fullscreen .chat-header h2 {display:block; margin:0; font-size:17px;}
+  .chat-fullscreen .chat-back {display:grid; place-items:center; flex:none; width:40px; height:40px; margin-left:-6px; padding:0; border:0; border-radius:50%; background:transparent; color:#6c55d8; box-shadow:none;}
+  .chat-fullscreen .chat-back:hover {background:#f0f2f5; transform:none; box-shadow:none;}
+  .chat-fullscreen .chat-back svg {width:24px; height:24px; fill:none; stroke:currentColor; stroke-width:2.4; stroke-linecap:round; stroke-linejoin:round;}
+  .chat-fullscreen .chat-compose {padding-bottom:max(8px, env(safe-area-inset-bottom));}
+  .chat-fullscreen.keyboard-open .chat-compose {padding-bottom:8px;}
+  html .chat-page .chat-card.chat-fullscreen .chat-caption {display:none;}
+}
+
 /* Lucky wheel, folded to one row until there is a spin to use. */
 .lucky-wheel-section.lucky-teaser {margin:2.5rem 0; padding:18px 22px;}
 .lucky-teaser-row {display:flex; align-items:center; gap:18px;}

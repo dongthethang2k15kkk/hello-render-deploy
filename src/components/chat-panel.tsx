@@ -1,6 +1,7 @@
 'use client';
 
 import {Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type SyntheticEvent} from 'react';
+import Link from 'next/link';
 import type {Role} from '@/lib/admin-session';
 import {chatListTime, chatRows, chatTime, mergeMessages, watchChat, type LocalMessage} from '@/lib/chat-client';
 import {readChatCache, readDrafts, saveChatCache, saveDrafts} from '@/lib/chat-drafts';
@@ -34,8 +35,9 @@ function cacheSnapshot(rooms: Room[], messages: LocalMessage[], role: Role, curr
 /**
  * `lockedRoom` pins an Admin to one customer's conversation (the workspace): no conversation list.
  * `active` is false while the floating window is closed: the panel stays mounted (instant reopen) but marks nothing read.
+ * On phones the full-page chat is a full-screen sheet; `backHref` / `onBack` is the arrow that leaves it.
  */
-export default function ChatPanel({role, accountId, compact = false, active = true, initialRoom: requestedRoom = '', lockedRoom, lockedTitle}: {role: Role; accountId: string; compact?: boolean; active?: boolean; initialRoom?: string; lockedRoom?: string; lockedTitle?: string}) {
+export default function ChatPanel({role, accountId, compact = false, active = true, initialRoom: requestedRoom = '', lockedRoom, lockedTitle, backHref, onBack, backLabel = 'Back'}: {role: Role; accountId: string; compact?: boolean; active?: boolean; initialRoom?: string; lockedRoom?: string; lockedTitle?: string; backHref?: string; onBack?: () => void; backLabel?: string}) {
   const initialRoom = lockedRoom ?? requestedRoom;
   const [messages, setMessages] = useState<LocalMessage[]>([]);
   const [rooms, setRooms] = useState<Room[]>([]);
@@ -278,6 +280,47 @@ export default function ChatPanel({role, accountId, compact = false, active = tr
     return () => { observer.disconnect(); window.removeEventListener('resize', fit); };
   }, [compact]);
 
+  // Phones: the full-page chat becomes a sheet over the page, sized to the visible area above the keyboard, so the page behind
+  // never scrolls or jumps while typing (like the floating chat window).
+  useEffect(() => {
+    if (compact) return;
+    const element = panel.current;
+    const parent = element?.parentElement;
+    if (!element || !parent) return;
+    const phone = window.matchMedia('(max-width: 700px)');
+    const viewport = window.visualViewport;
+    const root = document.documentElement;
+    let sheet = false;
+    const sync = () => {
+      const height = viewport?.height ?? window.innerHeight;
+      element.style.setProperty('--sheet-height', `${Math.round(height)}px`);
+      element.style.setProperty('--sheet-top', `${Math.round(viewport?.offsetTop ?? 0)}px`);
+      // With the keyboard up, the home-indicator padding under the reply box is wasted space.
+      element.classList.toggle('keyboard-open', window.innerHeight - height > 120);
+    };
+    const apply = () => {
+      // A hidden parent (the workspace's Order tab) must neither show the sheet nor freeze the page.
+      const want = phone.matches && parent.getClientRects().length > 0;
+      if (want === sheet) return;
+      sheet = want;
+      element.classList.toggle('chat-fullscreen', want);
+      root.classList.toggle('chat-sheet-open', want);
+      document.body.style.overflow = want ? 'hidden' : '';
+      if (want) sync(); else element.classList.remove('keyboard-open');
+    };
+    const observer = new ResizeObserver(apply);
+    observer.observe(parent);
+    phone.addEventListener('change', apply);
+    viewport?.addEventListener('resize', sync);
+    viewport?.addEventListener('scroll', sync);
+    apply();
+    return () => {
+      observer.disconnect(); phone.removeEventListener('change', apply);
+      viewport?.removeEventListener('resize', sync); viewport?.removeEventListener('scroll', sync);
+      if (sheet) {root.classList.remove('chat-sheet-open'); document.body.style.overflow = '';}
+    };
+  }, [compact]);
+
   const visible = useMemo(() => messages.filter(message => message.room === room), [messages, room]);
   const rows = useMemo(() => chatRows(visible, role), [visible, role]);
   const draftKey = room;
@@ -463,9 +506,12 @@ export default function ChatPanel({role, accountId, compact = false, active = tr
   const viewersOf = (id: string) => admins.filter(admin => admin.id !== self && admin.resource === `chat:${id}`);
   const inbox = role === 'admin' && !lockedRoom;
   const canSend = Boolean(room) && Boolean(body.trim() || image);
+  const arrowIcon = <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 5-7 7 7 7"/></svg>;
+  // Only visible while the chat is a phone sheet (see .chat-fullscreen in the stylesheet).
+  const backArrow = backHref ? <Link className="chat-back" href={backHref} aria-label={backLabel}>{arrowIcon}</Link> : onBack ? <button type="button" className="chat-back" aria-label={backLabel} onClick={onBack}>{arrowIcon}</button> : null;
   return <section ref={panel} className={`chat-card card ${inbox ? 'admin-inbox' : ''} ${lockedRoom ? 'chat-locked' : ''} ${compact ? 'chat-compact' : ''}`} aria-label={role === 'admin' ? 'Customer inbox' : 'Consultation'}>
     {inbox && <aside className="chat-sidebar">
-      <div className="chat-sidebar-tools"><h2>{'Conversations'}</h2>
+      <div className="chat-sidebar-tools"><h2>{backArrow}{'Conversations'}</h2>
       <label className="chat-search"><span className="sr-only">Search conversations</span><input ref={roomSearch} type="search" placeholder="Search customers (/ to focus)" value={roomQuery} onChange={event => setRoomQuery(event.target.value)}/></label>
       <div className="chat-filters" aria-label="Conversation filter"><button type="button" className={roomFilter === 'all' ? 'active' : ''} onClick={() => setRoomFilter('all')}>All</button><button type="button" className={roomFilter === 'needs-reply' ? 'active' : ''} onClick={() => setRoomFilter('needs-reply')}>Needs reply</button></div></div>
       {!roomsReady && !rooms.length && <LoadingRows label="Loading conversations" rows={4}/>}
@@ -480,7 +526,7 @@ export default function ChatPanel({role, accountId, compact = false, active = tr
       })}
     </aside>}
     <div className={`chat-main ${showRoomList ? 'show-room-list' : ''}`}>
-      <div className="chat-header"><div>{inbox && <button type="button" className="inbox-back secondary" onClick={() => setShowRoomList(true)}>← {'Conversations'}</button>}<span className="eyebrow">{lockedRoom ? 'CHAT WITH CUSTOMER' : role === 'admin' ? 'ADMIN INBOX' : 'DIRECT SUPPORT'}</span><h2>{role === 'admin' ? (lockedTitle ?? selected?.name ?? ('Select a conversation')) : 'Chat with support'}</h2>{role === 'admin' && selected?.booking && <p className="room-booking">{bookingLabel(selected.booking)}</p>}{role === 'admin' && selected && <PresenceBadges viewers={viewersOf(selected.id)} context="this conversation"/>}</div><span className={`live-dot ${connected ? "" : "reconnecting"}`} role="status">{connected ? "Live updates" : "Reconnecting..."}</span></div>
+      <div className="chat-header"><div>{!inbox && backArrow}{inbox && <button type="button" className="inbox-back secondary" onClick={() => setShowRoomList(true)}>← {'Conversations'}</button>}<span className="eyebrow">{lockedRoom ? 'CHAT WITH CUSTOMER' : role === 'admin' ? 'ADMIN INBOX' : 'DIRECT SUPPORT'}</span><h2>{role === 'admin' ? (lockedTitle ?? selected?.name ?? ('Select a conversation')) : 'Chat with support'}</h2>{role === 'admin' && selected?.booking && <p className="room-booking">{bookingLabel(selected.booking)}</p>}{role === 'admin' && selected && <PresenceBadges viewers={viewersOf(selected.id)} context="this conversation"/>}</div><span className={`live-dot ${connected ? "" : "reconnecting"}`} role="status">{connected ? "Live updates" : "Reconnecting..."}</span></div>
       <div className="chat-scroll">
         <div className="chat-messages" ref={messageArea} onScroll={onScroll} role="log" aria-label={'Message history'}>
           {hasOlder && <button type="button" className="secondary chat-history" disabled={loadingOlder} onClick={() => void loadOlder()}>{loadingOlder ? "Loading..." : "Load earlier messages"}</button>}
