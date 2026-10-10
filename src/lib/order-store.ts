@@ -11,7 +11,7 @@ import {formatVnd} from './money';
 import {notifyCustomer} from './notifications';
 import {allAdminEmails} from './admin-team';
 import {postPaymentMessage} from './chat-store';
-import {appointmentProblem, asapProblem, CRYPTO_METHODS, generateOrderCode, HOLD_MINUTES, isCrypto, NEEDS_ACTION, nextStatus, REPORT_DELAY_SECONDS, slotProblem, validTimeZone, VN_TIME_ZONE, type OrderStatus} from './order-rules';
+import {appointmentProblem, asapProblem, CRYPTO_METHODS, generateOrderCode, HOLD_MINUTES, isCrypto, NEEDS_ACTION, nextStatus, paymentKind, REPORT_DELAY_SECONDS, slotProblem, validTimeZone, VN_TIME_ZONE, type OrderStatus, type PaymentMethod, type PaymentSnapshot, type PaypalSnapshot, type WalletSnapshot} from './order-rules';
 import {getPaymentDb} from './payment-db';
 import {alertAppointment} from './payment-detection';
 import {reReserveItems, restockItems, StockError} from './order-stock';
@@ -19,6 +19,8 @@ import {uniqueLitoshi} from './ltc';
 import {formatLtc, parseLtc} from './ltc-format';
 import {getLtcRate} from './exchange-rates';
 import {usdtAmount} from './usdt';
+import {paypalAmount, paypalReady} from './paypal';
+import {getPaypalSettings} from './paypal-settings';
 import {grantPaidOrderSpin} from './lucky-wheel';
 import {refundReservedCoins, reserveAllCoins} from './coin-ledger';
 import {invalidateTradeStats} from './trade-stats';
@@ -28,14 +30,14 @@ export class OrderError extends Error {
 }
 
 type Tx = Prisma.TransactionClient;
-type BankSnapshot = {bankBin: string; bankName: string; accountNumber: string; accountHolder: string};
-type WalletSnapshot = {network: 'LTC' | 'TRC20'; address: string; label: string};
-export type PaymentMethod = 'bank' | 'ltc' | 'usdt';
+export type {PaymentMethod, PaymentSnapshot};
 /** When the customer can trade, chosen at checkout before paying. */
 export type Timing = {timeZone: string; slots: {start: string; end: string}[]; asap?: boolean};
-const cryptoMail = (order: {paymentMethod: string; cryptoAmount: string | null; bankSnapshot: unknown}, txid: string | null) =>
-  isCrypto(order.paymentMethod) ? {amount: order.cryptoAmount ?? '', coin: CRYPTO_METHODS[order.paymentMethod].coin, network: CRYPTO_METHODS[order.paymentMethod].network, address: (order.bankSnapshot as WalletSnapshot).address, txid} : null;
-export type PaymentSnapshot = BankSnapshot | WalletSnapshot;
+/** What the Admin email says the customer paid: a crypto transfer or a PayPal payment (null for a bank transfer). */
+const paymentMail = (order: {paymentMethod: string; cryptoAmount: string | null; bankSnapshot: unknown}, txid: string | null) =>
+  isCrypto(order.paymentMethod) ? {kind: 'crypto' as const, amount: order.cryptoAmount ?? '', coin: CRYPTO_METHODS[order.paymentMethod].coin, network: CRYPTO_METHODS[order.paymentMethod].network, address: (order.bankSnapshot as WalletSnapshot).address, txid}
+    : paymentKind(order) === 'paypal' ? {kind: 'paypal' as const, amount: order.cryptoAmount ?? '', paypalMe: (order.bankSnapshot as PaypalSnapshot).paypalMe, txid}
+    : null;
 const txOptions = {maxWait: 10000, timeout: 20000};
 const customerLink = (code: string) => `/en/orders/${code}`;
 
@@ -90,12 +92,14 @@ export async function createOrder(customer: {id: string}, lines: CartLine[], met
   // A Litecoin price at most a minute old is locked when the order is placed and holds for the 30-minute payment window.
   const ltcRate = method === 'ltc' ? await getLtcRate({fresh: true}) : null;
   if (method === 'ltc' && !ltcRate) throw new OrderError('Litecoin payments are temporarily unavailable. Choose bank transfer or try again shortly.', 503);
+  const paypal = method === 'paypal' ? await getPaypalSettings() : null;
+  if (method === 'paypal' && !paypalReady(paypal)) throw new OrderError('PayPal payments are not set up yet. Choose another payment method or message us in Chat.', 503);
 
   return getPaymentDb().$transaction(async tx => {
     const bank = method === 'bank' ? await tx.bankAccount.findFirst({where: {active: true}, orderBy: [{lastAssigned: 'asc'}, {id: 'asc'}]}) : null;
     const network = method === 'usdt' ? 'TRC20' : 'LTC';
-    const wallet = method !== 'bank' ? await tx.cryptoWallet.findFirst({where: {active: true, network}, orderBy: [{lastAssigned: 'asc'}, {id: 'asc'}]}) : null;
-    if (!bank && !wallet) throw new OrderError(method === 'usdt' ? 'USDT payments are not set up yet. Choose another payment method or message us in Chat.' : method === 'ltc' ? 'Litecoin payments are not set up yet. Choose bank transfer or contact the shop on Discord.' : 'Payments are not set up yet. Please contact the shop on Discord.', 503);
+    const wallet = isCrypto(method) ? await tx.cryptoWallet.findFirst({where: {active: true, network}, orderBy: [{lastAssigned: 'asc'}, {id: 'asc'}]}) : null;
+    if (!bank && !wallet && !paypal) throw new OrderError(method === 'usdt' ? 'USDT payments are not set up yet. Choose another payment method or message us in Chat.' : method === 'ltc' ? 'Litecoin payments are not set up yet. Choose bank transfer or contact the shop on Discord.' : 'Payments are not set up yet. Please contact the shop on Discord.', 503);
     // Reserve stock atomically; a concurrent order that took the last unit makes this fail cleanly.
     for (const [packageId, quantity] of quantities) {
       const reserved = await tx.package.updateMany({where: {id: packageId, active: true, stockOnHand: {gte: quantity}}, data: {stockOnHand: {decrement: quantity}}});
@@ -105,7 +109,12 @@ export async function createOrder(customer: {id: string}, lines: CartLine[], met
     while (await tx.order.findUnique({where: {code}, select: {id: true}})) code = generateOrderCode();
     let snapshot: PaymentSnapshot;
     let cryptoAmount: string | null = null;
-    if (bank) {
+    if (paypal) {
+      // PayPal gets no address to tell orders apart, so each open PayPal order gets its own cents.
+      const open = await tx.order.findMany({where: {paymentMethod: 'paypal', status: {in: ['awaiting_payment', 'payment_reported']}, cryptoAmount: {not: null}}, select: {cryptoAmount: true}});
+      cryptoAmount = paypalAmount(totalVnd, catalog.vndPerUsd, paypal, new Set(open.map(item => item.cryptoAmount!)));
+      snapshot = {paypalMe: paypal.username, email: paypal.email, instructions: paypal.instructions};
+    } else if (bank) {
       await tx.bankAccount.update({where: {id: bank.id}, data: {lastAssigned: new Date()}});
       snapshot = {bankBin: bank.bankBin, bankName: bank.bankName, accountNumber: bank.accountNumber, accountHolder: bank.accountHolder};
     } else {
@@ -118,18 +127,18 @@ export async function createOrder(customer: {id: string}, lines: CartLine[], met
         : formatLtc(uniqueLitoshi(totalVnd, ltcRate!.vndPerLtc, new Set(amounts.map(parseLtc).filter((value): value is bigint => value !== null))));
       snapshot = {network, address: wallet!.address, label: wallet!.label};
     }
-    const coin = isCrypto(method) ? CRYPTO_METHODS[method].coin : '';
+    const coin = isCrypto(method) ? CRYPTO_METHODS[method].coin : paypal ? 'USD' : '';
     const chosen = timing ? ` · ${timing.asap ? 'trade now, ' : ''}${timing.slots.length} time${timing.slots.length === 1 ? '' : 's'} chosen` : '';
     const order = await tx.order.create({data: {
       code, customerId: customer.id, status: 'awaiting_payment', totalVnd, vndPerUsd: catalog.vndPerUsd, bankSnapshot: snapshot,
       redeemWheelCoins,
-      paymentMethod: method, cryptoAmount, cryptoRateVnd: method === 'usdt' ? catalog.vndPerUsd : ltcRate?.vndPerLtc ?? null,
+      paymentMethod: method, cryptoAmount, cryptoRateVnd: method === 'usdt' || method === 'paypal' ? catalog.vndPerUsd : ltcRate?.vndPerLtc ?? null,
       holdExpiresAt: new Date(Date.now() + HOLD_MINUTES * 60_000),
       ...(timing ? {
         asap: Boolean(timing.asap), customerTimeZone: validTimeZone(timing.timeZone) ? timing.timeZone : VN_TIME_ZONE,
         slots: {create: timing.slots.map(slot => ({startsAt: new Date(slot.start), endsAt: new Date(slot.end)}))}
       } : {}),
-      items: {create: items}, events: {create: {actor: 'customer', action: 'created', note: `Order placed · ${formatVnd(totalVnd)}${cryptoAmount ? ` · pay ${cryptoAmount} ${coin}` : ''}${chosen}`}}
+      items: {create: items}, events: {create: {actor: 'customer', action: 'created', note: `Order placed · ${formatVnd(totalVnd)}${cryptoAmount ? ` · pay ${cryptoAmount} ${coin}${paypal ? ' via PayPal' : ''}` : ''}${chosen}`}}
     }, select: {id: true, code: true}});
     if (redeemWheelCoins) {
       const wheelCoins = await reserveAllCoins(tx, {customerId: customer.id, orderId: order.id, sourceKey: `order-redeem:${order.id}`, note: `Reserved for order ${code}`});
@@ -170,7 +179,7 @@ export async function customerOrders(customerId: string) {
   return getPaymentDb().order.findMany({where: {customerId}, orderBy: {createdAt: 'desc'}, take: 100, select: {code: true, status: true, totalVnd: true, vndPerUsd: true, createdAt: true, appointmentStart: true, appointmentEnd: true, customerTimeZone: true, items: {select: {title: true, quantity: true}}}});
 }
 
-export async function reportTransfer(customer: {id: string; name: string; email: string}, code: string, input: {timeZone?: string; slots?: {start: string; end: string}[]; txid?: string; asap?: boolean}, origin: string) {
+export async function reportTransfer(customer: {id: string; name: string; email: string}, code: string, input: {timeZone?: string; slots?: {start: string; end: string}[]; txid?: string; paypalTxid?: string; asap?: boolean}, origin: string) {
   const db = getPaymentDb();
   const order = await db.order.findFirst({where: {code, customerId: customer.id}, include: {items: true, slots: {orderBy: {startsAt: 'asc'}}}});
   if (!order) throw new OrderError('Order not found.', 404);
@@ -190,8 +199,10 @@ export async function reportTransfer(customer: {id: string; name: string; email:
   }
   const timeZone = given ? (input.timeZone && validTimeZone(input.timeZone) ? input.timeZone : VN_TIME_ZONE) : order.customerTimeZone ?? VN_TIME_ZONE;
   const slots = given ? given.map(slot => ({startsAt: new Date(slot.start), endsAt: new Date(slot.end)})).sort((a, b) => a.startsAt.getTime() - b.startsAt.getTime()) : order.slots;
+  // Crypto transaction IDs are stored in lowercase; PayPal's are capital letters and digits.
+  const txid = paymentKind(order) === 'paypal' ? input.paypalTxid : input.txid?.toLowerCase();
   await db.$transaction(async tx => {
-    const changed = await tx.order.updateMany({where: {id: order.id, status: 'awaiting_payment'}, data: {status: 'payment_reported', reportedAt: new Date(), customerTimeZone: timeZone, asap: given ? Boolean(input.asap) : order.asap, ...(input.txid ? {customerTxid: input.txid.toLowerCase()} : {})}});
+    const changed = await tx.order.updateMany({where: {id: order.id, status: 'awaiting_payment'}, data: {status: 'payment_reported', reportedAt: new Date(), customerTimeZone: timeZone, asap: given ? Boolean(input.asap) : order.asap, ...(txid ? {customerTxid: txid} : {})}});
     if (changed.count !== 1) throw new OrderError('This order is not waiting for payment.', 409);
     if (given) {
       await tx.orderSlot.deleteMany({where: {orderId: order.id}});
@@ -200,7 +211,7 @@ export async function reportTransfer(customer: {id: string; name: string; email:
     await tx.orderEvent.create({data: {orderId: order.id, actor: 'customer', action: 'payment_reported', note: given ? `${slots.length} available time${slots.length === 1 ? '' : 's'} proposed` : 'Payment reported'}});
   }, txOptions);
   await notifyCustomer({customerId: customer.id, orderId: order.id, title: `We are checking your payment · ${order.code}`, body: 'Thanks! We will confirm your transfer and book one of the times you chose. You will get an email and a message here.', link: customerLink(order.code)});
-  const mail = templates.adminPaymentReported({code: order.code, customerName: customer.name, customerEmail: customer.email, totalVnd: order.totalVnd, crypto: cryptoMail(order, input.txid ?? null), items: order.items.map(item => `${item.title} × ${item.quantity}`), slots: slots.map(slot => ({start: slot.startsAt, end: slot.endsAt})), orderUrl: `${origin}/en/admin/workspace/${order.id}`});
+  const mail = templates.adminPaymentReported({code: order.code, customerName: customer.name, customerEmail: customer.email, totalVnd: order.totalVnd, payment: paymentMail(order, txid ?? null), items: order.items.map(item => `${item.title} × ${item.quantity}`), slots: slots.map(slot => ({start: slot.startsAt, end: slot.endsAt})), orderUrl: `${origin}/en/admin/workspace/${order.id}`});
   await sendMail({to: await allAdminEmails(), ...mail, kind: 'admin.payment_reported', orderId: order.id});
 }
 
@@ -453,7 +464,7 @@ export async function resendEmail(adminEmail: string, id: string, kind: 'admin.p
   const order = await getPaymentDb().order.findUnique({where: {id}, include: {customer: {select: {name: true, email: true}}, items: true, slots: {orderBy: {startsAt: 'asc'}}}});
   if (!order) throw new OrderError('Order not found.', 404);
   if (kind === 'admin.payment_reported') {
-    const mail = templates.adminPaymentReported({code: order.code, customerName: order.customer.name, customerEmail: order.customer.email, totalVnd: order.totalVnd, crypto: cryptoMail(order, order.customerTxid), items: order.items.map(item => `${item.title} × ${item.quantity}`), slots: order.slots.map(slot => ({start: slot.startsAt, end: slot.endsAt})), orderUrl: `${origin}/en/admin/workspace/${order.id}`});
+    const mail = templates.adminPaymentReported({code: order.code, customerName: order.customer.name, customerEmail: order.customer.email, totalVnd: order.totalVnd, payment: paymentMail(order, order.customerTxid), items: order.items.map(item => `${item.title} × ${item.quantity}`), slots: order.slots.map(slot => ({start: slot.startsAt, end: slot.endsAt})), orderUrl: `${origin}/en/admin/workspace/${order.id}`});
     await sendMail({to: await allAdminEmails(), ...mail, kind, orderId: id});
   } else if (kind === 'customer.appointment') {
     if (!order.appointmentStart || !order.appointmentEnd) throw new OrderError('This order has no appointment yet.', 409);

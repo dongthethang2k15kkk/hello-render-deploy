@@ -16,6 +16,15 @@ export const MAX_SLOTS = 5;
 export const CRYPTO_METHODS = {ltc: {coin: 'LTC', network: 'Litecoin'}, usdt: {coin: 'USDT', network: 'TRON (TRC20)'}} as const;
 export type CryptoMethod = keyof typeof CRYPTO_METHODS;
 export const isCrypto = (method: string): method is CryptoMethod => Object.hasOwn(CRYPTO_METHODS, method);
+export const PAYMENT_METHODS = ['bank', 'ltc', 'usdt', 'paypal'] as const;
+export type PaymentMethod = typeof PAYMENT_METHODS[number];
+/** Which payment screen an order uses. Always decide by the method: the snapshot's shape no longer tells banks, wallets and PayPal apart. */
+export const paymentKind = (order: {paymentMethod: string}): 'bank' | 'crypto' | 'paypal' => order.paymentMethod === 'paypal' ? 'paypal' : isCrypto(order.paymentMethod) ? 'crypto' : 'bank';
+/** Where the customer pays, copied onto the order when it is placed (`Order.bankSnapshot`). */
+export type BankSnapshot = {bankBin: string; bankName: string; accountNumber: string; accountHolder: string};
+export type WalletSnapshot = {network: 'LTC' | 'TRC20'; address: string; label: string};
+export type PaypalSnapshot = {paypalMe: string; email: string | null; instructions: string};
+export type PaymentSnapshot = BankSnapshot | WalletSnapshot | PaypalSnapshot;
 /** Block explorer page for a crypto transaction. */
 export const explorerTx = (method: string, txid: string) => method === 'usdt' ? `https://tronscan.org/#/transaction/${txid}` : `https://litecoinspace.org/tx/${txid}`;
 export const explorerAddress = (method: string, address: string) => method === 'usdt' ? `https://tronscan.org/#/address/${address}` : `https://litecoinspace.org/address/${address}`;
@@ -82,6 +91,8 @@ export const reportSchema = z.object({
   slots: slotList.optional(),
   // Optional crypto transaction id (Litecoin or TRON) so the shop can find the payment quickly.
   txid: z.string().trim().regex(/^[0-9a-fA-F]{64}$/, 'The transaction ID is 64 letters and digits (0-9, a-f).').optional().or(z.literal('').transform(() => undefined)),
+  // Optional PayPal transaction ID (17 capital letters and digits), kept in capitals.
+  paypalTxid: z.string().trim().toUpperCase().regex(/^[A-Z0-9]{17}$/, 'The PayPal transaction ID is 17 letters and digits.').optional().or(z.literal('').transform(() => undefined)),
   // "I am free right now": the shop can start as soon as an Admin is available.
   asap: z.boolean().optional()
 }).strict();

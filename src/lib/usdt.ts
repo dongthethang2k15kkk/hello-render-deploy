@@ -1,6 +1,7 @@
 // USDT on TRON (TRC20): address checks, per-order amounts and matching transfers (no Prisma; unit-tested).
 import {createHash} from 'node:crypto';
 import {base58Decode} from './ltc';
+import {formatCents, uniqueCents} from './unique-cents';
 
 /** The official Tether USD contract on TRON. Transfers of any other token are ignored. */
 export const USDT_TRC20_CONTRACT = 'TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t';
@@ -17,18 +18,14 @@ export function validTronAddress(value: string) {
   return checksum.every((byte, index) => byte === bytes[21 + index]);
 }
 
-const cents = (amount: string) => Math.round(Number(amount) * 100);
-const formatCents = (value: number) => `${Math.floor(value / 100)}.${String(value % 100).padStart(2, '0')}`;
-
 /**
  * USDT to send for an order: the VND total at the locked USD rate, rounded up to the cent, plus the smallest extra
  * cent amount no other open order on the same address uses (crypto transfers carry no note to tell orders apart).
  */
 export function usdtAmount(totalVnd: number, vndPerUsd: number, taken: Set<string>) {
-  const base = Math.max(1, Math.ceil((totalVnd * 100) / vndPerUsd));
-  const used = new Set([...taken].map(cents));
-  for (let extra = 0; extra < 100; extra++) if (!used.has(base + extra)) return formatCents(base + extra);
-  throw new Error('Too many open USDT orders on this address');
+  const cents = uniqueCents(Math.max(1, Math.ceil((totalVnd * 100) / vndPerUsd)), taken);
+  if (cents === null) throw new Error('Too many open USDT orders on this address');
+  return formatCents(cents);
 }
 
 export function usdtToMicro(amount: string) {

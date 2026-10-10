@@ -268,9 +268,13 @@ model Order {
   wheelCoinsReleasedAt DateTime?
   vndPerUsd            Int
   paymentMethod        String         @default("bank")
+  // Where the customer pays, copied at checkout. Its shape depends on paymentMethod (bank | ltc | usdt | paypal).
   bankSnapshot         Json
+  // The exact amount to send: LTC, USDT or PayPal USD (each open order has its own cents).
   cryptoAmount         String?
+  // VND per coin (LTC) or per USD (USDT, PayPal) locked for this order.
   cryptoRateVnd        Int?
+  // Transaction ID the customer gave: 64-char hex for crypto, 17 capitals for PayPal.
   customerTxid         String?
   asap                 Boolean        @default(false)
   paymentSource        String?

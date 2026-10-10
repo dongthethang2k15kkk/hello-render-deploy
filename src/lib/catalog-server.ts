@@ -2,6 +2,8 @@ import 'server-only';
 import {getPaymentDb} from './payment-db';
 import {deliveryFieldSchema, fallbackProducts, fallbackVndPerUsd, type CatalogProduct, type CatalogSource} from './catalog';
 import {getLtcRate, getVndPerUsd} from './exchange-rates';
+import {paypalReady} from './paypal';
+import {getPaypalSettings} from './paypal-settings';
 
 // vndPerLtc is set only while Litecoin checkout is on (an active wallet), so the store can show an LTC estimate.
 export type PublicCatalog = {products: CatalogProduct[]; source: CatalogSource; vndPerUsd: number; vndPerLtc: number | null};
@@ -23,6 +25,11 @@ async function storeLtcRate() {
 export async function usdtCheckout() {
   if (!process.env.DATABASE_URL) return false;
   try { return (await getPaymentDb().cryptoWallet.count({where: {active: true, network: 'TRC20'}})) > 0; } catch { return false; }
+}
+
+/** Whether checkout offers PayPal (switched on with a valid PayPal.me name), for the store's payment copy. */
+export async function paypalCheckout() {
+  try { return paypalReady(await getPaypalSettings()); } catch { return false; }
 }
 
 async function readDatabaseCatalog(): Promise<CatalogProduct[]> {

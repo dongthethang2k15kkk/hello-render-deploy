@@ -25,19 +25,28 @@ const plain = (title: string, lines: string[], links: {label: string; url: strin
 
 type Slot = {start: Date | string; end: Date | string};
 
-export function adminPaymentReported(input: {code: string; customerName: string; customerEmail: string; totalVnd: number; crypto?: {amount: string; coin: string; network: string; address: string; txid: string | null} | null; items: string[]; slots: Slot[]; orderUrl: string}): EmailContent {
-  const title = `Đơn ${input.code} đã báo ${input.crypto ? `gửi ${input.crypto.coin}` : 'chuyển khoản'}`;
+export type ReportedPayment = {kind: 'crypto'; amount: string; coin: string; network: string; address: string; txid: string | null} | {kind: 'paypal'; amount: string; paypalMe: string; txid: string | null};
+
+export function adminPaymentReported(input: {code: string; customerName: string; customerEmail: string; totalVnd: number; payment?: ReportedPayment | null; items: string[]; slots: Slot[]; orderUrl: string}): EmailContent {
+  const payment = input.payment;
+  const customer = `Khách <strong>${escapeHtml(input.customerName)}</strong> (${escapeHtml(input.customerEmail)})`;
+  const title = `Đơn ${input.code} đã báo ${payment?.kind === 'crypto' ? `gửi ${payment.coin}` : payment ? 'gửi PayPal' : 'chuyển khoản'}`;
   const lines = [
-    input.crypto
-      ? `Khách <strong>${escapeHtml(input.customerName)}</strong> (${escapeHtml(input.customerEmail)}) báo đã gửi <strong>${escapeHtml(input.crypto.amount)} ${input.crypto.coin}</strong> (mạng ${escapeHtml(input.crypto.network)}, ≈ ${formatVnd(input.totalVnd)}) tới ví <strong>${escapeHtml(input.crypto.address)}</strong>.${input.crypto.txid ? ` TXID: ${escapeHtml(input.crypto.txid)}` : ''}`
-      : `Khách <strong>${escapeHtml(input.customerName)}</strong> (${escapeHtml(input.customerEmail)}) báo đã chuyển <strong>${formatVnd(input.totalVnd)}</strong> với nội dung <strong>${input.code}</strong>.`,
+    payment?.kind === 'crypto'
+      ? `${customer} báo đã gửi <strong>${escapeHtml(payment.amount)} ${payment.coin}</strong> (mạng ${escapeHtml(payment.network)}, ≈ ${formatVnd(input.totalVnd)}) tới ví <strong>${escapeHtml(payment.address)}</strong>.${payment.txid ? ` TXID: ${escapeHtml(payment.txid)}` : ''}`
+      : payment?.kind === 'paypal'
+        ? `${customer} báo đã gửi <strong>${escapeHtml(payment.amount)} USD</strong> qua PayPal (≈ ${formatVnd(input.totalVnd)}) tới <strong>paypal.me/${escapeHtml(payment.paypalMe)}</strong>, ghi chú <strong>${input.code}</strong>.${payment.txid ? ` Mã giao dịch PayPal: ${escapeHtml(payment.txid)}` : ''}`
+        : `${customer} báo đã chuyển <strong>${formatVnd(input.totalVnd)}</strong> với nội dung <strong>${input.code}</strong>.`,
     `Sản phẩm: ${input.items.map(escapeHtml).join('; ')}`,
     `Khung giờ khách rảnh (giờ Việt Nam):<br>${input.slots.map(slot => `• ${escapeHtml(formatRange(slot.start, slot.end, VN_TIME_ZONE))}`).join('<br>')}`,
-    input.crypto ? 'Hãy kiểm tra giao dịch trên blockchain (link trong trang đơn), rồi xác nhận và chọn giờ hẹn.' : 'Hãy đối chiếu sao kê ngân hàng, rồi xác nhận tiền và chọn giờ hẹn trong trang đơn.'
+    payment?.kind === 'crypto' ? 'Hãy kiểm tra giao dịch trên blockchain (link trong trang đơn), rồi xác nhận và chọn giờ hẹn.'
+      : payment?.kind === 'paypal' ? `Hãy mở PayPal, kiểm tra đã nhận đúng <strong>${escapeHtml(payment.amount)} USD</strong> (ghi chú ${input.code}), rồi xác nhận tiền và chọn giờ hẹn trong trang đơn.`
+      : 'Hãy đối chiếu sao kê ngân hàng, rồi xác nhận tiền và chọn giờ hẹn trong trang đơn.'
   ];
   lines.push('Admin nào bấm <strong>Nhận đơn</strong> trong Workspace trước sẽ phụ trách khách này (chat, xác nhận tiền, giao hàng).');
   const link = {label: 'Nhận đơn trong Workspace', url: input.orderUrl};
-  return {subject: `[Jewish Horse] ${title} ${input.crypto ? `${input.crypto.amount} ${input.crypto.coin}` : formatVnd(input.totalVnd)}`, html: layout(title, lines, link), text: plain(title, lines, [link])};
+  const amount = payment?.kind === 'crypto' ? `${payment.amount} ${payment.coin}` : payment ? `${payment.amount} USD` : formatVnd(input.totalVnd);
+  return {subject: `[Jewish Horse] ${title} ${amount}`, html: layout(title, lines, link), text: plain(title, lines, [link])};
 }
 
 export function adminAppointmentAssigned(input: {code: string; customerName: string; start: Date; end: Date; orderUrl: string; calendarUrl: string}): EmailContent {

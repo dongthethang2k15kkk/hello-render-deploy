@@ -8,6 +8,8 @@ import {getLtcRate, getMarketRates, getRateSettings, getUsdRate, saveLtcRateSett
 import {validLitecoinAddress} from '@/lib/ltc';
 import {validTronAddress} from '@/lib/usdt';
 import {litecoinUri} from '@/lib/ltc-format';
+import {cleanPaypalUsername, PAYPAL_USERNAME, paypalMeLink} from '@/lib/paypal';
+import {getPaypalSettings, savePaypalSettings} from '@/lib/paypal-settings';
 import {vietQrPayload} from '@/lib/vietqr';
 import {bankName, vnBanks} from '@/lib/vn-banks';
 
@@ -17,14 +19,14 @@ const accountSelect = {id: true, bankBin: true, bankName: true, accountNumber: t
 
 async function state() {
   const db = getPaymentDb();
-  const [accounts, wallets, rateSettings, market] = await Promise.all([
+  const [accounts, wallets, rateSettings, market, paypal] = await Promise.all([
     db.bankAccount.findMany({orderBy: {createdAt: 'asc'}, select: accountSelect}),
     db.cryptoWallet.findMany({orderBy: {createdAt: 'asc'}, select: {id: true, network: true, address: true, label: true, active: true}}),
-    getRateSettings(), getMarketRates()
+    getRateSettings(), getMarketRates(), getPaypalSettings()
   ]);
   // The rates in use come after the market lookup, so they reuse its fresh cache.
   const [usdRate, ltcRate] = await Promise.all([getUsdRate(), getLtcRate()]);
-  return {accounts, banks: vnBanks, wallets, rates: {...rateSettings, usdRate, ltcRate, market}};
+  return {accounts, banks: vnBanks, wallets, paypal, rates: {...rateSettings, usdRate, ltcRate, market}};
 }
 
 export async function GET() {
@@ -44,6 +46,8 @@ const action = z.discriminatedUnion('action', [
   z.object({action: z.literal('save-wallet'), id: z.string().max(40).optional(), network: z.enum(['LTC', 'TRC20']).default('LTC'), address: z.string().trim().max(100), label: z.string().trim().max(60).default(''), active: z.boolean()}).strict(),
   z.object({action: z.literal('delete-wallet'), id: z.string().max(40)}).strict(),
   z.object({action: z.literal('test-wallet-qr'), id: z.string().max(40)}).strict(),
+  z.object({action: z.literal('save-paypal'), enabled: z.boolean(), username: z.string().max(200), email: z.string().trim().max(120), feePercent: z.number().min(0, 'The PayPal fee cannot be negative.').max(15, 'The PayPal fee is at most 15%.'), feeFixedCents: z.number().int().min(0).max(500, 'The fixed PayPal fee is at most $5.00.'), instructions: z.string().trim().max(500, 'Instructions are at most 500 characters.')}).strict(),
+  z.object({action: z.literal('test-paypal-qr'), username: z.string().max(200)}).strict(),
   z.object({action: z.literal('ltc-rate'), mode: z.enum(['auto', 'fixed']), vndPerLtc: z.number().int().min(1000).max(1_000_000_000).nullable()}).strict()
 ]);
 
@@ -86,6 +90,19 @@ export async function POST(request: Request) {
       if (!wallet) return json({error: 'Wallet not found.'}, 404);
       // TRON wallets read a plain address; Litecoin wallets read a litecoin: link with a test amount.
       return json({qrSvg: await QRCode.toString(wallet.network === 'TRC20' ? wallet.address : litecoinUri(wallet.address, '0.00100000', 'TEST'), {type: 'svg', margin: 1, errorCorrectionLevel: 'M'})});
+    } else if (input.action === 'save-paypal') {
+      const username = cleanPaypalUsername(input.username);
+      if (username && !PAYPAL_USERNAME.test(username)) return json({error: 'The PayPal.me name is 1–20 letters and digits (the part after paypal.me/).'}, 400);
+      if (input.enabled && !username) return json({error: 'Enter your PayPal.me name before turning PayPal on.'}, 400);
+      if (input.email && !z.string().email().safeParse(input.email).success) return json({error: 'This PayPal email does not look right.'}, 400);
+      await savePaypalSettings({enabled: input.enabled, username, email: input.email || null, feePercent: input.feePercent, feeFixedCents: input.feeFixedCents, instructions: input.instructions}, admin.email);
+      await recordAudit({actorEmail: admin.email, action: 'settings.paypal', summary: `${input.enabled ? 'Turned on' : 'Turned off'} PayPal (paypal.me/${username || '—'}, fee ${input.feePercent}% + $${(input.feeFixedCents / 100).toFixed(2)})`, entityType: 'settings'});
+    } else if (input.action === 'test-paypal-qr') {
+      // Tests the name typed in the form, so a mistake is caught before it is saved.
+      const username = cleanPaypalUsername(input.username);
+      if (!PAYPAL_USERNAME.test(username)) return json({error: 'Enter a valid PayPal.me name first (letters and digits only).'}, 400);
+      const link = paypalMeLink(username, '1.00');
+      return json({link, qrSvg: await QRCode.toString(link, {type: 'svg', margin: 1, errorCorrectionLevel: 'M'})});
     } else if (input.action === 'ltc-rate') {
       if (input.mode === 'fixed' && !input.vndPerLtc) return json({error: 'Enter the fixed Litecoin price in VND.'}, 400);
       await saveLtcRateSettings({mode: input.mode, vndPerLtc: input.vndPerLtc}, admin.email);

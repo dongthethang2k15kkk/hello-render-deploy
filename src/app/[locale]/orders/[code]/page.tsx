@@ -8,16 +8,17 @@ import {useCatalog} from '@/components/catalog-provider';
 import {createCartSchema} from '@/lib/cart';
 import {googleCalendarLink} from '@/lib/calendar';
 import {formatUsdFromVnd, formatVnd} from '@/lib/money';
-import {CRYPTO_METHODS, explorerTx, formatRange, isCrypto, REPORT_DELAY_SECONDS, statusLabels, statusTone, type OrderStatus} from '@/lib/order-rules';
+import {CRYPTO_METHODS, explorerTx, formatRange, isCrypto, paymentKind, REPORT_DELAY_SECONDS, statusLabels, statusTone, type BankSnapshot, type OrderStatus, type PaymentMethod, type PaymentSnapshot, type PaypalSnapshot, type WalletSnapshot} from '@/lib/order-rules';
+import {paypalMeLink} from '@/lib/paypal';
 import {LoadingRows} from '@/components/loading-state';
 import {formatCoins} from '@/lib/coin-format';
 import {invalidateJson} from '@/lib/client-data-cache';
 
 type Order = {
   id: string; code: string; status: OrderStatus; totalVnd: number; vndPerUsd: number; holdExpiresAt: string; createdAt: string;
-  paymentMethod: 'bank' | 'ltc' | 'usdt'; cryptoAmount: string | null; cryptoRateVnd: number | null; customerTxid: string | null;
+  paymentMethod: PaymentMethod; cryptoAmount: string | null; cryptoRateVnd: number | null; customerTxid: string | null;
   asap: boolean; paymentSource: string | null; paymentSeenAt: string | null; txConfirmations: number | null;
-  bankSnapshot: {bankName: string; accountNumber: string; accountHolder: string} | {network: 'LTC' | 'TRC20'; address: string; label: string};
+  bankSnapshot: PaymentSnapshot;
   appointmentStart: string | null; appointmentEnd: string | null; deliveryNote: string | null; cancelReason: string | null;
   redeemWheelCoins: boolean; wheelCoins: string; wheelCoinsReleasedAt: string | null;
   items: {title: string; sku: string; unitPriceVnd: number; quantity: number; delivery: Record<string, string>}[];
@@ -81,6 +82,10 @@ export default function OrderPage({params}: {params: Promise<{locale: string; co
   const secondsLeft = Math.max(0, Math.floor((Date.parse(order.holdExpiresAt) - (now + offset)) / 1000));
   const reportIn = Math.max(0, Math.ceil((Date.parse(order.createdAt) + REPORT_DELAY_SECONDS * 1000 - (now + offset)) / 1000));
   const crypto = isCrypto(order.paymentMethod) ? CRYPTO_METHODS[order.paymentMethod] : null;
+  const kind = paymentKind(order);
+  const paypalPay = kind === 'paypal';
+  // Which snapshot applies follows from the payment method, not from the snapshot's shape.
+  const wallet = order.bankSnapshot as WalletSnapshot; const paypal = order.bankSnapshot as PaypalSnapshot; const bank = order.bankSnapshot as BankSnapshot;
   // Returning customers reorder in one click: the same packages (matched by SKU at today's price) and delivery details.
   function buyAgain() {
     if (!order) return;
@@ -98,9 +103,10 @@ export default function OrderPage({params}: {params: Promise<{locale: string; co
   async function reportPaid() {
     if (!order) return;
     if (!order.slots.length) { setDialog('report'); return; }
-    if (txid.trim() && !/^[0-9a-fA-F]{64}$/.test(txid.trim())) { setError('The transaction ID is 64 characters (0-9, a-f). Leave it empty if you do not have it.'); return; }
+    if (txid.trim() && !paypalPay && !/^[0-9a-fA-F]{64}$/.test(txid.trim())) { setError('The transaction ID is 64 characters (0-9, a-f). Leave it empty if you do not have it.'); return; }
+    if (txid.trim() && paypalPay && !/^[0-9a-zA-Z]{17}$/.test(txid.trim())) { setError('The PayPal transaction ID is 17 letters and digits. Leave it empty if you do not have it.'); return; }
     setReporting(true); setError('');
-    const failure = await act({action: 'report', ...(txid.trim() ? {txid: txid.trim()} : {})});
+    const failure = await act({action: 'report', ...(txid.trim() ? {[paypalPay ? 'paypalTxid' : 'txid']: txid.trim()} : {})});
     setReporting(false);
     if (failure) setError(failure); else setNotice('Thanks! We are confirming your payment and will message you in Chat.');
   }
@@ -113,44 +119,55 @@ export default function OrderPage({params}: {params: Promise<{locale: string; co
     <div className="order-layout">
       <div>
         {order.status === 'awaiting_payment' && <section className="card pay-card">
-          <span className="eyebrow">STEP 1 / {usdt ? 'PAY WITH USDT (TRC20)' : crypto ? 'PAY WITH LITECOIN' : 'PAY BY BANK TRANSFER'}</span>
+          <span className="eyebrow">STEP 1 / {usdt ? 'PAY WITH USDT (TRC20)' : crypto ? 'PAY WITH LITECOIN' : paypalPay ? 'PAY WITH PAYPAL' : 'PAY BY BANK TRANSFER'}</span>
           <h2>{secondsLeft > 0 ? <>Price locked · pay within <span className="countdown">{Math.floor(secondsLeft / 60)}:{String(secondsLeft % 60).padStart(2, '0')}</span></> : 'Payment window ended'}</h2>
           <div className="pay-grid">
-            {'address' in order.bankSnapshot ? <>
+            {kind === 'crypto' ? <>
               {qr && <figure className="vietqr"><img src={`data:image/svg+xml;utf8,${encodeURIComponent(qr)}`} alt={usdt ? `TRON address QR code for ${order.cryptoAmount} USDT` : `Litecoin QR code: ${order.cryptoAmount} LTC`}/><figcaption>{usdt ? 'Scan the address, then type the amount' : 'Scan with your Litecoin wallet'}</figcaption></figure>}
               <div className="pay-details">
                 <Copy label={`Amount (${crypto?.coin ?? 'LTC'})`} value={order.cryptoAmount ?? ''}/>
-                <Copy label={usdt ? 'TRON address (TRC20)' : 'Litecoin address'} value={order.bankSnapshot.address}/>
+                <Copy label={usdt ? 'TRON address (TRC20)' : 'Litecoin address'} value={wallet.address}/>
                 {usdt && <div className="pay-row"><span>Network</span><strong>TRON · TRC20</strong></div>}
                 {paymentUri && !usdt && <a className="button full-width" href={paymentUri}>Open in wallet app</a>}
                 {usdt
                   ? <p className="network-warning"><strong>Send USDT on the TRON (TRC20) network only.</strong> Make sure exactly <strong>{order.cryptoAmount} USDT</strong> arrives: the cents identify your order, so do not round, and add your exchange’s withdrawal fee. USDT sent on another network (ERC20, BEP20…) cannot be recovered.</p>
                   : <p className="field-caption">Send <strong>exactly {order.cryptoAmount} LTC</strong> (≈ {formatVnd(order.totalVnd)}). The last digits identify your order, so do not round the amount. Send on the Litecoin network only.</p>}
               </div>
-            </> : <>
-              {qr && <figure className="vietqr"><img src={`data:image/svg+xml;utf8,${encodeURIComponent(qr)}`} alt={`VietQR code: ${formatVnd(order.totalVnd)} to ${order.bankSnapshot.bankName}`}/><figcaption>Scan with your banking app</figcaption></figure>}
+            </> : paypalPay ? <>
+              {qr && <figure className="vietqr"><img src={`data:image/svg+xml;utf8,${encodeURIComponent(qr)}`} alt={`PayPal QR code: ${order.cryptoAmount} USD to paypal.me/${paypal.paypalMe}`}/><figcaption>Scan with your phone camera to open PayPal</figcaption></figure>}
               <div className="pay-details">
-                <Copy label="Bank" value={order.bankSnapshot.bankName}/>
-                <Copy label="Account number" value={order.bankSnapshot.accountNumber}/>
-                <Copy label="Account holder" value={order.bankSnapshot.accountHolder}/>
+                <Copy label="Amount (USD)" value={order.cryptoAmount ?? ''}/>
+                <Copy label="PayPal.me" value={`paypal.me/${paypal.paypalMe}`}/>
+                {paypal.email && <Copy label="PayPal email" value={paypal.email}/>}
+                <Copy label="Order code (note)" value={order.code}/>
+                <a className="button full-width" href={paymentUri ?? paypalMeLink(paypal.paypalMe, order.cryptoAmount ?? '')} target="_blank" rel="noreferrer">Open PayPal</a>
+                <p className="network-warning"><strong>Send exactly {order.cryptoAmount} USD</strong> and write <strong>{order.code}</strong> in the note: the cents identify your order, so do not round the amount.</p>
+                {paypal.instructions && <p className="field-caption paypal-instructions">{paypal.instructions}</p>}
+              </div>
+            </> : <>
+              {qr && <figure className="vietqr"><img src={`data:image/svg+xml;utf8,${encodeURIComponent(qr)}`} alt={`VietQR code: ${formatVnd(order.totalVnd)} to ${bank.bankName}`}/><figcaption>Scan with your banking app</figcaption></figure>}
+              <div className="pay-details">
+                <Copy label="Bank" value={bank.bankName}/>
+                <Copy label="Account number" value={bank.accountNumber}/>
+                <Copy label="Account holder" value={bank.accountHolder}/>
                 <Copy label="Amount (VND)" value={String(order.totalVnd)}/>
                 <Copy label="Transfer content" value={order.code}/>
                 <p className="field-caption">Transfer exactly <strong>{formatVnd(order.totalVnd)}</strong> with the content <strong>{order.code}</strong> so we can match your payment.</p>
               </div>
             </>}
           </div>
-          {crypto && order.slots.length > 0 && secondsLeft > 0 && <label className="txid-field">Transaction ID (optional)<input value={txid} onChange={event => setTxid(event.target.value)} placeholder="64-character TXID from your wallet" autoComplete="off" spellCheck={false}/><small>Not needed: we detect the payment by its exact amount. It only helps us find it faster.</small></label>}
-          <div className="pay-actions"><button type="button" disabled={secondsLeft <= 0 || reportIn > 0 || reporting} onClick={() => void reportPaid()}>{reporting ? 'Sending…' : crypto ? `I’ve sent the ${crypto.coin} →` : 'I’ve transferred →'}{reportIn > 0 && secondsLeft > 0 ? ` (${reportIn}s)` : ''}</button><button type="button" className="secondary" onClick={() => { if (window.confirm('Cancel this order?')) void act({action: 'cancel'}).then(failure => failure ? setError(failure) : setNotice('Order cancelled.')); }}>Cancel order</button></div>
+          {(crypto || paypalPay) && order.slots.length > 0 && secondsLeft > 0 && <label className="txid-field">{paypalPay ? 'PayPal transaction ID (optional)' : 'Transaction ID (optional)'}<input value={txid} onChange={event => setTxid(event.target.value)} placeholder={paypalPay ? '17-character ID from your PayPal receipt' : '64-character TXID from your wallet'} autoComplete="off" spellCheck={false}/><small>{paypalPay ? 'Not needed: we match your payment by its exact amount and note. It only helps us find it faster.' : 'Not needed: we detect the payment by its exact amount. It only helps us find it faster.'}</small></label>}
+          <div className="pay-actions"><button type="button" disabled={secondsLeft <= 0 || reportIn > 0 || reporting} onClick={() => void reportPaid()}>{reporting ? 'Sending…' : crypto ? `I’ve sent the ${crypto.coin} →` : paypalPay ? 'I’ve paid with PayPal →' : 'I’ve transferred →'}{reportIn > 0 && secondsLeft > 0 ? ` (${reportIn}s)` : ''}</button><button type="button" className="secondary" onClick={() => { if (window.confirm('Cancel this order?')) void act({action: 'cancel'}).then(failure => failure ? setError(failure) : setNotice('Order cancelled.')); }}>Cancel order</button></div>
           {order.paymentSeenAt && <p className="payment-seen" role="status">Payment seen on the {crypto?.network ?? 'Litecoin'} network.{usdt ? ' Confirming it now' : ` Waiting for confirmations (${Math.min(order.txConfirmations ?? 0, 2)}/2)`}; this page updates by itself.</p>}
           {autoDetect && !order.paymentSeenAt && <p className="field-caption">This page updates by itself when your payment arrives, usually within a minute or two. You can also tap the button after paying.</p>}
-          {reportIn > 0 && secondsLeft > 0 && <p className="field-caption">First {crypto ? `send the ${crypto.coin} from your wallet` : 'make the transfer in your banking app'}. The button unlocks {REPORT_DELAY_SECONDS} seconds after you order.</p>}
+          {reportIn > 0 && secondsLeft > 0 && <p className="field-caption">First {crypto ? `send the ${crypto.coin} from your wallet` : paypalPay ? 'send the payment in PayPal' : 'make the transfer in your banking app'}. The button unlocks {REPORT_DELAY_SECONDS} seconds after you order.</p>}
           {order.slots.length > 0 && <div className="pay-times"><strong>{order.asap ? 'Trade now, right after your payment is confirmed' : 'Your times'}</strong>{order.asap && <small>Backup times if the trader is busy:</small>}<ul className="slot-list">{order.slots.filter(slot => !order.asap || Date.parse(slot.startsAt) > Date.parse(order.createdAt) + 5 * 60_000).map(slot => <li key={slot.startsAt}>{formatRange(slot.startsAt, slot.endsAt, timeZone)}</li>)}</ul></div>}
           {secondsLeft <= 0 && <p className="field-caption">If you already transferred, message us in <Link href={`/${locale}/workspace`}>Chat</Link> with the order code.</p>}
         </section>}
 
         {(order.status === 'payment_reported' || order.status === 'paid') && <section className="card">
           <span className="eyebrow">{order.status === 'paid' ? 'PAYMENT CONFIRMED' : 'CHECKING YOUR PAYMENT'}</span>
-          {order.customerTxid && <p className="field-caption">Your transaction: <a href={explorerTx(order.paymentMethod, order.customerTxid)} target="_blank" rel="noreferrer">{order.customerTxid.slice(0, 12)}…</a></p>}
+          {order.customerTxid && <p className="field-caption">{paypalPay ? `Your PayPal transaction: ${order.customerTxid}` : <>Your transaction: <a href={explorerTx(order.paymentMethod, order.customerTxid)} target="_blank" rel="noreferrer">{order.customerTxid.slice(0, 12)}…</a></>}</p>}
           <h2>{order.status === 'paid' ? (order.slots.length || order.asap ? 'We are booking your appointment' : 'Payment received! When are you free?') : 'Thanks! We are confirming your transfer'}</h2>
           {order.paymentSource && order.status === 'paid' && <p className="payment-seen">Payment confirmed automatically on the {crypto?.network ?? 'Litecoin'} network.</p>}
           {order.status === 'payment_reported' && order.paymentSeenAt && <p className="payment-seen" role="status">Payment seen on the {crypto?.network ?? 'Litecoin'} network{usdt ? '' : ` (${Math.min(order.txConfirmations ?? 0, 2)}/2 confirmations)`}. It is confirmed automatically.</p>}
@@ -178,7 +195,7 @@ export default function OrderPage({params}: {params: Promise<{locale: string; co
         <h2>Items</h2>
         {order.items.map((item, index) => <div className="summary-item" key={index}><div className="summary-line"><span>{item.title} × {item.quantity}</span><span className="summary-amount"><strong>{formatUsdFromVnd(item.unitPriceVnd * item.quantity, order.vndPerUsd)}</strong><small>{formatVnd(item.unitPriceVnd * item.quantity)}</small></span></div>{Object.entries(item.delivery).filter(([, value]) => value).map(([key, value]) => <small key={key}>{key}: {value}</small>)}</div>)}
         {order.redeemWheelCoins && <div className="summary-wheel-coins"><span>Wheel coins with this delivery</span><strong>{BigInt(order.wheelCoins) > BigInt(0) ? `+ ${formatCoins(order.wheelCoins)}` : order.wheelCoinsReleasedAt ? 'Returned to balance' : 'No balance reserved'}</strong></div>}
-        <div className="summary-total"><small>Total</small><p className="pay-amount">{formatUsdFromVnd(order.totalVnd, order.vndPerUsd)}</p><small className="pay-secondary">{formatVnd(order.totalVnd)}{order.cryptoAmount ? ` · paid as ${order.cryptoAmount} ${crypto?.coin ?? 'LTC'}` : ''}</small></div>
+        <div className="summary-total"><small>Total</small><p className="pay-amount">{formatUsdFromVnd(order.totalVnd, order.vndPerUsd)}</p><small className="pay-secondary">{formatVnd(order.totalVnd)}{order.cryptoAmount ? ` · paid as ${order.cryptoAmount} ${paypalPay ? 'USD via PayPal' : crypto?.coin ?? 'LTC'}` : ''}</small></div>
         <p className="field-caption">Placed {new Date(order.createdAt).toLocaleString('en-GB')}</p>
         {order.status !== 'awaiting_payment' && <button type="button" className="full-width buy-again" onClick={buyAgain}>Buy again <span aria-hidden="true">→</span></button>}
       </aside>

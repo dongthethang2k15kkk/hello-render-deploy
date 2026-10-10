@@ -4,6 +4,7 @@ import Link from 'next/link';
 import {useLocale} from 'next-intl';
 import {formatUsdFromVnd} from '@/lib/money';
 import {LoadingRows} from '@/components/loading-state';
+import type {PaypalSettings} from '@/lib/paypal';
 
 type Account = {id: string; bankBin: string; bankName: string; accountNumber: string; accountHolder: string; active: boolean};
 type Wallet = {id: string; network: string; address: string; label: string; active: boolean};
@@ -13,7 +14,9 @@ type Mode = 'auto' | 'fixed';
 type UsdRate = {vndPerUsd: number; source: string; updatedAt: string | null};
 type LtcRate = {vndPerLtc: number; source: string; updatedAt: string | null};
 type Rates = {usdMode: Mode; usdFixed: number; ltcMode: Mode; ltcFixed: number | null; usdRate: UsdRate; ltcRate: LtcRate | null; market: {usd: UsdRate | null; ltc: LtcRate | null}};
-type State = {accounts: Account[]; banks: readonly {bin: string; name: string}[]; wallets: Wallet[]; rates: Rates};
+type State = {accounts: Account[]; banks: readonly {bin: string; name: string}[]; wallets: Wallet[]; paypal: PaypalSettings; rates: Rates};
+type PaypalDraft = {enabled: boolean; username: string; email: string; feePercent: string; feeFixed: string; instructions: string};
+const paypalDraft = (saved: PaypalSettings): PaypalDraft => ({enabled: saved.enabled, username: saved.username, email: saved.email ?? '', feePercent: String(saved.feePercent), feeFixed: (saved.feeFixedCents / 100).toFixed(2), instructions: saved.instructions});
 
 const providers: Record<string, string> = {'currency-api': 'currency-api (daily market rate)', coinbase: 'Coinbase', coingecko: 'CoinGecko', kraken: 'Kraken', binance: 'Binance'};
 /** "live from CoinGecko, updated 16:42" / "fixed by an Admin" / "fixed rate, because no market rate could be fetched". */
@@ -37,12 +40,14 @@ export default function PaymentSettings() {
   const [ltcMode, setLtcMode] = useState<Mode>('auto');
   const [ltcFixed, setLtcFixed] = useState('');
   const [qr, setQr] = useState<{id: string; svg: string} | null>(null);
+  const [paypal, setPaypal] = useState<PaypalDraft | null>(null);
+  const [paypalQr, setPaypalQr] = useState<{svg: string; link: string} | null>(null);
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
-    fetch('/api/admin/settings/payments', {cache: 'no-store'}).then(async response => { const body = await response.json(); if (!response.ok) throw new Error(body.error); setState(body); setUsdMode(body.rates.usdMode); setRate(String(body.rates.usdFixed)); setLtcMode(body.rates.ltcMode); setLtcFixed(body.rates.ltcFixed ? String(body.rates.ltcFixed) : ''); })
+    fetch('/api/admin/settings/payments', {cache: 'no-store'}).then(async response => { const body = await response.json(); if (!response.ok) throw new Error(body.error); setState(body); setUsdMode(body.rates.usdMode); setRate(String(body.rates.usdFixed)); setLtcMode(body.rates.ltcMode); setLtcFixed(body.rates.ltcFixed ? String(body.rates.ltcFixed) : ''); setPaypal(paypalDraft(body.paypal)); })
       .catch(cause => setError(cause instanceof Error ? cause.message : 'Payment settings could not be loaded.'));
   }, []);
 
@@ -62,7 +67,7 @@ export default function PaymentSettings() {
   if (!state) return <div className="page-heading"><Link href={`/${locale}/admin/settings`}>← Settings</Link>{error ? <p className="admin-feedback error" role="alert">{error}</p> : <LoadingRows label="Loading…"/>}</div>;
   const bin = draft.bankBin === 'other' ? draft.customBin : draft.bankBin;
   return <div className="admin-payments-page">
-    <div className="page-heading admin-page-heading"><div><p className="eyebrow"><Link href={`/${locale}/admin/settings`}>ADMIN / SETTINGS</Link> / PAYMENTS</p><h1>Payments</h1><p className="admin-lede">Customers pay by VietQR bank transfer (VND) or Litecoin. With several active accounts or wallets, orders rotate between them.</p></div></div>
+    <div className="page-heading admin-page-heading"><div><p className="eyebrow"><Link href={`/${locale}/admin/settings`}>ADMIN / SETTINGS</Link> / PAYMENTS</p><h1>Payments</h1><p className="admin-lede">Customers pay by VietQR bank transfer (VND), Litecoin, USDT or PayPal. With several active accounts or wallets, orders rotate between them.</p></div></div>
     {error && <p className="admin-feedback error" role="alert">{error}</p>}
     {message && <p className="admin-feedback success" role="status">{message}</p>}
 
@@ -106,6 +111,24 @@ export default function PaymentSettings() {
         <div className="form-actions"><button type="submit" disabled={busy}>{wallet.id ? 'Save wallet' : 'Add wallet'}</button>{wallet.id && <button type="button" className="secondary" onClick={() => setWallet(emptyWallet)}>Cancel edit</button>}</div>
       </form>
     </section>
+
+    {paypal && <section className="card admin-panel"><h2>PayPal</h2>
+      <p className="field-caption">Customers get a PayPal.me link and QR code with their exact USD amount filled in; each order gets its own cents. PayPal does not report payments to the site, so <strong>you confirm each PayPal order yourself</strong> after checking your PayPal account, like a bank transfer.</p>
+      <form className="bank-form" onSubmit={event => {event.preventDefault(); void post({action: 'save-paypal', enabled: paypal.enabled, username: paypal.username, email: paypal.email, feePercent: Number(paypal.feePercent) || 0, feeFixedCents: Math.round((Number(paypal.feeFixed) || 0) * 100), instructions: paypal.instructions}, paypal.enabled ? 'PayPal is on. Press Test QR to check the link before customers use it.' : 'PayPal settings saved (PayPal is off).').then(data => data && setPaypal(paypalDraft(data.paypal)));}}>
+        <label className="admin-compact-check"><input type="checkbox" checked={paypal.enabled} onChange={event => setPaypal({...paypal, enabled: event.target.checked})}/> Offer PayPal at checkout</label>
+        <div className="admin-field-row">
+          <label>PayPal.me name<input className="admin-mono" value={paypal.username} maxLength={200} placeholder="yourname" onChange={event => setPaypal({...paypal, username: event.target.value})}/><small>The part after paypal.me/ (you can paste the whole link).</small></label>
+          <label>PayPal email (optional)<input type="email" value={paypal.email} maxLength={120} placeholder="shown to customers who prefer to send by hand" onChange={event => setPaypal({...paypal, email: event.target.value})}/></label>
+        </div>
+        <div className="admin-field-row">
+          <label>Fee added to PayPal orders (%)<input type="number" min="0" max="15" step="0.1" value={paypal.feePercent} onChange={event => setPaypal({...paypal, feePercent: event.target.value})}/><small>0 to 15. Customers see it at checkout.</small></label>
+          <label>Fixed fee (USD)<input type="number" min="0" max="5" step="0.01" value={paypal.feeFixed} onChange={event => setPaypal({...paypal, feeFixed: event.target.value})}/><small>0 to 5.00, added on top of the percentage.</small></label>
+        </div>
+        <label>Instructions for customers (optional)<textarea rows={2} maxLength={500} value={paypal.instructions} placeholder="e.g. Send as Friends &amp; Family" onChange={event => setPaypal({...paypal, instructions: event.target.value})}/><small>Shown on the order page next to the QR code. {paypal.instructions.length}/500</small></label>
+        <div className="form-actions"><button type="submit" disabled={busy}>Save PayPal</button><button type="button" className="secondary" disabled={busy} onClick={() => void post({action: 'test-paypal-qr', username: paypal.username}, '').then(data => data?.qrSvg && setPaypalQr({svg: data.qrSvg, link: data.link}))}>Test QR</button></div>
+      </form>
+      {paypalQr && <div className="test-qr"><img src={`data:image/svg+xml;utf8,${encodeURIComponent(paypalQr.svg)}`} alt="Test PayPal QR code for 1.00 USD"/><div><strong>Test before going live</strong><p className="field-caption">Scan with your phone camera, or open the link. PayPal should show a payment page to your name for $1.00 USD. You do not need to pay. If it shows a different amount or none, customers still see the exact amount on their order page and can copy it.</p><a className="button secondary" href={paypalQr.link} target="_blank" rel="noreferrer">Open test link</a> <button type="button" className="secondary" onClick={() => setPaypalQr(null)}>Close</button></div></div>}
+    </section>}
 
     <section className="card admin-panel"><h2>Litecoin price</h2>
       <p className="field-caption">Used for new orders and the LTC estimates in the store: <strong>{state.rates.ltcRate ? `${state.rates.ltcRate.vndPerLtc.toLocaleString('vi-VN')} ₫ per LTC` : 'unavailable'}</strong>{state.rates.ltcRate ? ` (${rateSource(state.rates.ltcRate)})` : ' (no market price and no fixed price, so Litecoin checkout is paused)'}. Each order locks the price for its 30-minute payment window.</p>

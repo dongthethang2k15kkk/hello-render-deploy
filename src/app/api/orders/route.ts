@@ -3,7 +3,7 @@ import {getSession} from '@/lib/auth';
 import {cartLineSchema} from '@/lib/cart';
 import {sameOrigin} from '@/lib/customer-rules';
 import {createOrder, customerOrders, OrderError} from '@/lib/order-store';
-import {timingSchema} from '@/lib/order-rules';
+import {PAYMENT_METHODS, timingSchema} from '@/lib/order-rules';
 
 export const runtime = 'nodejs';
 const json = (data: unknown, status = 200) => Response.json(data, {status, headers: {'Cache-Control': 'no-store'}});
@@ -16,7 +16,7 @@ export async function GET() {
 }
 
 // Checkout sends when the customer wants to trade (now and/or later times) together with the order.
-const body = z.object({lines: z.array(cartLineSchema).min(1).max(20), method: z.enum(['bank', 'ltc', 'usdt']).default('bank'), timing: timingSchema.optional(), redeemWheelCoins: z.boolean().default(false)}).strict();
+const body = z.object({lines: z.array(cartLineSchema).min(1).max(20), method: z.enum(PAYMENT_METHODS).default('bank'), timing: timingSchema.optional(), redeemWheelCoins: z.boolean().default(false)}).strict();
 
 export async function POST(request: Request) {
   if (!sameOrigin(request.headers)) return json({error: 'Invalid request origin.'}, 403);

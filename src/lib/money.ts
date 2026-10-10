@@ -17,6 +17,8 @@ export function formatUsdFromVnd(vnd: number, vndPerUsd: number) {
   return usdFormat.format(vndToUsdCents(vnd, vndPerUsd) / 100);
 }
 
+export const formatUsdCents = (cents: number) => usdFormat.format(cents / 100);
+
 export function validVndPerUsd(value: unknown): value is number {
   return typeof value === 'number' && Number.isInteger(value) && value >= 1000 && value <= 1_000_000;
 }

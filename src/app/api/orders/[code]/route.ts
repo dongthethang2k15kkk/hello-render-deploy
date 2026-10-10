@@ -3,9 +3,10 @@ import {z} from 'zod';
 import {getSession} from '@/lib/auth';
 import {sameOrigin} from '@/lib/customer-rules';
 import {appOrigin} from '@/lib/oauth-helpers';
-import {isCrypto, orderCodePattern, reportSchema, timingSchema} from '@/lib/order-rules';
+import {isCrypto, orderCodePattern, paymentKind, reportSchema, timingSchema, type BankSnapshot, type PaypalSnapshot, type WalletSnapshot} from '@/lib/order-rules';
 import {cancelByCustomer, customerOrder, OrderError, reportTransfer, updateTimes} from '@/lib/order-store';
 import {litecoinUri} from '@/lib/ltc-format';
+import {paypalMeLink} from '@/lib/paypal';
 import {vietQrPayload} from '@/lib/vietqr';
 import {checkCryptoOrder} from '@/lib/payment-detection';
 import {mailStatus} from '@/lib/mailer';
@@ -30,10 +31,21 @@ export async function GET(request: Request, {params}: {params: Promise<{code: st
     let qrSvg: string | null = null;
     let paymentUri: string | null = null;
     if (order.status === 'awaiting_payment') {
-      const snapshot = order.bankSnapshot;
-      // TRON wallets scan a plain address (the amount is typed in); Litecoin wallets read the amount from the link.
-      if ('address' in snapshot) paymentUri = order.paymentMethod === 'usdt' ? snapshot.address : litecoinUri(snapshot.address, order.cryptoAmount ?? '', order.code);
-      const payload = 'address' in snapshot ? paymentUri! : vietQrPayload({bankBin: snapshot.bankBin, accountNumber: snapshot.accountNumber, amountVnd: order.totalVnd, note: order.code});
+      const kind = paymentKind(order);
+      let payload: string;
+      if (kind === 'paypal') {
+        // The PayPal.me link opens the payment screen with the exact USD amount filled in.
+        paymentUri = paypalMeLink((order.bankSnapshot as PaypalSnapshot).paypalMe, order.cryptoAmount ?? '');
+        payload = paymentUri;
+      } else if (kind === 'crypto') {
+        // TRON wallets scan a plain address (the amount is typed in); Litecoin wallets read the amount from the link.
+        const wallet = order.bankSnapshot as WalletSnapshot;
+        paymentUri = order.paymentMethod === 'usdt' ? wallet.address : litecoinUri(wallet.address, order.cryptoAmount ?? '', order.code);
+        payload = paymentUri;
+      } else {
+        const bank = order.bankSnapshot as BankSnapshot;
+        payload = vietQrPayload({bankBin: bank.bankBin, accountNumber: bank.accountNumber, amountVnd: order.totalVnd, note: order.code});
+      }
       qrSvg = await QRCode.toString(payload, {type: 'svg', margin: 1, errorCorrectionLevel: 'M'});
     }
     // The shop's sending address, so the order page can tell customers which emails to look for in Spam.
