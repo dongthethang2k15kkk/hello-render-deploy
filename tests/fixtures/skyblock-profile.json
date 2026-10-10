@@ -1,0 +1,145 @@
+{
+ "member": {
+  "leveling": {
+   "experience": 13842
+  },
+  "player_data": {
+   "experience": {
+    "SKILL_ALCHEMY": 633425,
+    "SKILL_CARPENTRY": 7266425,
+    "SKILL_COMBAT": 8503425,
+    "SKILL_ENCHANTING": 36339925,
+    "SKILL_FARMING": 39145425,
+    "SKILL_FISHING": 115925,
+    "SKILL_FORAGING": 6129425,
+    "SKILL_HUNTING": 175175,
+    "SKILL_MINING": 12814425,
+    "SKILL_TAMING": 28710425,
+    "SKILL_RUNECRAFTING": 4972,
+    "SKILL_SOCIAL": 6290
+   }
+  },
+  "currencies": {
+   "coin_purse": 162900000
+  },
+  "profile": {
+   "first_join": 1725148800000
+  },
+  "fairy_soul": {
+   "total_collected": 241
+  },
+  "jacobs_contest": {
+   "perks": {
+    "farming_level_cap": 0
+   }
+  }
+ },
+ "bankBalance": 849230000,
+ "gear": {
+  "armor": [
+   {
+    "id": "FERMENTO_BOOTS",
+    "name": "§5Mantid Fermento Boots",
+    "lore": [
+     "§7Health: §a+150 HP",
+     "§7Defense: §a+110",
+     "§7Farming Fortune: §a+95",
+     "§7Bonus Pest Chance: §a+4%",
+     "",
+     "§5§lEPIC BOOTS"
+    ],
+    "modifier": "mantid"
+   },
+   {
+    "id": "FERMENTO_LEGGINGS",
+    "name": "§5Mantid Fermento Leggings",
+    "lore": [
+     "§7Health: §a+200 HP",
+     "§7Defense: §a+130",
+     "§7Farming Fortune: §a+110",
+     "§7Bonus Pest Chance: §a+4%",
+     "",
+     "§5§lEPIC LEGGINGS"
+    ],
+    "modifier": "mantid"
+   },
+   {
+    "id": "FERMENTO_CHESTPLATE",
+    "name": "§5Mantid Fermento Chestplate",
+    "lore": [
+     "§7Health: §a+250 HP",
+     "§7Defense: §a+150",
+     "§7Farming Fortune: §a+120",
+     "§7Bonus Pest Chance: §a+4%",
+     "",
+     "§5§lEPIC CHESTPLATE"
+    ],
+    "modifier": "mantid"
+   },
+   {
+    "id": "FERMENTO_HELMET",
+    "name": "§5Mantid Fermento Helmet",
+    "lore": [
+     "§7Health: §a+120 HP",
+     "§7Defense: §a+90",
+     "§7Farming Fortune: §a+90",
+     "§7Bonus Pest Chance: §a+4%",
+     "",
+     "§5§lEPIC HELMET"
+    ],
+    "modifier": "mantid"
+   }
+  ],
+  "equipment": [
+   {
+    "id": "LOTUS_NECKLACE",
+    "name": "§6Lotus Necklace",
+    "lore": [
+     "§7Health: §a+30 HP",
+     "§7Farming Fortune: §a+45",
+     "§7Speed: §a+5",
+     "§7Gear Score: §d400 §8(1337)",
+     "",
+     "§6§lLEGENDARY NECKLACE"
+    ]
+   },
+   {
+    "id": "LOTUS_CLOAK",
+    "name": "§5Lotus Cloak",
+    "lore": [
+     "§7Farming Fortune: §a+40",
+     "",
+     "§5§lEPIC CLOAK"
+    ]
+   },
+   {
+    "id": "LOTUS_BELT",
+    "name": "§5Lotus Belt",
+    "lore": [
+     "§7Farming Fortune: §a+35",
+     "",
+     "§5§lEPIC BELT"
+    ]
+   },
+   {
+    "id": "LOTUS_GLOVES",
+    "name": "§5Lotus Bracelet",
+    "lore": [
+     "§7Farming Fortune: §a+30",
+     "§7Pest Chance Cap: §a+2",
+     "",
+     "§5§lEPIC GLOVES"
+    ]
+   }
+  ]
+ },
+ "networth": {
+  "total": 849230000,
+  "nonCosmetic": 801100000
+ },
+ "profile": {
+  "cuteName": "Mango",
+  "gameMode": "ironman",
+  "coop": false
+ }
+}

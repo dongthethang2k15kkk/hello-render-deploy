@@ -1,6 +1,7 @@
 import 'server-only';
 import {expireStaleOrders} from './order-store';
 import {checkOpenCryptoOrders, sendDueReminders} from './payment-detection';
+import {refreshDueAccountStats} from './skyblock-fetch';
 
 const state = globalThis as unknown as {lastHousekeeping?: number};
 
@@ -14,5 +15,7 @@ export async function runHousekeeping(origin: string, minGapMs = 60_000) {
   await expireStaleOrders();
   const ltcChecked = await checkOpenCryptoOrders(origin);
   const reminders = await sendDueReminders(origin);
-  return {ltcChecked, reminders};
+  // Keeps the stats of accounts for sale fresh (a few per run, only when an Admin set a Hypixel key and an interval).
+  const accountsRefreshed = await refreshDueAccountStats().catch(() => 0);
+  return {ltcChecked, reminders, accountsRefreshed};
 }
