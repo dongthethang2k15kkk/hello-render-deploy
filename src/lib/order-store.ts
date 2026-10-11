@@ -10,7 +10,10 @@ import {sendMail} from './mailer';
 import {formatVnd} from './money';
 import {notifyCustomer} from './notifications';
 import {allAdminEmails} from './admin-team';
-import {postPaymentMessage} from './chat-store';
+import {postAccountsDeliveredMessage, postPaymentMessage} from './chat-store';
+import {completeAccountOrder, deliverAccounts, DeliveryError} from './account-delivery';
+import {needsAppointment as ordersNeedAppointment} from './account-rules';
+import {openLogin} from './account-vault';
 import {appointmentProblem, asapProblem, CRYPTO_METHODS, generateOrderCode, HOLD_MINUTES, isCrypto, NEEDS_ACTION, nextStatus, paymentKind, REPORT_DELAY_SECONDS, slotProblem, validTimeZone, VN_TIME_ZONE, type OrderStatus, type PaymentMethod, type PaymentSnapshot, type PaypalSnapshot, type WalletSnapshot} from './order-rules';
 import {getPaymentDb} from './payment-db';
 import {alertAppointment} from './payment-detection';
@@ -80,15 +83,21 @@ export async function createOrder(customer: {id: string}, lines: CartLine[], met
   await expireStaleOrders();
   const catalog = await getPublicCatalog();
   if (catalog.source !== 'database') throw new OrderError('The shop is temporarily unavailable. Please try again in a moment.', 503);
-  const parsed = createCartSchema(catalog.products).safeParse(lines);
+  const purchasable = [...catalog.products, ...catalog.accounts];
+  const parsed = createCartSchema(purchasable).safeParse(lines);
   if (!parsed.success) throw new OrderError('Your cart changed: an item is no longer available or exceeds the stock. Please review your cart.', 409);
   const items = parsed.data.map(line => {
-    const product = catalog.products.find(item => item.id === line.productId)!;
-    return {packageId: product.id, productSlug: product.slug, sku: product.sku, title: product.title.en, unitPriceVnd: product.priceVnd, quantity: line.quantity, delivery: line.delivery};
+    const product = purchasable.find(item => item.id === line.productId)!;
+    // A game account is one unit with no delivery form; `packageId` holds its id (see GameAccount).
+    if (product.kind === 'account') return {packageId: product.id, productSlug: product.slug, sku: product.sku, title: `SkyBlock account · ${product.title.en}`, unitPriceVnd: product.priceVnd, quantity: 1, delivery: {}, kind: 'account', accountId: product.id};
+    return {packageId: product.id, productSlug: product.slug, sku: product.sku, title: product.title.en, unitPriceVnd: product.priceVnd, quantity: line.quantity, delivery: line.delivery, kind: 'package', accountId: null};
   });
+  // An order of game accounts only has nothing to book, so any times sent with it are ignored.
+  const bookable = ordersNeedAppointment(items);
+  const accountIds = items.filter(item => item.kind === 'account').map(item => item.accountId!);
   const totalVnd = items.reduce((sum, item) => sum + item.unitPriceVnd * item.quantity, 0);
   const quantities = new Map<string, number>();
-  for (const item of items) quantities.set(item.packageId, (quantities.get(item.packageId) ?? 0) + item.quantity);
+  for (const item of items) if (item.kind === 'package') quantities.set(item.packageId, (quantities.get(item.packageId) ?? 0) + item.quantity);
   // A Litecoin price at most a minute old is locked when the order is placed and holds for the 30-minute payment window.
   const ltcRate = method === 'ltc' ? await getLtcRate({fresh: true}) : null;
   if (method === 'ltc' && !ltcRate) throw new OrderError('Litecoin payments are temporarily unavailable. Choose bank transfer or try again shortly.', 503);
@@ -128,18 +137,23 @@ export async function createOrder(customer: {id: string}, lines: CartLine[], met
       snapshot = {network, address: wallet!.address, label: wallet!.label};
     }
     const coin = isCrypto(method) ? CRYPTO_METHODS[method].coin : paypal ? 'USD' : '';
-    const chosen = timing ? ` · ${timing.asap ? 'trade now, ' : ''}${timing.slots.length} time${timing.slots.length === 1 ? '' : 's'} chosen` : '';
+    const chosen = timing && bookable ? ` · ${timing.asap ? 'trade now, ' : ''}${timing.slots.length} time${timing.slots.length === 1 ? '' : 's'} chosen` : '';
     const order = await tx.order.create({data: {
       code, customerId: customer.id, status: 'awaiting_payment', totalVnd, vndPerUsd: catalog.vndPerUsd, bankSnapshot: snapshot,
-      redeemWheelCoins,
+      redeemWheelCoins, needsAppointment: bookable,
       paymentMethod: method, cryptoAmount, cryptoRateVnd: method === 'usdt' || method === 'paypal' ? catalog.vndPerUsd : ltcRate?.vndPerLtc ?? null,
       holdExpiresAt: new Date(Date.now() + HOLD_MINUTES * 60_000),
-      ...(timing ? {
+      ...(timing && bookable ? {
         asap: Boolean(timing.asap), customerTimeZone: validTimeZone(timing.timeZone) ? timing.timeZone : VN_TIME_ZONE,
         slots: {create: timing.slots.map(slot => ({startsAt: new Date(slot.start), endsAt: new Date(slot.end)}))}
       } : {}),
-      items: {create: items}, events: {create: {actor: 'customer', action: 'created', note: `Order placed · ${formatVnd(totalVnd)}${cryptoAmount ? ` · pay ${cryptoAmount} ${coin}${paypal ? ' via PayPal' : ''}` : ''}${chosen}`}}
+      items: {create: items}, events: {create: {actor: 'customer', action: 'created', note: `Order placed · ${formatVnd(totalVnd)}${accountIds.length ? ` · ${accountIds.length} game account${accountIds.length === 1 ? '' : 's'}` : ''}${cryptoAmount ? ` · pay ${cryptoAmount} ${coin}${paypal ? ' via PayPal' : ''}` : ''}${chosen}`}}
     }, select: {id: true, code: true}});
+    // The accounts are held in the same transaction; whoever updates first wins, so an account is never sold twice.
+    for (const accountId of accountIds) {
+      const held = await tx.gameAccount.updateMany({where: {id: accountId, status: 'available'}, data: {status: 'reserved', orderId: order.id, reservedAt: new Date()}});
+      if (held.count !== 1) throw new OrderError('Sorry, this account was just sold. Please review your cart.', 409);
+    }
     if (redeemWheelCoins) {
       const wheelCoins = await reserveAllCoins(tx, {customerId: customer.id, orderId: order.id, sourceKey: `order-redeem:${order.id}`, note: `Reserved for order ${code}`});
       if (wheelCoins > BigInt(0)) {
@@ -152,9 +166,9 @@ export async function createOrder(customer: {id: string}, lines: CartLine[], met
 }
 
 const customerOrderInclude = {
-  items: {select: {title: true, sku: true, unitPriceVnd: true, quantity: true, delivery: true}},
+  items: {select: {title: true, sku: true, unitPriceVnd: true, quantity: true, delivery: true, kind: true, deliveredAt: true}},
   slots: {orderBy: {startsAt: 'asc'}, select: {startsAt: true, endsAt: true}},
-  events: {where: {action: {notIn: ['note', 'claimed', 'released', 'taken_over']}}, orderBy: {createdAt: 'asc'}, select: {action: true, note: true, createdAt: true}}
+  events: {where: {action: {notIn: ['note', 'claimed', 'released', 'taken_over', 'accounts_viewed']}}, orderBy: {createdAt: 'asc'}, select: {action: true, note: true, createdAt: true}}
 } satisfies Prisma.OrderInclude;
 
 /** Expires this order immediately when its hold has passed, so the page never shows a stale "awaiting payment". */
@@ -171,7 +185,26 @@ export async function customerOrder(customerId: string, code: string) {
   if (!order) return null;
   // Internal Admin notes and the paying Admin's identity are never shown to customers.
   const {internalNote: _internal, paymentConfirmedBy: _confirmedBy, assignedAdmin: _assigned, customerId: _customer, ...visible} = order;
-  return {...visible, wheelCoins: order.wheelCoins.toString(), paymentMethod: order.paymentMethod as PaymentMethod, bankSnapshot: order.bankSnapshot as PaymentSnapshot};
+  return {...visible, wheelCoins: order.wheelCoins.toString(), paymentMethod: order.paymentMethod as PaymentMethod, bankSnapshot: order.bankSnapshot as PaymentSnapshot, accounts: await deliveredAccounts(order)};
+}
+
+/**
+ * The game accounts the customer bought, with their login details, once the payment is confirmed. Only the buyer ever gets
+ * these. The first time they are shown is recorded (without the details) as proof of delivery if a dispute follows.
+ */
+async function deliveredAccounts(order: {id: string; status: string; customerId: string}) {
+  if (!['paid', 'scheduled', 'completed'].includes(order.status)) return [];
+  const db = getPaymentDb();
+  const lines = await db.orderItem.findMany({where: {orderId: order.id, kind: 'account', deliveredAt: {not: null}}, select: {sku: true, title: true, accountId: true, deliveredSecretEnc: true}});
+  if (!lines.length) return [];
+  const accounts = await db.gameAccount.findMany({where: {id: {in: lines.map(line => line.accountId ?? '')}}, select: {id: true, ign: true, profileName: true}});
+  if (!await db.orderEvent.findFirst({where: {orderId: order.id, action: 'accounts_viewed'}, select: {id: true}})) {
+    await db.orderEvent.create({data: {orderId: order.id, actor: 'customer', action: 'accounts_viewed', note: `Login details opened by the customer at ${new Date().toISOString()}`}}).catch(() => undefined);
+  }
+  return lines.map(line => {
+    const account = accounts.find(item => item.id === line.accountId);
+    return {code: line.sku, title: line.title, ign: account?.ign ?? null, profileName: account?.profileName ?? null, loginDetails: line.deliveredSecretEnc ? openLogin(line.deliveredSecretEnc) ?? 'These details cannot be shown right now. Message us in Chat.' : ''};
+  });
 }
 
 export async function customerOrders(customerId: string) {
@@ -191,8 +224,8 @@ export async function reportTransfer(customer: {id: string; name: string; email:
   // A few seconds of slack for clock differences; the page itself waits the full delay.
   if (Date.now() - order.createdAt.getTime() < (REPORT_DELAY_SECONDS - 5) * 1000) throw new OrderError(`Please make the payment first. You can confirm it about ${REPORT_DELAY_SECONDS} seconds after placing the order.`, 409);
   // Times chosen at checkout are kept; an order placed without them must send them now.
-  const given = input.slots?.length ? input.slots : null;
-  if (!given && !order.slots.length) throw new OrderError('Tell us when you are free first.');
+  const given = order.needsAppointment && input.slots?.length ? input.slots : null;
+  if (!given && !order.slots.length && order.needsAppointment) throw new OrderError('Tell us when you are free first.');
   if (given) {
     const problem = slotProblem(given) ?? asapProblem(input.asap, given);
     if (problem) throw new OrderError(problem);
@@ -210,15 +243,16 @@ export async function reportTransfer(customer: {id: string; name: string; email:
     }
     await tx.orderEvent.create({data: {orderId: order.id, actor: 'customer', action: 'payment_reported', note: given ? `${slots.length} available time${slots.length === 1 ? '' : 's'} proposed` : 'Payment reported'}});
   }, txOptions);
-  await notifyCustomer({customerId: customer.id, orderId: order.id, title: `We are checking your payment · ${order.code}`, body: 'Thanks! We will confirm your transfer and book one of the times you chose. You will get an email and a message here.', link: customerLink(order.code)});
-  const mail = templates.adminPaymentReported({code: order.code, customerName: customer.name, customerEmail: customer.email, totalVnd: order.totalVnd, payment: paymentMail(order, txid ?? null), items: order.items.map(item => `${item.title} × ${item.quantity}`), slots: slots.map(slot => ({start: slot.startsAt, end: slot.endsAt})), orderUrl: `${origin}/en/admin/workspace/${order.id}`});
+  await notifyCustomer({customerId: customer.id, orderId: order.id, title: `We are checking your payment · ${order.code}`, body: order.needsAppointment ? 'Thanks! We will confirm your transfer and book one of the times you chose. You will get an email and a message here.' : 'Thanks! We will confirm your payment, and your account appears on your order page right after.', link: customerLink(order.code)});
+  const mail = templates.adminPaymentReported({code: order.code, customerName: customer.name, customerEmail: customer.email, totalVnd: order.totalVnd, payment: paymentMail(order, txid ?? null), items: order.items.map(item => `${item.title} × ${item.quantity}`), slots: slots.map(slot => ({start: slot.startsAt, end: slot.endsAt})), orderUrl: `${origin}/en/admin/workspace/${order.id}`, accountsOnly: !order.needsAppointment});
   await sendMail({to: await allAdminEmails(), ...mail, kind: 'admin.payment_reported', orderId: order.id});
 }
 
 export async function updateTimes(customerId: string, code: string, input: {timeZone: string; slots: {start: string; end: string}[]; asap?: boolean}, origin = '') {
   const db = getPaymentDb();
-  const order = await db.order.findFirst({where: {code, customerId}, select: {id: true, code: true, status: true, asap: true, customer: {select: {name: true}}, _count: {select: {slots: true}}}});
+  const order = await db.order.findFirst({where: {code, customerId}, select: {id: true, code: true, status: true, asap: true, needsAppointment: true, customer: {select: {name: true}}, _count: {select: {slots: true}}}});
   if (!order) throw new OrderError('Order not found.', 404);
+  if (!order.needsAppointment) throw new OrderError('This order only has game accounts, so there is no time to choose.', 409);
   if (order.status !== 'payment_reported' && order.status !== 'paid') throw new OrderError('Times can only be changed before the appointment is booked. Message us in Chat.', 409);
   const problem = slotProblem(input.slots) ?? asapProblem(input.asap, input.slots);
   if (problem) throw new OrderError(problem);
@@ -276,7 +310,7 @@ export async function listOrders(filters: AdminOrderFilters, pageSize = 50) {
 export async function adminOrder(id: string) {
   await expireStaleOrders(60_000);
   const db = getPaymentDb();
-  const include = {customer: {select: {id: true, name: true, email: true, status: true, discordUsername: true}}, items: true, slots: {orderBy: {startsAt: 'asc'}}, events: {orderBy: {createdAt: 'asc'}}} satisfies Prisma.OrderInclude;
+  const include = {customer: {select: {id: true, name: true, email: true, status: true, discordUsername: true}}, items: {select: {id: true, packageId: true, productSlug: true, sku: true, title: true, unitPriceVnd: true, quantity: true, delivery: true, kind: true, accountId: true, deliveredAt: true}}, slots: {orderBy: {startsAt: 'asc'}}, events: {orderBy: {createdAt: 'asc'}}} satisfies Prisma.OrderInclude;
   let order = await db.order.findUnique({where: {id}, include});
   if (order && await expireIfDue(order)) order = await db.order.findUnique({where: {id}, include});
   if (!order) return null;
@@ -378,31 +412,45 @@ export async function confirmPayment(adminEmail: string, id: string, input: {amo
   const order = await loadForAdmin(id);
   if (!nextStatus(order.status, 'confirm-payment')) throw new OrderError('This order is not waiting for payment confirmation.', 409);
   if (!Number.isInteger(input.amountVnd) || input.amountVnd <= 0) throw new OrderError('Enter the amount you received in VND.');
-  if (input.appointment) {
-    const problem = appointmentProblem(input.appointment.start.getTime(), input.appointment.end.getTime());
+  // An order of game accounts only is delivered at once; there is no appointment to book.
+  const appointment = order.needsAppointment ? input.appointment : undefined;
+  if (appointment) {
+    const problem = appointmentProblem(appointment.start.getTime(), appointment.end.getTime());
     if (problem) throw new OrderError(problem);
   }
-  const status: OrderStatus = input.appointment ? 'scheduled' : 'paid';
+  const status: OrderStatus = appointment ? 'scheduled' : 'paid';
+  let delivered = 0;
   await getPaymentDb().$transaction(async tx => {
     // A late transfer revives the order only if its items can be reserved again.
     if (order.status === 'expired') await reReserveItems(tx, id).catch(error => { throw error instanceof StockError ? new OrderError(error.message, 409) : error; });
     const changed = await tx.order.updateMany({where: {id, status: order.status}, data: {
       status, paidAt: new Date(), paidAmountVnd: input.amountVnd, paymentReference: input.reference || null, paymentConfirmedBy: adminEmail, assignedAdmin: adminEmail,
-      ...(input.appointment ? {appointmentStart: input.appointment.start, appointmentEnd: input.appointment.end} : {})
+      ...(appointment ? {appointmentStart: appointment.start, appointmentEnd: appointment.end} : {})
     }});
     if (changed.count !== 1) throw new OrderError('The order changed meanwhile. Reload and try again.', 409);
     await grantPaidOrderSpin(tx, order);
     await tx.orderEvent.create({data: {orderId: id, actor: adminEmail, action: 'payment_confirmed', note: `Received ${formatVnd(input.amountVnd)}${input.amountVnd !== order.totalVnd ? ` (order total ${formatVnd(order.totalVnd)})` : ''}`}});
-    if (input.appointment) await tx.orderEvent.create({data: {orderId: id, actor: adminEmail, action: 'scheduled', note: 'Appointment booked'}});
+    if (appointment) await tx.orderEvent.create({data: {orderId: id, actor: adminEmail, action: 'scheduled', note: 'Appointment booked'}});
+    // Game accounts are handed over in the same transaction as the payment, so one is never paid without being delivered.
+    delivered = await deliverAccounts(tx, id).catch(error => { throw error instanceof DeliveryError ? new OrderError(error.message, 409) : error; });
+    if (delivered) await tx.orderEvent.create({data: {orderId: id, actor: adminEmail, action: 'accounts_delivered', note: `${delivered} game account${delivered === 1 ? '' : 's'} delivered to the order page`}});
+    if (!order.needsAppointment) await completeAccountOrder(tx, id, adminEmail);
   }, txOptions);
-  await recordAudit({actorEmail: adminEmail, action: 'order.payment_confirmed', summary: `Confirmed ${formatVnd(input.amountVnd)} for ${order.code}${input.appointment ? ' and booked the appointment' : ''}`, entityType: 'order', entityId: id, customerId: order.customerId});
-  await postPaymentMessage({customerId: order.customerId, code: order.code, customerTimeZone: order.customerTimeZone, appointmentStart: input.appointment?.start});
-  if (input.appointment) {
+  if (!order.needsAppointment) invalidateTradeStats();
+  await recordAudit({actorEmail: adminEmail, action: 'order.payment_confirmed', summary: `Confirmed ${formatVnd(input.amountVnd)} for ${order.code}${appointment ? ' and booked the appointment' : ''}${delivered ? ` · delivered ${delivered} game account${delivered === 1 ? '' : 's'}` : ''}`, entityType: 'order', entityId: id, customerId: order.customerId});
+  if (!order.needsAppointment) {
+    await postAccountsDeliveredMessage({customerId: order.customerId, code: order.code});
+    await notifyCustomer({customerId: order.customerId, orderId: id, title: `Your account is ready · ${order.code}`, body: 'We received your payment. Open the order to see your account details, then change the password right away.', link: customerLink(order.code)});
+    await sendMail({to: [order.customer.email], ...templates.customerAccountsDelivered({code: order.code, name: order.customer.name, orderUrl: `${origin}${customerLink(order.code)}`}), kind: 'customer.accounts_delivered', orderId: id});
+    return;
+  }
+  await postPaymentMessage({customerId: order.customerId, code: order.code, customerTimeZone: order.customerTimeZone, appointmentStart: appointment?.start});
+  if (appointment) {
     await notifyCustomer({customerId: order.customerId, orderId: id, title: `Appointment booked · ${order.code}`, body: 'Your payment is confirmed and your appointment is booked. Open the order for the time and calendar links.', link: customerLink(order.code)});
-    await sendAppointment(order, input.appointment.start, input.appointment.end, adminEmail, origin, false);
+    await sendAppointment(order, appointment.start, appointment.end, adminEmail, origin, false);
   } else {
-    await notifyCustomer({customerId: order.customerId, orderId: id, title: `Payment received · ${order.code}`, body: 'We received your payment and will confirm one of your times shortly.', link: customerLink(order.code)});
-    await sendMail({to: [order.customer.email], ...templates.customerPaymentConfirmed({code: order.code, name: order.customer.name, orderUrl: `${origin}${customerLink(order.code)}`}), kind: 'customer.payment_confirmed', orderId: id});
+    await notifyCustomer({customerId: order.customerId, orderId: id, title: `Payment received · ${order.code}`, body: `We received your payment and will confirm one of your times shortly.${delivered ? ' Your account details are already on the order page.' : ''}`, link: customerLink(order.code)});
+    await sendMail({to: [order.customer.email], ...templates.customerPaymentConfirmed({code: order.code, name: order.customer.name, orderUrl: `${origin}${customerLink(order.code)}`, accountsDelivered: delivered > 0}), kind: 'customer.payment_confirmed', orderId: id});
   }
 }
 
@@ -452,6 +500,16 @@ export async function cancelByAdmin(adminEmail: string, id: string, reason: stri
   await sendMail({to: [order.customer.email], ...templates.customerCancelled({code: order.code, name: order.customer.name, reason: reason.trim(), paid, orderUrl: `${origin}${customerLink(order.code)}`}), kind: 'customer.cancelled', orderId: id});
 }
 
+/** An Admin opens the login details that were delivered with an order. Recorded without the details. */
+export async function revealDeliveredLogin(adminEmail: string, orderId: string, itemId: string) {
+  const item = await getPaymentDb().orderItem.findFirst({where: {id: itemId, orderId, kind: 'account', deliveredAt: {not: null}}, select: {sku: true, deliveredSecretEnc: true, order: {select: {code: true, customerId: true}}}});
+  if (!item?.deliveredSecretEnc) throw new OrderError('This account has not been delivered.', 404);
+  const login = openLogin(item.deliveredSecretEnc);
+  if (login === null) throw new OrderError('The delivered details cannot be opened (AUTH_SECRET changed?).', 409);
+  await recordAudit({actorEmail: adminEmail, action: 'account.secret_revealed', summary: `Revealed the delivered login details of ${item.sku} in order ${item.order.code}`, entityType: 'order', entityId: orderId, customerId: item.order.customerId});
+  return login;
+}
+
 export async function addInternalNote(adminEmail: string, id: string, note: string) {
   const text = note.trim().slice(0, 2000);
   if (!text) throw new OrderError('Write a note first.');
@@ -464,7 +522,7 @@ export async function resendEmail(adminEmail: string, id: string, kind: 'admin.p
   const order = await getPaymentDb().order.findUnique({where: {id}, include: {customer: {select: {name: true, email: true}}, items: true, slots: {orderBy: {startsAt: 'asc'}}}});
   if (!order) throw new OrderError('Order not found.', 404);
   if (kind === 'admin.payment_reported') {
-    const mail = templates.adminPaymentReported({code: order.code, customerName: order.customer.name, customerEmail: order.customer.email, totalVnd: order.totalVnd, payment: paymentMail(order, order.customerTxid), items: order.items.map(item => `${item.title} × ${item.quantity}`), slots: order.slots.map(slot => ({start: slot.startsAt, end: slot.endsAt})), orderUrl: `${origin}/en/admin/workspace/${order.id}`});
+    const mail = templates.adminPaymentReported({code: order.code, customerName: order.customer.name, customerEmail: order.customer.email, totalVnd: order.totalVnd, payment: paymentMail(order, order.customerTxid), items: order.items.map(item => `${item.title} × ${item.quantity}`), slots: order.slots.map(slot => ({start: slot.startsAt, end: slot.endsAt})), orderUrl: `${origin}/en/admin/workspace/${order.id}`, accountsOnly: !order.needsAppointment});
     await sendMail({to: await allAdminEmails(), ...mail, kind, orderId: id});
   } else if (kind === 'customer.appointment') {
     if (!order.appointmentStart || !order.appointmentEnd) throw new OrderError('This order has no appointment yet.', 409);

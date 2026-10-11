@@ -27,7 +27,7 @@ type Slot = {start: Date | string; end: Date | string};
 
 export type ReportedPayment = {kind: 'crypto'; amount: string; coin: string; network: string; address: string; txid: string | null} | {kind: 'paypal'; amount: string; paypalMe: string; txid: string | null};
 
-export function adminPaymentReported(input: {code: string; customerName: string; customerEmail: string; totalVnd: number; payment?: ReportedPayment | null; items: string[]; slots: Slot[]; orderUrl: string}): EmailContent {
+export function adminPaymentReported(input: {code: string; customerName: string; customerEmail: string; totalVnd: number; payment?: ReportedPayment | null; items: string[]; slots: Slot[]; orderUrl: string; accountsOnly?: boolean}): EmailContent {
   const payment = input.payment;
   const customer = `Khách <strong>${escapeHtml(input.customerName)}</strong> (${escapeHtml(input.customerEmail)})`;
   const title = `Đơn ${input.code} đã báo ${payment?.kind === 'crypto' ? `gửi ${payment.coin}` : payment ? 'gửi PayPal' : 'chuyển khoản'}`;
@@ -38,10 +38,10 @@ export function adminPaymentReported(input: {code: string; customerName: string;
         ? `${customer} báo đã gửi <strong>${escapeHtml(payment.amount)} USD</strong> qua PayPal (≈ ${formatVnd(input.totalVnd)}) tới <strong>paypal.me/${escapeHtml(payment.paypalMe)}</strong>, ghi chú <strong>${input.code}</strong>.${payment.txid ? ` Mã giao dịch PayPal: ${escapeHtml(payment.txid)}` : ''}`
         : `${customer} báo đã chuyển <strong>${formatVnd(input.totalVnd)}</strong> với nội dung <strong>${input.code}</strong>.`,
     `Sản phẩm: ${input.items.map(escapeHtml).join('; ')}`,
-    `Khung giờ khách rảnh (giờ Việt Nam):<br>${input.slots.map(slot => `• ${escapeHtml(formatRange(slot.start, slot.end, VN_TIME_ZONE))}`).join('<br>')}`,
-    payment?.kind === 'crypto' ? 'Hãy kiểm tra giao dịch trên blockchain (link trong trang đơn), rồi xác nhận và chọn giờ hẹn.'
-      : payment?.kind === 'paypal' ? `Hãy mở PayPal, kiểm tra đã nhận đúng <strong>${escapeHtml(payment.amount)} USD</strong> (ghi chú ${input.code}), rồi xác nhận tiền và chọn giờ hẹn trong trang đơn.`
-      : 'Hãy đối chiếu sao kê ngân hàng, rồi xác nhận tiền và chọn giờ hẹn trong trang đơn.'
+    input.accountsOnly ? 'Đơn chỉ có tài khoản game: không cần hẹn giờ. Khi bạn xác nhận tiền, web tự giao tài khoản cho khách.' : `Khung giờ khách rảnh (giờ Việt Nam):<br>${input.slots.map(slot => `• ${escapeHtml(formatRange(slot.start, slot.end, VN_TIME_ZONE))}`).join('<br>')}`,
+    payment?.kind === 'crypto' ? `Hãy kiểm tra giao dịch trên blockchain (link trong trang đơn), rồi xác nhận${input.accountsOnly ? '' : ' và chọn giờ hẹn'}.`
+      : payment?.kind === 'paypal' ? `Hãy mở PayPal, kiểm tra đã nhận đúng <strong>${escapeHtml(payment.amount)} USD</strong> (ghi chú ${input.code}), rồi xác nhận tiền${input.accountsOnly ? '' : ' và chọn giờ hẹn trong trang đơn'}.`
+      : `Hãy đối chiếu sao kê ngân hàng, rồi xác nhận tiền${input.accountsOnly ? '' : ' và chọn giờ hẹn trong trang đơn'}.`
   ];
   lines.push('Admin nào bấm <strong>Nhận đơn</strong> trong Workspace trước sẽ phụ trách khách này (chat, xác nhận tiền, giao hàng).');
   const link = {label: 'Nhận đơn trong Workspace', url: input.orderUrl};
@@ -56,9 +56,10 @@ export function adminAppointmentAssigned(input: {code: string; customerName: str
   return {subject: `[Jewish Horse] ${title}`, html: layout(title, lines, links[0], links[1]), text: plain(title, lines, links)};
 }
 
-export function customerPaymentConfirmed(input: {code: string; name: string; orderUrl: string}): EmailContent {
+export function customerPaymentConfirmed(input: {code: string; name: string; orderUrl: string; accountsDelivered?: boolean}): EmailContent {
   const title = `Payment received for order ${input.code}`;
   const lines = [`Hi ${escapeHtml(input.name)},`, 'We have received your payment. We will confirm one of your chosen times shortly and let you know here and in your Inbox on our website.'];
+  if (input.accountsDelivered) lines.push('Your account details are already on your order page.');
   const link = {label: 'View your order', url: input.orderUrl};
   return {subject: `Jewish Horse: ${title}`, html: layout(title, lines, link), text: plain(title, lines, [link])};
 }
@@ -81,6 +82,14 @@ export function customerCompleted(input: {code: string; name: string; orderUrl: 
   const title = `Order ${input.code} is complete`;
   const lines = [`Hi ${escapeHtml(input.name)},`, 'Your order has been delivered. For your security, the delivery details are only shown on your order page after you sign in.'];
   const link = {label: 'View delivery details', url: input.orderUrl};
+  return {subject: `Jewish Horse: ${title}`, html: layout(title, lines, link), text: plain(title, lines, [link])};
+}
+
+/** Orders of game accounts only. The login details are never in the email: they are shown on the order page after sign-in. */
+export function customerAccountsDelivered(input: {code: string; name: string; orderUrl: string}): EmailContent {
+  const title = `Your account is ready · order ${input.code}`;
+  const lines = [`Hi ${escapeHtml(input.name)},`, 'We received your payment and your account is delivered. For your security the login details are not in this email: sign in and open your order to see them.', 'Please change the password and the recovery email right away. If anything does not work, message us in Chat.'];
+  const link = {label: 'Open my order', url: input.orderUrl};
   return {subject: `Jewish Horse: ${title}`, html: layout(title, lines, link), text: plain(title, lines, [link])};
 }
 
@@ -112,13 +121,14 @@ export function adminTestEmail(input: {sender: string; adminUrl: string}): Email
 
 // ---------- Automatic payment detection, ASAP appointments and reminders ----------
 
-export function adminPaymentDetected(input: {code: string; customerName: string; amountLabel: string; network: string; slots: Slot[]; asap: boolean; orderUrl: string}): EmailContent {
+export function adminPaymentDetected(input: {code: string; customerName: string; amountLabel: string; network: string; slots: Slot[]; asap: boolean; orderUrl: string; accountsOnly?: boolean}): EmailContent {
   const title = `Đơn ${input.code} đã thanh toán (tự động)`;
   const lines = [
     `Hệ thống đã tự nhận giao dịch ${escapeHtml(input.network)} trên blockchain: <strong>${escapeHtml(input.amountLabel)}</strong> từ khách <strong>${escapeHtml(input.customerName)}</strong>.`,
     ...(input.asap ? ['<strong>Khách muốn giao dịch NGAY BÂY GIỜ.</strong> Nếu bạn rảnh, nhận đơn trong Workspace và bấm "Start now".'] : []),
-    input.slots.length ? `Khung giờ khách rảnh (giờ Việt Nam):<br>${input.slots.map(slot => `• ${escapeHtml(formatRange(slot.start, slot.end, VN_TIME_ZONE))}`).join('<br>')}` : 'Khách chưa chọn giờ; web đã nhắc khách chọn.',
-    'Hãy chốt lịch hẹn trong trang đơn.'
+    ...(input.accountsOnly ? ['Đơn chỉ có tài khoản game: web đã tự giao tài khoản cho khách và hoàn tất đơn. Không cần hẹn giờ.'] : [
+      input.slots.length ? `Khung giờ khách rảnh (giờ Việt Nam):<br>${input.slots.map(slot => `• ${escapeHtml(formatRange(slot.start, slot.end, VN_TIME_ZONE))}`).join('<br>')}` : 'Khách chưa chọn giờ; web đã nhắc khách chọn.',
+      'Hãy chốt lịch hẹn trong trang đơn.'])
   ];
   const link = {label: 'Mở đơn', url: input.orderUrl};
   return {subject: `[Jewish Horse] ${title}${input.asap ? ' · khách rảnh ngay' : ''}`, html: layout(title, lines, link), text: plain(title, lines, [link])};

@@ -38,7 +38,7 @@ export default function AdminNav({locale, initialOrders}: {locale: string; initi
   }, [locale, pathname]);
 
   // Workspace badge: paid or reported orders no Admin has taken yet.
-  const links: [string, string, number][] = [['workspace', 'Workspace', counts.workspace], ['overview', 'Overview', 0], ['orders', 'Orders', counts.orders], ['chat', 'Chat', counts.chat], ['customers', 'Customers', 0], ['activity', 'Activity', 0], ['lucky-wheel', 'Lucky wheel', 0], ['settings', 'Settings', 0]];
+  const links: [string, string, number][] = [['workspace', 'Workspace', counts.workspace], ['overview', 'Overview', 0], ['orders', 'Orders', counts.orders], ['accounts', 'Accounts', 0], ['chat', 'Chat', counts.chat], ['customers', 'Customers', 0], ['activity', 'Activity', 0], ['lucky-wheel', 'Lucky wheel', 0], ['settings', 'Settings', 0]];
   return <nav ref={strip} aria-label="Admin navigation">{links.map(([slug, label, count]) => {
     const active = pathname.startsWith(`/${locale}/admin/${slug}`);
     return <Link key={slug} href={`/${locale}/admin/${slug}`} className={active ? 'active' : undefined} aria-current={active ? 'page' : undefined}>{label}{count > 0 && <b className="nav-badge" aria-label={`${count} ${slug === 'chat' ? 'unread' : 'need action'}`}>{count}</b>}</Link>;

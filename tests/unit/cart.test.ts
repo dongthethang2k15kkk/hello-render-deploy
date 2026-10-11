@@ -1,3 +1,4 @@
+import {accountCatalogLine} from '../../src/lib/account-card';
 import {describe, expect, it} from 'vitest';
 import {cartSchema, createCartSchema, totalVnd} from '../../src/lib/cart';
 import type {CatalogProduct} from '../../src/lib/catalog';
@@ -28,12 +29,24 @@ describe('demo cart validation and server-side prices', () => {
       id: 'package-db-1', sourceProductId: 'product-db-1', slug: 'configured-product', sku: 'CONFIGURED_1', category: 'general', imagePath: '',
       priceVnd: 123000, basePriceVnd: 150000, salePriceVnd: 123000, stock: 3,
       title: {en: 'Configured package'}, description: {en: 'Database catalog test'},
-      fields: [{key: 'account_name', labelEn: 'Account name', required: true, maxLength: 12}]
+      fields: [{key: 'account_name', labelEn: 'Account name', required: true, maxLength: 12}], kind: 'package', account: null
     };
     const lines = [{productId: configured.id, quantity: 2, delivery: {account_name: 'Demo'}}];
     expect(createCartSchema([configured]).safeParse(lines).success).toBe(true);
     expect(totalVnd(lines, [configured])).toBe(246000);
     expect(createCartSchema([configured]).safeParse([{...lines[0], quantity: 4}]).success).toBe(false);
     expect(createCartSchema([configured]).safeParse([{...lines[0], delivery: {account_name: 'Too long for field'}}]).success).toBe(false);
+  });
+  it('sells a game account once: quantity 2, a reserved account and a delivery form are refused', () => {
+    const account = accountCatalogLine({id: 'acc1', code: 'SB234567', ign: 'Farmer', showIgn: false, profileName: 'Mango', imagePaths: [], status: 'available', stats: null, title: 'Farming 45', description: '', priceVnd: 5_000_000, salePriceVnd: null});
+    const line = {productId: 'acc1', quantity: 1, delivery: {}};
+    expect(account).toMatchObject({kind: 'account', stock: 1, fields: [], sku: 'SB234567', priceVnd: 5_000_000, salePriceVnd: null});
+    expect(account.account.ign).toBeNull();
+    expect(createCartSchema([account]).safeParse([line]).success).toBe(true);
+    expect(totalVnd([line], [account])).toBe(5_000_000);
+    expect(createCartSchema([account]).safeParse([{...line, quantity: 2}]).success).toBe(false);
+    expect(createCartSchema([account]).safeParse([line, line]).success).toBe(false);
+    expect(createCartSchema([account]).safeParse([{...line, delivery: {note: 'x'}}]).success).toBe(false);
+    expect(createCartSchema([{...account, stock: 0}]).safeParse([line]).success).toBe(false);
   });
 });

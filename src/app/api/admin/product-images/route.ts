@@ -1,6 +1,7 @@
 import {createHash} from 'node:crypto';
 import {Prisma} from '@prisma/client';
 import {getSession} from '@/lib/auth';
+import {accountImagePaths} from '@/lib/account-store';
 import {announcementImagePaths} from '@/lib/announcements';
 import {backgroundImagePaths} from '@/lib/background-scene';
 import {getPaymentDb} from '@/lib/payment-db';
@@ -38,7 +39,7 @@ export async function POST(request: Request) {
       const paths = stale.map(image => `/api/product-images/${image.id}`);
       const referenced = await db.product.findMany({where: {imagePath: {in: paths}}, select: {imagePath: true}});
       // Images are shared by products, storefront announcements and the background; keep anything any of them uses.
-      const used = new Set([...referenced.map(product => product.imagePath), ...await announcementImagePaths(), ...await backgroundImagePaths()]);
+      const used = new Set([...referenced.map(product => product.imagePath), ...await announcementImagePaths(), ...await backgroundImagePaths(), ...await accountImagePaths()]);
       const unusedIds = stale.filter(image => !used.has(`/api/product-images/${image.id}`)).map(image => image.id);
       if (unusedIds.length) await db.productImage.deleteMany({where: {id: {in: unusedIds}}});
     }
@@ -67,6 +68,7 @@ export async function DELETE(request: Request) {
     if (references > 0) return Response.json({error: 'This image is still used by a product'}, {status: 409});
     if ((await announcementImagePaths()).has(path)) return Response.json({error: 'This image is still used by an announcement'}, {status: 409});
     if ((await backgroundImagePaths()).has(path)) return Response.json({error: 'This image is still used by the background'}, {status: 409});
+    if ((await accountImagePaths()).has(path)) return Response.json({error: 'This image is still used by an account'}, {status: 409});
     const result = await getPaymentDb().productImage.deleteMany({where: {id}});
     return Response.json({ok: true, deleted: result.count === 1});
   } catch {

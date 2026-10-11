@@ -4,6 +4,8 @@ import {usePathname, useRouter} from 'next/navigation';
 import {useLocale, useTranslations} from 'next-intl';
 import {useCallback, useDeferredValue, useEffect, useMemo, useRef, useState} from 'react';
 import {type CatalogProduct, type CatalogSource, Locale} from '@/lib/catalog';
+import {defaultShelf, type Shelf} from '@/lib/accounts-shelf-rules';
+import {AccountShelf} from './account-shelf';
 import Price from './price';
 import {QuickBuy} from './quick-buy';
 import {shortTitle, stockText, type AmountSlider} from '@/lib/amount-slider-rules';
@@ -137,8 +139,24 @@ const comparison: Record<string, string[]> = {
   'sample-plus': ['Higher sample price', 'Recipient name plus an optional delivery note']
 };
 
-export function Catalog({products: allProducts, source, vndPerUsd, vndPerLtc = null, slider = null, trades}: {products: CatalogProduct[]; source: CatalogSource; vndPerUsd: number; vndPerLtc?: number | null; slider?: AmountSlider | null; trades?: {completed: number}}) {
+export function Catalog({products: allProducts, accounts = [], shelf = defaultShelf, source, vndPerUsd, vndPerLtc = null, slider = null, trades}: {products: CatalogProduct[]; accounts?: CatalogProduct[]; shelf?: Shelf; source: CatalogSource; vndPerUsd: number; vndPerLtc?: number | null; slider?: AmountSlider | null; trades?: {completed: number}}) {
   const locale = useLocale() as Locale; const t = useTranslations();
+  // Two tabs: the packages and the game accounts. The chosen tab lives in the address (?shelf=accounts, or #accounts) so it can be shared.
+  const showShelf = shelf.enabled && accounts.length > 0;
+  const [tab, setTab] = useState<'packages' | 'accounts'>('packages');
+  useEffect(() => {
+    const read = () => { if (new URLSearchParams(window.location.search).get('shelf') === 'accounts' || window.location.hash === '#accounts') setTab('accounts'); };
+    read();
+    window.addEventListener('hashchange', read);
+    return () => window.removeEventListener('hashchange', read);
+  }, []);
+  function chooseTab(next: 'packages' | 'accounts') {
+    setTab(next);
+    const url = new URL(window.location.href);
+    if (next === 'accounts') url.searchParams.set('shelf', 'accounts'); else { url.searchParams.delete('shelf'); if (url.hash === '#accounts') url.hash = ''; }
+    window.history.replaceState(null, '', url);
+  }
+  const availableAccounts = accounts.filter(account => account.stock > 0).length;
   // The slider sells its per-unit package by amount; that package can stay out of the grid.
   const sliderProduct = slider?.enabled ? allProducts.find(product => product.id === slider.packageId) : undefined;
   const products = useMemo(() => sliderProduct && slider?.hideFromGrid ? allProducts.filter(product => product.id !== sliderProduct.id) : allProducts, [allProducts, sliderProduct, slider?.hideFromGrid]);
@@ -148,7 +166,13 @@ export function Catalog({products: allProducts, source, vndPerUsd, vndPerLtc = n
   const deferredQuery = useDeferredValue(query);
   const shown = useMemo(() => filterCatalog(products, deferredQuery, inStock, sort), [products, deferredQuery, inStock, sort]);
   const reset = () => {setQuery(''); setInStock(false); setSort('featured');};
+  const tabs = showShelf && <div className="shelf-tabs" role="tablist" aria-label="What to buy">
+    <button type="button" role="tab" aria-selected={tab === 'packages'} onClick={() => chooseTab('packages')}>{shelf.packagesTabLabel}</button>
+    <button type="button" role="tab" aria-selected={tab === 'accounts'} onClick={() => chooseTab('accounts')}>{shelf.accountsTabLabel}<span className="shelf-count">{availableAccounts}</span></button>
+  </div>;
+  if (showShelf && tab === 'accounts') return <section id="catalog" className="section"><span id="accounts"/>{tabs}<AccountShelf accounts={accounts} shelf={shelf} vndPerUsd={vndPerUsd} vndPerLtc={vndPerLtc} locale={locale}/></section>;
   return <section id="catalog" className="section">
+    {tabs}
     <div className="section-heading"><div><p className="eyebrow">BUY</p><h2>Choose your amount</h2><p className="muted">{products.length ? 'Any amount on the slider, or one of the packages below. Checkout takes about a minute.' : 'No packages are currently available.'}</p></div><span className="pill">Prices in USD</span></div>
     {source !== 'fallback' && <QuickBuy products={allProducts} slider={slider} vndPerUsd={vndPerUsd} vndPerLtc={vndPerLtc} trades={trades}/>}
     {source === 'fallback' && <p className="catalog-status" role="status">The catalog is temporarily unavailable. Please refresh in a moment.</p>}

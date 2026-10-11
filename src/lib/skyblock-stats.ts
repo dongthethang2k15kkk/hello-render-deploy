@@ -221,3 +221,21 @@ export function suggestTitle(stats: AccountStats) {
 export const skillFill = (skill: SkillStat) => skill.maxed ? 1 : skill.xpNext ? Math.min(1, skill.xpInto / skill.xpNext) : Math.min(1, skill.level / Math.max(1, skill.cap));
 
 export const GAME_MODES: Record<string, string> = {normal: 'Classic', ironman: 'Ironman', stranded: 'Stranded', bingo: 'Bingo'};
+
+// ---------- Editing by hand ----------
+
+/** Sets a skill's level by hand: progress inside the level is unknown, so the bar follows the level. The average skill level follows too. */
+export function setSkillLevel(stats: AccountStats, key: string, level: number): AccountStats {
+  const skills = stats.skills.map(skill => {
+    if (skill.key !== key) return skill;
+    const whole = Math.max(0, Math.min(skill.cap, Math.floor(Number.isFinite(level) ? level : 0)));
+    return {...skill, level: whole, maxed: whole >= skill.cap, xpInto: 0, xpNext: null, totalXp: 0};
+  });
+  return {...stats, skills, summary: {...stats.summary, averageSkill: averageSkill(skills)}};
+}
+
+/** Sets the SkyBlock level by hand (100 XP per level). */
+export const setSkyblockLevel = (stats: AccountStats, level: number): AccountStats => ({...stats, level: skyblockLevel(Math.max(0, Math.floor(level)) * 100)});
+
+/** An empty field means "not known"; anything else must be a number of at least 0. */
+export const parseOptionalNumber = (text: string) => { const trimmed = text.trim().replace(/,/g, ''); if (!trimmed) return null; const value = Number(trimmed); return Number.isFinite(value) && value >= 0 ? value : null; };

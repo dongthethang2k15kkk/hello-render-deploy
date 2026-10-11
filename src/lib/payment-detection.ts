@@ -1,13 +1,15 @@
 import 'server-only';
 import {allAdminEmails} from './admin-team';
 import {recordAudit} from './audit';
-import {addMessage, postPaymentMessage} from './chat-store';
+import {addMessage, postAccountsDeliveredMessage, postPaymentMessage} from './chat-store';
 import * as templates from './email-templates';
 import {parseLtc} from './ltc-format';
 import {sendMail} from './mailer';
 import {notifyCustomer} from './notifications';
 import {CRYPTO_METHODS, isCrypto, VN_TIME_ZONE} from './order-rules';
 import {reReserveItems} from './order-stock';
+import {completeAccountOrder, deliverAccounts} from './account-delivery';
+import {invalidateTradeStats} from './trade-stats';
 import {findLtcPayment, REQUIRED_LTC_CONFIRMATIONS} from './payment-match';
 import {getPaymentDb} from './payment-db';
 import {findUsdtPayment, USDT_TRC20_CONTRACT} from './usdt';
@@ -22,6 +24,7 @@ export async function markPaidAutomatically(orderId: string, input: {amountVnd: 
   const db = getPaymentDb();
   const order = await db.order.findUnique({where: {id: orderId}, include: {customer: {select: {id: true, name: true, email: true}}, slots: {orderBy: {startsAt: 'asc'}}, items: {select: {title: true, quantity: true}}}});
   if (!order || !PAYABLE.includes(order.status)) return false;
+  let delivered = 0;
   const network = isCrypto(order.paymentMethod) ? CRYPTO_METHODS[order.paymentMethod].network : 'Litecoin';
   try {
     await db.$transaction(async tx => {
@@ -33,16 +36,28 @@ export async function markPaidAutomatically(orderId: string, input: {amountVnd: 
       if (changed.count !== 1) throw new Error('Order changed');
       await grantPaidOrderSpin(tx, order);
       await tx.orderEvent.create({data: {orderId, actor: 'system', action: 'payment_confirmed', note: `Detected automatically on the ${network} blockchain: ${input.amountLabel}`}});
+      // Game accounts are delivered in the same transaction as the payment; an order of accounts only is complete at once.
+      delivered = await deliverAccounts(tx, orderId);
+      if (delivered) await tx.orderEvent.create({data: {orderId, actor: 'system', action: 'accounts_delivered', note: `${delivered} game account${delivered === 1 ? '' : 's'} delivered to the order page`}});
+      if (!order.needsAppointment) await completeAccountOrder(tx, orderId, 'system');
     }, {maxWait: 10000, timeout: 20000});
   } catch (error) {
     console.error('Automatic confirmation failed', error instanceof Error ? error.message : error);
     return false;
   }
   await recordAudit({actorEmail: 'system', action: 'order.payment_detected', summary: `Payment for ${order.code} detected automatically on the ${network} blockchain: ${input.amountLabel}`, entityType: 'order', entityId: orderId, customerId: order.customerId});
+  if (!order.needsAppointment) {
+    invalidateTradeStats();
+    await postAccountsDeliveredMessage({customerId: order.customerId, code: order.code});
+    await notifyCustomer({customerId: order.customerId, orderId, title: `Your account is ready · ${order.code}`, body: 'Thank you! Your payment arrived. Open the order to see your account details, then change the password right away.', link: `/en/orders/${order.code}`});
+    await sendMail({to: [order.customer.email], ...templates.customerAccountsDelivered({code: order.code, name: order.customer.name, orderUrl: `${origin}/en/orders/${order.code}`}), kind: 'customer.accounts_delivered', orderId});
+    await sendMail({to: await allAdminEmails(), ...templates.adminPaymentDetected({code: order.code, customerName: order.customer.name, amountLabel: input.amountLabel, network, slots: [], asap: false, accountsOnly: true, orderUrl: `${origin}/en/admin/workspace/${orderId}`}), kind: 'admin.payment_detected', orderId});
+    return true;
+  }
   await postPaymentMessage({customerId: order.customerId, code: order.code, customerTimeZone: order.customerTimeZone});
   const needsTimes = order.slots.length === 0 && !order.asap;
-  await notifyCustomer({customerId: order.customerId, orderId, title: `Payment received · ${order.code}`, body: needsTimes ? 'Thank you! Your payment arrived. Tell us when you are free so we can book your appointment.' : 'Thank you! Your payment arrived. We will confirm your appointment shortly.', link: `/en/orders/${order.code}`});
-  await sendMail({to: [order.customer.email], ...templates.customerPaymentConfirmed({code: order.code, name: order.customer.name, orderUrl: `${origin}/en/orders/${order.code}`}), kind: 'customer.payment_confirmed', orderId});
+  await notifyCustomer({customerId: order.customerId, orderId, title: `Payment received · ${order.code}`, body: needsTimes ? 'Thank you! Your payment arrived. Tell us when you are free so we can book your appointment.' : `Thank you! Your payment arrived. We will confirm your appointment shortly.${delivered ? ' Your account details are already on the order page.' : ''}`, link: `/en/orders/${order.code}`});
+  await sendMail({to: [order.customer.email], ...templates.customerPaymentConfirmed({code: order.code, name: order.customer.name, orderUrl: `${origin}/en/orders/${order.code}`, accountsDelivered: delivered > 0}), kind: 'customer.payment_confirmed', orderId});
   await sendMail({to: await allAdminEmails(), ...templates.adminPaymentDetected({code: order.code, customerName: order.customer.name, amountLabel: input.amountLabel, network, slots: order.slots.map(slot => ({start: slot.startsAt, end: slot.endsAt})), asap: order.asap, orderUrl: `${origin}/en/admin/workspace/${orderId}`}), kind: 'admin.payment_detected', orderId});
   return true;
 }

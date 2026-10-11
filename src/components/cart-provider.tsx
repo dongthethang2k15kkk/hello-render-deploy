@@ -17,7 +17,7 @@ export function CartProvider({children}: {children: React.ReactNode}) {
     if (!catalog.ready) return;
     try {
       const raw = JSON.parse(localStorage.getItem(KEY) ?? '[]');
-      const parsed = createCartSchema(catalog.products).safeParse(raw);
+      const parsed = createCartSchema(catalog.purchasable).safeParse(raw);
       if (parsed.success) setLines(parsed.data);
       else {localStorage.removeItem(KEY); setLines([]);}
     } catch {
@@ -25,9 +25,9 @@ export function CartProvider({children}: {children: React.ReactNode}) {
       setLines([]);
     }
     setReady(true);
-  }, [catalog.ready, catalog.products]);
+  }, [catalog.ready, catalog.purchasable]);
   function save(next: CartLine[]) {
-    const parsed = createCartSchema(catalog.products).safeParse(next);
+    const parsed = createCartSchema(catalog.purchasable).safeParse(next);
     if (!parsed.success) return false;
     try {localStorage.setItem(KEY, JSON.stringify(parsed.data));}
     catch {return false;}

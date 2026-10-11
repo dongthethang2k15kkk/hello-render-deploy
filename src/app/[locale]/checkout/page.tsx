@@ -27,7 +27,9 @@ export default function Checkout() {
   const router = useRouter();
   const {lines, ready, save} = useCart();
   const catalog = useCatalog();
-  const products = catalog.products;
+  const products = catalog.purchasable;
+  const accountsOnly = lines.length > 0 && lines.every(line => products.find(item => item.id === line.productId)?.kind === 'account');
+  const step = (position: number) => String(accountsOnly ? position - 1 : position).padStart(2, '0');
   const online = useOnlineAdmins();
   const [account, setAccount] = useState<{name: string; role: string; coinBalance?: string} | null | false>(null);
   const [busy, setBusy] = useState(false);
@@ -64,11 +66,12 @@ export default function Checkout() {
   }
 
   async function placeOrder() {
-    const built = buildTiming(asap, rows);
-    if ('error' in built) { setError(built.error); return; }
+    // An order of game accounts has nothing to book: no time is chosen or sent.
+    const built = accountsOnly ? null : buildTiming(asap, rows);
+    if (built && 'error' in built) { setError(built.error); return; }
     setBusy(true); setError('');
     try {
-      const response = await fetch('/api/orders', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({lines, method, timing: built.timing, redeemWheelCoins})});
+      const response = await fetch('/api/orders', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({lines, method, ...(built ? {timing: built.timing} : {}), redeemWheelCoins})});
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || 'Your order could not be placed.');
       save([]);
@@ -92,10 +95,10 @@ export default function Checkout() {
   const wheelBalance = account && account.role === 'user' && /^\d+$/.test(account.coinBalance ?? '') ? BigInt(account.coinBalance!) : BigInt(0);
 
   return <>
-    <div className="page-heading"><p className="eyebrow">CHECKOUT</p><h1>Review and place your order</h1><p className="muted checkout-lede">Pick when to trade, choose how to pay, place the order. Your price is held for {HOLD_MINUTES} minutes while you pay with the QR code; then we trade with you in the site chat.</p></div>
+    <div className="page-heading"><p className="eyebrow">CHECKOUT</p><h1>Review and place your order</h1><p className="muted checkout-lede">{accountsOnly ? `Choose how to pay and place the order. Your account is held for ${HOLD_MINUTES} minutes while you pay with the QR code; your account details appear on your order page as soon as the payment is confirmed.` : `Pick when to trade, choose how to pay, place the order. Your price is held for ${HOLD_MINUTES} minutes while you pay with the QR code; then we trade with you in the site chat.`}</p></div>
     <div className="checkout-layout">
       <div>
-        <section className="card timing-card"><span className="eyebrow">01 / WHEN</span><h2>When do you want to trade?</h2>
+        {!accountsOnly && <section className="card timing-card"><span className="eyebrow">01 / WHEN</span><h2>When do you want to trade?</h2>
           {mode === null ? <p aria-busy="true">Checking who is online…</p> : <>
             <div className="payment-options timing-options" role="radiogroup" aria-label="When to trade">
               <label className={`payment-option timing-option ${nowAvailable ? '' : 'disabled'}`}><input type="radio" name="timing" value="now" checked={asap} disabled={!nowAvailable} onChange={() => choose('now')}/>
@@ -108,9 +111,9 @@ export default function Checkout() {
             <p className="field-caption">{asap ? 'Also free later today? Add a backup time in case the trader gets busy. ' : ''}Times are in your time zone ({browserTimeZone()}).</p>
             <SlotRows rows={rows} asap={asap} onChange={editRows}/>
           </>}
-        </section>
+        </section>}
 
-        <section className="card" style={{marginTop: 20}}><span className="eyebrow">02 / PAYMENT METHOD</span><h2>How do you want to pay?</h2>
+        <section className="card" style={{marginTop: accountsOnly ? 0 : 20}}><span className="eyebrow">{step(2)} / PAYMENT METHOD</span><h2>How do you want to pay?</h2>
           {!methods ? <p aria-busy="true">Checking payment options…</p> : <div className="payment-options">
             {methods.usdt && <label className="payment-option"><input type="radio" name="method" value="usdt" checked={method === 'usdt'} onChange={() => setMethod('usdt')}/><span>USDT · TRON (TRC20)<small>Send {usd} in USDT from any wallet or exchange · exact amount on the next page</small></span></label>}
             {methods.ltc && <label className="payment-option"><input type="radio" name="method" value="ltc" checked={method === 'ltc'} onChange={() => setMethod('ltc')}/><span>Litecoin (LTC)<small>About {formatLtcEstimate(total, methods.ltc.vndPerLtc)} · exact amount shown after you place the order</small></span></label>}
@@ -119,11 +122,11 @@ export default function Checkout() {
             {noMethod && <p className="error-text">Payments are not set up yet. Please contact the shop on Discord.</p>}
           </div>}
         </section>
-        <section id="account" className="card checkout-account" style={{marginTop: 20}}><span className="eyebrow">03 / ACCOUNT</span>
+        <section id="account" className="card checkout-account" style={{marginTop: 20}}><span className="eyebrow">{step(3)} / ACCOUNT</span>
           {account ? <><h2>Signed in as {account.name}</h2><p className="muted">Order updates go to the email on your account and to your <Link href={`/${locale}/inbox`}>Inbox</Link>.</p></>
             : <CheckoutSignIn locale={locale} onSignedIn={() => {invalidateJson('/api/auth/session'); void loadAccount(true);}}/>}
         </section>
-        {account && account.role === 'user' && <section className="card checkout-coins" style={{marginTop: 20}}><span className="eyebrow">04 / WHEEL COINS</span><h2>Receive your wheel winnings with this order?</h2>
+        {account && account.role === 'user' && <section className="card checkout-coins" style={{marginTop: 20}}><span className="eyebrow">{step(4)} / WHEEL COINS</span><h2>Receive your wheel winnings with this order?</h2>
           {wheelBalance > BigInt(0) ? <label className="wheel-coin-option"><input type="checkbox" checked={redeemWheelCoins} onChange={event => setRedeemWheelCoins(event.target.checked)}/><span><strong>Receive all {formatCoins(wheelBalance)}</strong><small>The balance is reserved now. Your Admin will add it to the package amount when delivering this order. It is returned automatically if this unpaid order is cancelled or expires.</small></span></label>
             : <p className="muted">Your wheel balance is empty. Paid orders unlock spins; spin first, then apply the winnings to a later order.</p>}
         </section>}
@@ -137,10 +140,10 @@ export default function Checkout() {
         })}
         <div className="summary-total"><small>{method === 'usdt' ? 'You pay in USDT (TRC20)' : method === 'ltc' ? 'Order value (paid in LTC)' : method === 'paypal' ? `You pay with PayPal${paypalFee ? ` (includes ${paypalFee} PayPal fee)` : ''}` : 'You pay by bank transfer'}</small><p className="pay-amount">{method === 'paypal' ? paypalUsd : usd}</p><small className="pay-secondary">{formatVnd(total)}{methods?.ltc ? ` · ≈ ${formatLtcEstimate(total, methods.ltc.vndPerLtc)}` : ''}</small></div>
         {redeemWheelCoins && wheelBalance > BigInt(0) && <p className="summary-wheel-coins"><span>Wheel coins to receive</span><strong>+ {formatCoins(wheelBalance)}</strong></p>}
-        {mode !== null && <p className="summary-timing">{asap ? <><span className="live-status-dot on" aria-hidden="true"/> Trade now, right after payment</> : <>Scheduled · {rows.length} time{rows.length === 1 ? '' : 's'} chosen</>}</p>}
+        {!accountsOnly && mode !== null && <p className="summary-timing">{asap ? <><span className="live-status-dot on" aria-hidden="true"/> Trade now, right after payment</> : <>Scheduled · {rows.length} time{rows.length === 1 ? '' : 's'} chosen</>}</p>}
         {error && <p className="error-text" role="alert">{error}</p>}
-        <button className="full-width" type="button" disabled={busy || !signedIn || !methods || Boolean(noMethod) || mode === null} onClick={() => void placeOrder()}>{busy ? 'Placing order…' : 'Place order →'}</button>
-        <p className="field-caption">{signedIn ? `You will see the ${method === 'bank' ? 'bank details' : method === 'paypal' ? 'PayPal link' : 'wallet address'} and QR code on the next page.` : <><a href="#account">Sign in or create an account</a> (step 03, takes a few seconds) to place your order.</>}</p>
+        <button className="full-width" type="button" disabled={busy || !signedIn || !methods || Boolean(noMethod) || (!accountsOnly && mode === null)} onClick={() => void placeOrder()}>{busy ? 'Placing order…' : 'Place order →'}</button>
+        <p className="field-caption">{signedIn ? `You will see the ${method === 'bank' ? 'bank details' : method === 'paypal' ? 'PayPal link' : 'wallet address'} and QR code on the next page.` : <><a href="#account">Sign in or create an account</a> (step {step(3)}, takes a few seconds) to place your order.</>}</p>
       </aside>
     </div>
   </>;

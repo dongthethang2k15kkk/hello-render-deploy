@@ -2,14 +2,18 @@ import 'server-only';
 import {getPaymentDb} from './payment-db';
 import {deliveryFieldSchema, fallbackProducts, fallbackVndPerUsd, type CatalogProduct, type CatalogSource} from './catalog';
 import {getLtcRate, getVndPerUsd} from './exchange-rates';
+import {accountCatalogLine} from './account-card';
+import {getShelf} from './accounts-settings';
+import {defaultShelf, type Shelf} from './accounts-shelf-rules';
 import {paypalReady} from './paypal';
 import {getPaypalSettings} from './paypal-settings';
 
 // vndPerLtc is set only while Litecoin checkout is on (an active wallet), so the store can show an LTC estimate.
-export type PublicCatalog = {products: CatalogProduct[]; source: CatalogSource; vndPerUsd: number; vndPerLtc: number | null};
+// `products` are the packages; `accounts` are the game accounts for sale (empty when the Admin turned the shelf off).
+export type PublicCatalog = {products: CatalogProduct[]; accounts: CatalogProduct[]; shelf: Shelf; source: CatalogSource; vndPerUsd: number; vndPerLtc: number | null};
 
 function fallback(source: 'demo' | 'fallback'): PublicCatalog {
-  return {products: fallbackProducts, source, vndPerUsd: fallbackVndPerUsd, vndPerLtc: null};
+  return {products: fallbackProducts, accounts: [], shelf: defaultShelf, source, vndPerUsd: fallbackVndPerUsd, vndPerLtc: null};
 }
 
 async function storeLtcRate() {
@@ -60,10 +64,17 @@ async function readDatabaseCatalog(): Promise<CatalogProduct[]> {
       return [{
         id: item.id, sourceProductId: product.id, slug: product.slug, sku: item.sku, category: product.category, imagePath: product.imagePath,
         priceVnd: sale ?? item.priceVnd, basePriceVnd: item.priceVnd, salePriceVnd: sale, stock: Math.max(0, item.stockOnHand),
-        title: {en: title}, description: {en: packageText.description || productText.description}, fields: parsedFields.data
+        title: {en: title}, description: {en: packageText.description || productText.description}, fields: parsedFields.data, kind: 'package' as const, account: null
       } satisfies CatalogProduct];
     });
   });
+}
+
+/** Game accounts on sale, and the ones a customer just reserved (shown as "Reserved" until their order is paid or expires). */
+async function readAccounts(shelf: Shelf): Promise<CatalogProduct[]> {
+  if (!shelf.enabled) return [];
+  const rows = await getPaymentDb().gameAccount.findMany({where: {status: {in: ['available', 'reserved']}, priceVnd: {gt: 0}}, orderBy: [{sortOrder: 'asc'}, {createdAt: 'desc'}], take: 200});
+  return rows.map(accountCatalogLine);
 }
 
 // Neon Free suspends idle compute; the first query after a pause can take several seconds.
@@ -72,8 +83,9 @@ export async function getPublicCatalog(timeoutMs = 10000): Promise<PublicCatalog
   let timer: ReturnType<typeof setTimeout> | undefined;
   try {
     const timeout = new Promise<never>((_, reject) => {timer = setTimeout(() => reject(new Error('Catalog database timeout')), timeoutMs);});
-    const [products, vndPerUsd, vndPerLtc] = await Promise.race([Promise.all([readDatabaseCatalog(), getVndPerUsd(), storeLtcRate()]), timeout]);
-    return {products, source: 'database', vndPerUsd, vndPerLtc};
+    const [products, vndPerUsd, vndPerLtc, shelf] = await Promise.race([Promise.all([readDatabaseCatalog(), getVndPerUsd(), storeLtcRate(), getShelf()]), timeout]);
+    const accounts = await readAccounts(shelf).catch(() => []);
+    return {products, accounts, shelf, source: 'database', vndPerUsd, vndPerLtc};
   } catch {
     return fallback('fallback');
   } finally {

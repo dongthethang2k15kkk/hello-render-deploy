@@ -15,7 +15,7 @@ import {LoadingRows} from '@/components/loading-state';
 export default function Cart() {
   const {lines, ready, save} = useCart();
   const catalog = useCatalog();
-  const products = catalog.products;
+  const products = catalog.purchasable;
   const t = useTranslations();
   const locale = useLocale() as Locale;
   const [error, setError] = useState('');
@@ -37,17 +37,20 @@ export default function Cart() {
         {lines.map((line, index) => {
           const product = products.find(item => item.id === line.productId);
           if (!product) return null;
+          // A game account is one unit with nothing to fill in: no quantity buttons, no delivery form.
+          const isAccount = product.kind === 'account';
           return <article className="card cart-item" key={`${line.productId}-${index}`}>
             <ProductPreview product={product} variant={index % 2}/>
             <div>
               <h2>{product.title[locale]}</h2>
-              <p>{t('quantity')}: {line.quantity} · <Price vnd={product.priceVnd * line.quantity} vndPerUsd={catalog.vndPerUsd} className="inline-price"/></p>
+              {isAccount ? <p>SkyBlock account · {product.sku} · <Price vnd={product.priceVnd} vndPerUsd={catalog.vndPerUsd} className="inline-price"/></p>
+                : <p>{t('quantity')}: {line.quantity} · <Price vnd={product.priceVnd * line.quantity} vndPerUsd={catalog.vndPerUsd} className="inline-price"/></p>}
               {Object.entries(line.delivery).map(([key, value]) => {
                 const label = product.fields.find(field => field.key === key)?.labelEn ?? key;
                 return <p key={key}>{label}: {value}</p>;
               })}
               <div className="row">
-                <div className="quantity-control">
+                {!isAccount && <div className="quantity-control">
                   <button type="button" aria-label={`Decrease item ${index + 1}`} disabled={line.quantity <= 1} onClick={() => {
                     setRemoved(null);
                     setError(save(lines.map((item, itemIndex) => itemIndex === index ? {...item, quantity: item.quantity - 1} : item)) ? '' : t('invalid'));
@@ -57,9 +60,9 @@ export default function Cart() {
                     setRemoved(null);
                     setError(save(lines.map((item, itemIndex) => itemIndex === index ? {...item, quantity: item.quantity + 1} : item)) ? '' : t('invalid'));
                   }}>+</button>
-                </div>
+                </div>}
                 <div className="cart-item-actions">
-                  <Link className="text-link" href={`/${locale}/products/${line.productId}?edit=${index}`}>Edit details</Link>
+                  {isAccount ? <Link className="text-link" href={`/${locale}/accounts/${product.sku}`}>View account</Link> : <Link className="text-link" href={`/${locale}/products/${line.productId}?edit=${index}`}>Edit details</Link>}
                   <button className="secondary" type="button" onClick={() => {
                     if (save(lines.filter((_, itemIndex) => itemIndex !== index))) {
                       setError('');

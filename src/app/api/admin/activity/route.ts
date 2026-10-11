@@ -9,7 +9,7 @@ const json = (data: unknown, status = 200) => Response.json(data, {status, heade
 const dateParam = z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().catch(undefined);
 const filters = z.object({
   q: z.string().trim().max(100).catch(''),
-  type: z.enum(['all', 'order', 'customer', 'product', 'settings', 'email']).catch('all'),
+  type: z.enum(['all', 'order', 'customer', 'product', 'settings', 'email', 'account']).catch('all'),
   actor: z.string().trim().max(254).catch(''),
   from: dateParam, to: dateParam,
   page: z.coerce.number().int().min(1).max(10000).catch(1)

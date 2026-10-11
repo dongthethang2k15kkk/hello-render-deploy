@@ -8,13 +8,14 @@ import {LoadingRows} from '@/components/loading-state';
 type Entry = {id: string; actorEmail: string; action: string; summary: string; entityType: string | null; entityId: string | null; customerId: string | null; createdAt: string};
 type Filters = {q: string; type: string; actor: string; from: string; to: string};
 const emptyFilters: Filters = {q: '', type: 'all', actor: '', from: '', to: ''};
-const typeLabels: Record<string, string> = {order: 'Order', customer: 'Customer', product: 'Product', settings: 'Settings', email: 'Email'};
+const typeLabels: Record<string, string> = {order: 'Order', customer: 'Customer', product: 'Product', settings: 'Settings', email: 'Email', account: 'Account'};
 
 function entityLink(locale: string, entry: Entry) {
   if (entry.entityType === 'order' && entry.entityId) return `/${locale}/admin/orders/${entry.entityId}`;
   if (entry.entityType === 'customer' && entry.customerId) return `/${locale}/admin/customers/${entry.customerId}`;
   if (entry.entityType === 'product') return `/${locale}/admin/settings/products`;
   if (entry.entityType === 'settings') return `/${locale}/admin/settings/payments`;
+  if (entry.entityType === 'account' && entry.entityId) return `/${locale}/admin/accounts/${entry.entityId}`;
   if (entry.entityType === 'email') return `/${locale}/admin/settings/email`;
   return null;
 }

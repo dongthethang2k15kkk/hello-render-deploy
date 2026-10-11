@@ -1,11 +1,13 @@
 'use client';
 
 import {createContext, useContext, useEffect, useState} from 'react';
+import {defaultShelf, type Shelf} from '@/lib/accounts-shelf-rules';
 import {catalogResponseSchema, fallbackProducts, fallbackVndPerUsd, type CatalogProduct, type CatalogSource} from '@/lib/catalog';
 import {loadJson} from '@/lib/client-data-cache';
 
-type CatalogState = {products: CatalogProduct[]; ready: boolean; source: CatalogSource; vndPerUsd: number; vndPerLtc: number | null};
-const initial: CatalogState = {products: fallbackProducts, ready: false, source: 'demo', vndPerUsd: fallbackVndPerUsd, vndPerLtc: null};
+// `products` are the packages. A cart can also hold a game account, so anything that looks up cart lines uses `purchasable`.
+type CatalogState = {products: CatalogProduct[]; accounts: CatalogProduct[]; purchasable: CatalogProduct[]; shelf: Shelf; ready: boolean; source: CatalogSource; vndPerUsd: number; vndPerLtc: number | null};
+const initial: CatalogState = {products: fallbackProducts, accounts: [], purchasable: fallbackProducts, shelf: defaultShelf, ready: false, source: 'demo', vndPerUsd: fallbackVndPerUsd, vndPerLtc: null};
 const CatalogContext = createContext<CatalogState>(initial);
 
 export function CatalogProvider({children}: {children: React.ReactNode}) {
@@ -19,7 +21,7 @@ export function CatalogProvider({children}: {children: React.ReactNode}) {
         const response = await loadJson<unknown>('/api/catalog', {maxAgeMs: 60_000, force: attempt > 0, timeoutMs: 12_000});
         const parsed = catalogResponseSchema.safeParse(response.ok ? response.data : null);
         if (!parsed.success || parsed.data.source === 'fallback') throw new Error('Catalog unavailable');
-        if (!cancelled) setState({...parsed.data, ready: true});
+        if (!cancelled) setState({...parsed.data, purchasable: [...parsed.data.products, ...parsed.data.accounts], ready: true});
       } catch {
         if (cancelled) return;
         if (attempt < 2) { await new Promise(resolve => window.setTimeout(resolve, 1500)); return load(attempt + 1); }

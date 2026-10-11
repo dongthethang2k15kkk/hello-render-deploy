@@ -1,7 +1,7 @@
 import 'server-only';
 import {getPaymentDb} from './payment-db';
 
-export type AuditEntity = 'customer' | 'order' | 'product' | 'settings' | 'email';
+export type AuditEntity = 'customer' | 'order' | 'product' | 'settings' | 'email' | 'account';
 
 /** Records an Admin action for the Activity page. Failures are logged, never thrown, so the action itself still succeeds. */
 export async function recordAudit(entry: {actorEmail: string; action: string; summary: string; entityType: AuditEntity; entityId?: string | null; customerId?: string | null}) {

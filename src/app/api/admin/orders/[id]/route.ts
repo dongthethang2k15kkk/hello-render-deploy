@@ -3,7 +3,7 @@ import {getSession} from '@/lib/auth';
 import {sameOrigin} from '@/lib/customer-rules';
 import {appOrigin} from '@/lib/oauth-helpers';
 import {isCrypto, vietnamLocalToDate} from '@/lib/order-rules';
-import {addInternalNote, adminOrder, assertHandles, cancelByAdmin, claimOrder, completeOrder, confirmPayment, OrderError, resendEmail, scheduleAppointment} from '@/lib/order-store';
+import {addInternalNote, adminOrder, assertHandles, cancelByAdmin, claimOrder, completeOrder, confirmPayment, OrderError, resendEmail, revealDeliveredLogin, scheduleAppointment} from '@/lib/order-store';
 import {checkCryptoOrder} from '@/lib/payment-detection';
 
 export const runtime = 'nodejs';
@@ -35,6 +35,7 @@ const action = z.discriminatedUnion('action', [
   z.object({action: z.literal('resend'), kind: z.enum(['admin.payment_reported', 'customer.appointment', 'customer.completed'])}).strict(),
   z.object({action: z.literal('start-now'), minutes: z.number().int().min(15).max(240).default(60)}).strict(),
   z.object({action: z.literal('check-payment')}).strict(),
+  z.object({action: z.literal('reveal-account'), itemId: z.string().regex(/^[a-z0-9]{10,40}$/)}).strict(),
   z.object({action: z.enum(['claim', 'release', 'take-over'])}).strict()
 ]);
 // Changing the order is for the Admin handling it (notes, resends and payment checks stay open to every Admin).
@@ -54,6 +55,7 @@ export async function POST(request: Request, {params}: {params: Promise<{id: str
   try {
     const input = parsed.data;
     if (HANDLER_ACTIONS.has(input.action)) await assertHandles(admin.email, id);
+    if (input.action === 'reveal-account') return json({login: await revealDeliveredLogin(admin.email, id, input.itemId)});
     if (input.action === 'claim' || input.action === 'release' || input.action === 'take-over') await claimOrder(admin.email, id, input.action);
     else if (input.action === 'confirm-payment') await confirmPayment(admin.email, id, {amountVnd: input.amountVnd, reference: input.reference, appointment: input.appointment ? toDates(input.appointment) : undefined}, origin);
     else if (input.action === 'schedule') await scheduleAppointment(admin.email, id, toDates(input.appointment), origin);

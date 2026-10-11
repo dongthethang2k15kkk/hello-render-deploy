@@ -21,16 +21,34 @@ type Order = {
   bankSnapshot: PaymentSnapshot;
   appointmentStart: string | null; appointmentEnd: string | null; deliveryNote: string | null; cancelReason: string | null;
   redeemWheelCoins: boolean; wheelCoins: string; wheelCoinsReleasedAt: string | null;
-  items: {title: string; sku: string; unitPriceVnd: number; quantity: number; delivery: Record<string, string>}[];
+  // False for an order of game accounts only: nothing to book, the account is delivered when the payment is confirmed.
+  needsAppointment: boolean; accounts: {code: string; title: string; ign: string | null; profileName: string | null; loginDetails: string}[];
+  items: {title: string; sku: string; unitPriceVnd: number; quantity: number; delivery: Record<string, string>; kind: string}[];
   slots: {startsAt: string; endsAt: string}[];
   events: {action: string; note: string | null; createdAt: string}[];
 };
 
-const eventLabels: Record<string, string> = {created: 'Order placed', payment_reported: 'You reported the payment', payment_seen: 'Payment seen on the blockchain', times_updated: 'You changed your times', payment_confirmed: 'Payment confirmed', scheduled: 'Appointment booked', rescheduled: 'Appointment changed', completed: 'Order completed', cancelled: 'Order cancelled', expired: 'Payment window ended'};
+const eventLabels: Record<string, string> = {created: 'Order placed', payment_reported: 'You reported the payment', payment_seen: 'Payment seen on the blockchain', times_updated: 'You changed your times', payment_confirmed: 'Payment confirmed', accounts_delivered: 'Account delivered', scheduled: 'Appointment booked', rescheduled: 'Appointment changed', completed: 'Order completed', cancelled: 'Order cancelled', expired: 'Payment window ended'};
 
 function Copy({label, value}: {label: string; value: string}) {
   const [copied, setCopied] = useState(false);
   return <div className="pay-row"><span>{label}</span><strong>{value}</strong><button type="button" className="secondary copy-button" onClick={() => {void navigator.clipboard?.writeText(value).then(() => {setCopied(true); window.setTimeout(() => setCopied(false), 1500);});}}>{copied ? 'Copied' : 'Copy'}</button></div>;
+}
+
+/** The game account the customer bought: shown only to them, with each login line ready to copy. */
+function AccountDelivery({account}: {account: Order['accounts'][number]}) {
+  const lines = account.loginDetails.split('\n').map(line => line.trim()).filter(Boolean);
+  return <section className="card delivery-card account-delivery">
+    <span className="eyebrow">YOUR SKYBLOCK ACCOUNT</span><h2>{account.title.replace(/^SkyBlock account · /, '')}</h2>
+    {account.ign && <Copy label="In-game name" value={account.ign}/>}
+    {account.profileName && <div className="pay-row"><span>Profile</span><strong>{account.profileName}</strong></div>}
+    {lines.map((line, index) => {
+      const match = /^([^:]{1,40}):\s*(.+)$/.exec(line);
+      return match ? <Copy key={index} label={match[1]} value={match[2]}/> : <p key={index} className="delivery-note">{line}</p>;
+    })}
+    <p className="network-warning"><strong>Change the password and recovery email right away.</strong> Message us in Chat if anything does not work.</p>
+    <p className="field-caption">Only you can see this page.</p>
+  </section>;
 }
 
 export default function OrderPage({params}: {params: Promise<{locale: string; code: string}>}) {
@@ -90,7 +108,7 @@ export default function OrderPage({params}: {params: Promise<{locale: string; co
   function buyAgain() {
     if (!order) return;
     const lines = order.items.flatMap(item => {
-      const product = catalog.products.find(entry => entry.sku === item.sku && entry.stock > 0);
+      const product = item.kind === 'account' ? undefined : catalog.products.find(entry => entry.sku === item.sku && entry.stock > 0);
       if (!product) return [];
       const delivery = Object.fromEntries(product.fields.map(field => [field.key, item.delivery[field.key] ?? '']));
       return [{productId: product.id, quantity: Math.min(item.quantity, product.stock), delivery}];
@@ -102,7 +120,7 @@ export default function OrderPage({params}: {params: Promise<{locale: string; co
   // Times chosen at checkout: "I've paid" reports at once. Older orders still ask for times in the dialog.
   async function reportPaid() {
     if (!order) return;
-    if (!order.slots.length) { setDialog('report'); return; }
+    if (order.needsAppointment && !order.slots.length) { setDialog('report'); return; }
     if (txid.trim() && !paypalPay && !/^[0-9a-fA-F]{64}$/.test(txid.trim())) { setError('The transaction ID is 64 characters (0-9, a-f). Leave it empty if you do not have it.'); return; }
     if (txid.trim() && paypalPay && !/^[0-9a-zA-Z]{17}$/.test(txid.trim())) { setError('The PayPal transaction ID is 17 letters and digits. Leave it empty if you do not have it.'); return; }
     setReporting(true); setError('');
@@ -118,6 +136,7 @@ export default function OrderPage({params}: {params: Promise<{locale: string; co
     {error && <p className="error-text" role="alert">{error}</p>}
     <div className="order-layout">
       <div>
+        {order.accounts.map(account => <AccountDelivery key={account.code} account={account}/>)}
         {order.status === 'awaiting_payment' && <section className="card pay-card">
           <span className="eyebrow">STEP 1 / {usdt ? 'PAY WITH USDT (TRC20)' : crypto ? 'PAY WITH LITECOIN' : paypalPay ? 'PAY WITH PAYPAL' : 'PAY BY BANK TRANSFER'}</span>
           <h2>{secondsLeft > 0 ? <>Price locked · pay within <span className="countdown">{Math.floor(secondsLeft / 60)}:{String(secondsLeft % 60).padStart(2, '0')}</span></> : 'Payment window ended'}</h2>
@@ -168,14 +187,14 @@ export default function OrderPage({params}: {params: Promise<{locale: string; co
         {(order.status === 'payment_reported' || order.status === 'paid') && <section className="card">
           <span className="eyebrow">{order.status === 'paid' ? 'PAYMENT CONFIRMED' : 'CHECKING YOUR PAYMENT'}</span>
           {order.customerTxid && <p className="field-caption">{paypalPay ? `Your PayPal transaction: ${order.customerTxid}` : <>Your transaction: <a href={explorerTx(order.paymentMethod, order.customerTxid)} target="_blank" rel="noreferrer">{order.customerTxid.slice(0, 12)}…</a></>}</p>}
-          <h2>{order.status === 'paid' ? (order.slots.length || order.asap ? 'We are booking your appointment' : 'Payment received! When are you free?') : 'Thanks! We are confirming your transfer'}</h2>
+          <h2>{order.status === 'paid' ? (order.slots.length || order.asap ? 'We are booking your appointment' : 'Payment received! When are you free?') : 'Thanks! We are confirming your payment'}</h2>
           {order.paymentSource && order.status === 'paid' && <p className="payment-seen">Payment confirmed automatically on the {crypto?.network ?? 'Litecoin'} network.</p>}
           {order.status === 'payment_reported' && order.paymentSeenAt && <p className="payment-seen" role="status">Payment seen on the {crypto?.network ?? 'Litecoin'} network{usdt ? '' : ` (${Math.min(order.txConfirmations ?? 0, 2)}/2 confirmations)`}. It is confirmed automatically.</p>}
           {order.asap && <p className="payment-seen">You are free right now: we will message you in <Link href={`/${locale}/workspace`}>Chat</Link> as soon as an Admin is available.</p>}
-          <p className="muted">You will get an email and a message in your <Link href={`/${locale}/inbox`}>Inbox</Link> when your appointment is booked.</p>
+          {order.needsAppointment ? <p className="muted">You will get an email and a message in your <Link href={`/${locale}/inbox`}>Inbox</Link> when your appointment is booked.</p> : <p className="muted">Your account appears at the top of this page as soon as we confirm the payment. You will also get an email and a message in your <Link href={`/${locale}/inbox`}>Inbox</Link>.</p>}
           {order.slots.length > 0 && <><h3>Your available times</h3>
           <ul className="slot-list">{order.slots.map(slot => <li key={slot.startsAt}>{formatRange(slot.startsAt, slot.endsAt, timeZone)}</li>)}</ul></>}
-          <button type="button" className={order.slots.length || order.asap ? 'secondary' : ''} onClick={() => setDialog('update-times')}>{order.slots.length || order.asap ? 'Change my times' : 'Choose my times'}</button>
+          {order.needsAppointment && <button type="button" className={order.slots.length || order.asap ? 'secondary' : ''} onClick={() => setDialog('update-times')}>{order.slots.length || order.asap ? 'Change my times' : 'Choose my times'}</button>}
         </section>}
 
         {order.status === 'scheduled' && calendar && <section className="card appointment-card">
@@ -184,7 +203,7 @@ export default function OrderPage({params}: {params: Promise<{locale: string; co
           <div className="pay-actions"><Link className="button" href={`/${locale}/workspace`}>Open chat</Link><a className="button secondary" href={googleCalendarLink(calendar)} target="_blank" rel="noreferrer">Add to Google Calendar</a><a className="button secondary" href={`/api/orders/${order.code}/calendar`}>Download calendar file</a></div>
         </section>}
 
-        {order.status === 'completed' && <section className="card delivery-card"><span className="eyebrow">DELIVERED</span><h2>Your delivery details</h2><p className="delivery-note">{order.deliveryNote}</p><p className="field-caption">Only you can see this. Questions? <Link href={`/${locale}/workspace`}>Open chat</Link>.</p></section>}
+        {order.status === 'completed' && (order.needsAppointment || order.accounts.length === 0) && <section className="card delivery-card"><span className="eyebrow">DELIVERED</span><h2>Your delivery details</h2><p className="delivery-note">{order.deliveryNote}</p><p className="field-caption">Only you can see this. Questions? <Link href={`/${locale}/workspace`}>Open chat</Link>.</p></section>}
 
         {(order.status === 'cancelled' || order.status === 'expired') && <section className="card"><span className="eyebrow">{order.status === 'expired' ? 'EXPIRED' : 'CANCELLED'}</span><h2>{order.status === 'expired' ? 'The payment window ended' : 'This order was cancelled'}</h2>{order.cancelReason && <p className="muted">{order.cancelReason}</p>}<Link className="button" href={`/${locale}#catalog`}>Back to packages</Link></section>}
 

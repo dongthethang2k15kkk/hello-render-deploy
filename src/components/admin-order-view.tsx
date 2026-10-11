@@ -17,7 +17,8 @@ export type AdminOrder = {
   redeemWheelCoins: boolean; wheelCoins: string; wheelCoinsReleasedAt: string | null;
   bankSnapshot: PaymentSnapshot;
   customer: {id: string; name: string; email: string; status: string; discordUsername?: string | null};
-  items: {id: string; title: string; sku: string; unitPriceVnd: number; quantity: number; delivery: Record<string, string>}[];
+  needsAppointment: boolean;
+  items: {id: string; title: string; sku: string; unitPriceVnd: number; quantity: number; delivery: Record<string, string>; kind: string; accountId: string | null; deliveredAt: string | null}[];
   slots: {id: string; startsAt: string; endsAt: string}[];
   events: {id: string; actor: string; action: string; note: string | null; createdAt: string}[];
   emails: {id: string; recipient: string; subject: string; kind: string; status: string; error: string | null; createdAt: string}[];
@@ -44,6 +45,7 @@ export default function AdminOrderView({locale, id, variant = 'page', onLoaded}:
   const [reason, setReason] = useState('');
   const [note, setNote] = useState('');
   const [startMinutes, setStartMinutes] = useState('60');
+  const [revealed, setRevealed] = useState<Record<string, string>>({});
 
   const adopt = useCallback((next: AdminOrder) => {
     setOrder(next);
@@ -81,6 +83,12 @@ export default function AdminOrderView({locale, id, variant = 'page', onLoaded}:
     finally { setBusy(false); }
   }
 
+  async function revealAccount(itemId: string) {
+    setError('');
+    const response = await fetch(`/api/admin/orders/${id}`, {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({action: 'reveal-account', itemId})}).catch(() => null);
+    const data = await response?.json().catch(() => null);
+    if (!response?.ok) setError(data?.error ?? 'The details could not be shown.'); else setRevealed(current => ({...current, [itemId]: data.login}));
+  }
   const backHref = variant === 'workspace' ? `/${locale}/admin/workspace` : `/${locale}/admin/orders`;
   if (!order) return <div className="page-heading"><Link href={backHref}>← {variant === 'workspace' ? 'Workspace' : 'Orders'}</Link>{error ? <p className="admin-feedback error" role="alert">{error}</p> : <LoadingRows label="Loading order…"/>}</div>;
   // Another Admin handles this order: show who, and offer to take it over instead of the actions.
@@ -94,9 +102,12 @@ export default function AdminOrderView({locale, id, variant = 'page', onLoaded}:
   const kind = paymentKind(order);
   // Which snapshot applies follows from the payment method, not from the snapshot's shape.
   const wallet = order.bankSnapshot as WalletSnapshot; const paypal = order.bankSnapshot as PaypalSnapshot; const bank = order.bankSnapshot as BankSnapshot;
+  // An order of game accounts only has no appointment: confirming the payment delivers the account and completes the order.
+  const bookNow = order.needsAppointment && scheduleNow;
+  const viewedAt = order.events.find(event => event.action === 'accounts_viewed')?.createdAt;
   const canConfirm = !otherHandler && ['awaiting_payment', 'payment_reported', 'expired'].includes(order.status);
-  const canSchedule = !otherHandler && (order.status === 'paid' || order.status === 'scheduled');
-  const canComplete = !otherHandler && (order.status === 'paid' || order.status === 'scheduled');
+  const canSchedule = !otherHandler && order.needsAppointment && (order.status === 'paid' || order.status === 'scheduled');
+  const canComplete = !otherHandler && order.needsAppointment && (order.status === 'paid' || order.status === 'scheduled');
   const canCancel = !otherHandler && open;
   const appointment = {start, end};
   const timePicker = <div className="appointment-picker">
@@ -121,21 +132,22 @@ export default function AdminOrderView({locale, id, variant = 'page', onLoaded}:
         <dl className="account-details"><dt>Name</dt><dd><Link href={`/${locale}/admin/customers/${order.customer.id}`}>{order.customer.name}</Link></dd><dt>Email</dt><dd>{order.customer.email}</dd>{order.customer.discordUsername && <><dt>Discord</dt><dd>@{order.customer.discordUsername}</dd></>}{kind === 'crypto' ? <><dt>Method</dt><dd>{crypto ? `${crypto.coin} · ${crypto.network}` : 'Crypto'}</dd><dt>Expected</dt><dd><strong>{order.cryptoAmount} {coin}</strong>{order.cryptoRateVnd ? ` at ${order.cryptoRateVnd.toLocaleString('vi-VN')} ₫/${coin}` : ''}</dd><dt>To wallet</dt><dd>{wallet.label} · <a className="admin-mono" href={explorerAddress(order.paymentMethod, wallet.address)} target="_blank" rel="noreferrer">{wallet.address}</a></dd>{order.paymentSeenAt && <><dt>Seen on chain</dt><dd>{formatDateTime(order.paymentSeenAt)}{order.paymentMethod === 'ltc' ? ` · ${order.txConfirmations ?? 0} confirmation${order.txConfirmations === 1 ? '' : 's'}` : ''}</dd></>}{order.customerTxid && <><dt>Customer TXID</dt><dd><a className="admin-mono" href={explorerTx(order.paymentMethod, order.customerTxid)} target="_blank" rel="noreferrer">{order.customerTxid.slice(0, 16)}…</a></dd></>}</> : kind === 'paypal' ? <><dt>Method</dt><dd>PayPal</dd><dt>Expected</dt><dd><strong>{order.cryptoAmount} USD</strong> to <a href={`https://paypal.me/${paypal.paypalMe}`} target="_blank" rel="noreferrer">paypal.me/{paypal.paypalMe}</a></dd><dt>Note</dt><dd><strong>{order.code}</strong></dd>{order.customerTxid && <><dt>Customer PayPal ID</dt><dd className="admin-mono">{order.customerTxid}</dd></>}</> : <><dt>Method</dt><dd>Bank transfer</dd><dt>Transfer content</dt><dd><strong>{order.code}</strong></dd><dt>To account</dt><dd>{bank.bankName} · {bank.accountNumber}</dd></>}{order.reportedAt && <><dt>Reported transfer</dt><dd>{formatDateTime(order.reportedAt)}</dd></>}{order.paidAt && <><dt>Payment confirmed</dt><dd>{formatVnd(order.paidAmountVnd ?? 0)} · {formatDateTime(order.paidAt)} by {order.paymentConfirmedBy?.startsWith('auto:') ? `automatic (${crypto?.network ?? 'blockchain'})` : order.paymentConfirmedBy}{order.paymentReference ? ` · ref ${order.paymentReference}` : ''}</dd></>}{order.appointmentStart && order.appointmentEnd && <><dt>Appointment</dt><dd><strong>{formatRange(order.appointmentStart, order.appointmentEnd, VN_TIME_ZONE)}</strong></dd></>}{order.cancelReason && <><dt>Reason</dt><dd>{order.cancelReason}</dd></>}</dl>
       </section>
       <section className="card admin-panel"><h2>Items</h2>
-        {order.items.map(item => <div className="admin-order-item" key={item.id}><strong>{item.title} × {item.quantity}</strong><span>{item.sku} · {formatVnd(item.unitPriceVnd * item.quantity)}</span>{Object.entries(item.delivery).filter(([, value]) => value).map(([key, value]) => <small key={key}>{key}: {value}</small>)}</div>)}
+        {order.items.map(item => <div className="admin-order-item" key={item.id}><strong>{item.title} × {item.quantity}</strong><span>{item.sku} · {formatVnd(item.unitPriceVnd * item.quantity)}</span>{item.kind === 'account' && <small>{item.accountId && <Link href={`/${locale}/admin/accounts/${item.accountId}`}>Open the account</Link>} · {item.deliveredAt ? `delivered ${formatDateTime(item.deliveredAt)}` : 'not delivered yet'}{item.deliveredAt && (viewedAt ? ` · the customer opened the details ${formatDateTime(viewedAt)}` : ' · the customer has not opened them yet')}
+          {item.deliveredAt && (revealed[item.id] === undefined ? <> · <button type="button" className="admin-remove-link" disabled={busy} onClick={() => { if (window.confirm('Show the delivered login details? This is recorded in Activity.')) void revealAccount(item.id); }}>Reveal</button></> : <textarea readOnly rows={4} className="admin-mono" value={revealed[item.id]}/>)}</small>}{Object.entries(item.delivery).filter(([, value]) => value).map(([key, value]) => <small key={key}>{key}: {value}</small>)}</div>)}
         {order.redeemWheelCoins && <div className={`admin-coin-calculation ${wheelCoins > BigInt(0) ? '' : 'released'}`}><strong>{wheelCoins > BigInt(0) ? 'Add wheel winnings to delivery' : 'Wheel winnings are not reserved'}</strong>{wheelCoins > BigInt(0) ? <><span>Package amount: {formatCoins(packageCoins)}</span><span>Wheel balance: + {formatCoins(wheelCoins)}</span><b>Admin delivers: {formatCoins(deliveryCoins)}</b></> : <span>{order.wheelCoinsReleasedAt ? 'The reserved balance was returned when this order ended.' : 'The customer selected the option with an empty balance.'}</span>}</div>}
         <p className="admin-order-total">Total <strong>{formatVnd(order.totalVnd)}</strong></p>
       </section>
     </div>
 
-    {canConfirm && <section className="card admin-panel action-panel"><h2>Confirm payment{scheduleNow ? ' and book the appointment' : ''}</h2>
+    {canConfirm && <section className="card admin-panel action-panel"><h2>{order.needsAppointment ? `Confirm payment${bookNow ? ' and book the appointment' : ''}` : 'Confirm payment and deliver'}</h2>
       <p className="field-caption">{kind === 'crypto' ? <>Check that the wallet received exactly <strong>{order.cryptoAmount} {coin}</strong> (<a href={order.customerTxid ? explorerTx(order.paymentMethod, order.customerTxid) : explorerAddress(order.paymentMethod, wallet.address)} target="_blank" rel="noreferrer">open in explorer</a>). The order value is recorded as {formatVnd(order.totalVnd)}.</> : kind === 'paypal' ? <>Check PayPal for exactly <strong>{order.cryptoAmount} USD</strong> with note <strong>{order.code}</strong>. The order value is recorded as {formatVnd(order.totalVnd)}; PayPal does not confirm by itself.</> : <>Check your bank statement for <strong>{formatVnd(order.totalVnd)}</strong> with content <strong>{order.code}</strong>.</>}{order.status === 'expired' ? ' This order expired; confirming re-reserves its items if they are still in stock.' : ''}</p>
       {crypto && <p className="field-caption">The site checks the {crypto.network} network by itself and confirms {order.paymentMethod === 'ltc' ? 'at 2 confirmations' : 'once the transfer is final (about a minute)'}. <button type="button" className="secondary copy-button" disabled={busy} onClick={() => void act({action: 'check-payment'}, `Checked the ${crypto.network} network.`)}>Check payment now</button></p>}
-      <form onSubmit={event => {event.preventDefault(); void act({action: 'confirm-payment', amountVnd: Number(amount), reference, ...(scheduleNow ? {appointment} : {})}, scheduleNow ? 'Payment confirmed and appointment sent to the customer.' : 'Payment confirmed.');}}>
+      <form onSubmit={event => {event.preventDefault(); void act({action: 'confirm-payment', amountVnd: Number(amount), reference, ...(bookNow ? {appointment} : {})}, !order.needsAppointment ? 'Payment confirmed and the account was delivered to the customer.' : bookNow ? 'Payment confirmed and appointment sent to the customer.' : 'Payment confirmed.');}}>
         <div className="admin-field-row"><label>{crypto || kind === 'paypal' ? 'Order value received (VND)' : 'Amount received (VND)'}<input type="number" min="1" step="1" value={amount} onChange={event => setAmount(event.target.value)} required/></label><label>{crypto ? 'Transaction ID (optional)' : kind === 'paypal' ? 'PayPal transaction ID (optional)' : 'Bank reference (optional)'}<input value={reference} onChange={event => setReference(event.target.value)} maxLength={120} placeholder={crypto ? '64-character TXID' : kind === 'paypal' ? '17-character ID' : 'e.g. FT26273…'}/></label></div>
         {Number(amount) !== order.totalVnd && amount !== '' && <p className="admin-feedback error">This differs from the order total ({formatVnd(order.totalVnd)}). Confirm only if you accept it.</p>}
-        <label className="admin-compact-check"><input type="checkbox" checked={scheduleNow} onChange={event => setScheduleNow(event.target.checked)}/> Book the appointment now</label>
-        {scheduleNow && timePicker}
-        <button type="submit" disabled={busy}>{scheduleNow ? 'Confirm payment & send appointment' : 'Confirm payment'}</button>
+        {order.needsAppointment && <label className="admin-compact-check"><input type="checkbox" checked={scheduleNow} onChange={event => setScheduleNow(event.target.checked)}/> Book the appointment now</label>}
+        {bookNow && timePicker}
+        <button type="submit" disabled={busy}>{!order.needsAppointment ? 'Confirm payment & deliver' : bookNow ? 'Confirm payment & send appointment' : 'Confirm payment'}</button>
       </form>
     </section>}
 

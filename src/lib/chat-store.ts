@@ -129,6 +129,12 @@ export async function postPaymentMessage(order: {customerId: string; code: strin
   await addMessage({customerId: order.customerId, role: 'admin', authorName: 'Jewish Horse', body}).catch(error => console.error('Payment chat message failed', error instanceof Error ? error.message.split('\n')[0] : error));
 }
 
+/** The chat message for an order of game accounts only: there is no appointment, the details are already on the order page. */
+export async function postAccountsDeliveredMessage(order: {customerId: string; code: string}) {
+  const body = `Payment received for ${order.code}. Your account details are on your order page. Please change the password and recovery email right away, and message us here if anything does not work.`;
+  await addMessage({customerId: order.customerId, role: 'admin', authorName: 'Jewish Horse', body}).catch(error => console.error('Payment chat message failed', error instanceof Error ? error.message.split('\n')[0] : error));
+}
+
 /** Image bytes plus the owning conversation, for the access check in the image route. */
 export async function chatImage(id: string) {
   return getPaymentDb().chatImage.findUnique({where: {id}, select: {data: true, mimeType: true, sizeBytes: true, message: {select: {customerId: true}}}});
