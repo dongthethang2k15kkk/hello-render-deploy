@@ -35,4 +35,6 @@ export const skyCryptUrl = (ign: string, profile: string | null) => `https://sky
 export const eliteUrl = (ign: string, profile: string | null) => `https://elitebot.dev/@${encodeURIComponent(ign)}${profile ? `/${encodeURIComponent(profile)}` : ''}`;
 
 export const RARITY_COLORS: Record<string, string> = {COMMON: '#ffffff', UNCOMMON: '#55ff55', RARE: '#5555ff', EPIC: '#aa00aa', LEGENDARY: '#ffaa00', MYTHIC: '#ff55ff', DIVINE: '#55ffff', SPECIAL: '#ff5555'};
+/** Rarity colours as text on the dark store: blue and purple are lightened so they stay readable. */
+export const rarityTextColor = (rarity: string | null | undefined) => ({RARE: '#8c99ff', EPIC: '#d46fd4'} as Record<string, string>)[rarity ?? ''] ?? rarityColor(rarity);
 export const rarityColor = (rarity: string | null | undefined) => RARITY_COLORS[rarity ?? ''] ?? RARITY_COLORS.COMMON;

@@ -16,13 +16,20 @@ nhận tiền, chốt lịch hẹn và giao hàng qua chat trên web. Live: http
 - Trang đơn: mã VietQR điền sẵn số tiền + nội dung (mã đơn), đồng hồ đếm ngược, nút "I've transferred"
   kèm chọn 1–5 khung giờ rảnh; lịch hẹn kèm Google Calendar / file .ics; nội dung giao chỉ khách đó xem.
 - My orders, Inbox (thông báo có số chưa đọc), chat hỗ trợ lưu vĩnh viễn (ảnh chat riêng tư, xóa sau 90 ngày).
+- Thanh toán: chuyển khoản VietQR, Litecoin, USDT (TRC20, web tự dò) và **PayPal** (link PayPal.me + mã QR, số USD riêng cho
+  từng đơn, Admin xác nhận tay; có thể cộng phụ phí %).
+- **Gian tài khoản Hypixel SkyBlock**: trang chủ có 2 tab (gói / tài khoản). Mỗi acc là một món riêng, trang chi tiết
+  hiện level, 12 skill, purse, bank, fairy souls, networth, armor/equipment. Mua acc không cần chọn giờ: khi tiền được
+  xác nhận, thông tin đăng nhập hiện ngay trên trang đơn của khách. Chat trên điện thoại là màn hình toàn phần, bàn phím
+  không đẩy cả trang lên.
 
 **Admin** (đăng nhập Google theo `ADMIN_GOOGLE_EMAILS`)
 - Overview: việc cần làm, lịch hẹn sắp tới, doanh thu hôm nay/7/30 ngày, khách, hàng sắp hết, dung lượng DB, Gmail.
 - Orders: lọc, "Needs action"; trang đơn: xác nhận tiền + chốt lịch trong một bước, đổi lịch, hoàn tất, hủy (trả tồn),
   ghi chú nội bộ, gửi lại email, dòng thời gian, nhật ký email.
 - Customers: danh sách/lọc, lịch sử đăng nhập, khóa/mở, đặt mật khẩu mới, đăng xuất mọi nơi, xóa/ẩn danh.
-- Activity: nhật ký mọi thao tác Admin. Settings: Products, Payments (tài khoản ngân hàng, QR thử, tỷ giá), Email (Gmail).
+- Activity: nhật ký mọi thao tác Admin. Settings: Products, Payments (tài khoản ngân hàng, ví crypto, PayPal, QR thử, tỷ giá), Email (Gmail), SkyBlock accounts (tên tab, khóa Hypixel API).
+- Accounts: thêm acc bằng IGN (tự lấy thông số từ Hypixel) hoặc nhập tay, xem trước đúng như khách thấy, ảnh chụp, thông tin đăng nhập mã hóa (Reveal ghi vào Activity), tự làm mới thông số.
 
 **Email**: gửi qua Gmail API từ Gmail của shop (Render Free chặn SMTP). Admin nhận thư khi khách báo đã chuyển;
 khách nhận thư lịch hẹn (kèm .ics), xác nhận tiền, hoàn tất, hủy. Mọi sự kiện đồng thời vào Inbox trên web.

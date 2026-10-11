@@ -2267,3 +2267,5 @@ html.chat-sheet-open .bg-scene {display:none;}
 .admin-login-saved {display:grid; gap:10px;}
 .admin-account-form form {display:grid; gap:16px;}
 .admin-account-form details > summary {cursor:pointer;}
+.sb-block h2, .sb-level-head h2, .sb-gear-group h3 {font-family:var(--body-font); letter-spacing:0; text-transform:none;}
+.sb-page h1 {font-size:clamp(22px, 3.4vw, 32px);}

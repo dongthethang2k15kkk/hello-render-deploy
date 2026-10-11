@@ -2,7 +2,7 @@
 import Link from 'next/link';
 import type {ReactNode} from 'react';
 import type {CatalogProduct} from '@/lib/catalog';
-import {rarityColor, timeAgo} from '@/lib/account-view';
+import {rarityColor, rarityTextColor, timeAgo} from '@/lib/account-view';
 import {formatCompact, GAME_MODES, skillFill, statColor, type AccountStats, type GearGroup, type SkillStat} from '@/lib/skyblock-stats';
 import Price from './price';
 
@@ -43,7 +43,7 @@ export function AccountCardTile({product, vndPerUsd, vndPerLtc = null, href, pre
         <div><dt>Networth</dt><dd>{num(card.networth)}</dd></div>
         <div><dt>Purse</dt><dd>{num(card.purse)}</dd></div>
       </dl>
-      {card.setName && <p className="sb-set" style={{color: rarityColor(card.setRarity)}}><span aria-hidden="true">✦</span> {card.setName}</p>}
+      {card.setName && <p className="sb-set" style={{color: rarityTextColor(card.setRarity)}}><span aria-hidden="true">✦</span> {card.setName}</p>}
       <div className="sb-bottom">
         <div>{product.salePriceVnd && <del>{product.basePriceVnd.toLocaleString('en-US')} ₫</del>}<Price vnd={product.priceVnd} vndPerUsd={vndPerUsd} vndPerLtc={vndPerLtc}/></div>
         {preview ? <span className="button disabled-link" aria-disabled="true">View account →</span>

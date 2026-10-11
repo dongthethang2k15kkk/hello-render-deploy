@@ -4,7 +4,8 @@ import {catalogId, registerCustomer} from './helpers';
 
 // Direct access to the disposable E2E database only (never DATABASE_URL), to skip the wait before "I've paid" unlocks.
 const db = new PrismaClient({datasourceUrl: process.env.E2E_DATABASE_URL});
-test.afterAll(async () => { await db.$disconnect(); });
+// These tests place orders for the sample package and leave them open; give the stock back so later specs (which count on 5) are not starved.
+test.afterAll(async () => { await db.package.updateMany({where: {sku: 'SAMPLE_BASIC'}, data: {stockOnHand: 5}}); await db.$disconnect(); });
 
 async function admin(browser: Browser) {
   const context = await browser.newContext();

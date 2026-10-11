@@ -157,6 +157,31 @@ sau 20 giây; chỉ đúng khi chạy **một instance** (đúng với Render Fr
   4. Render → service → **Environment** → thêm `DISCORD_CLIENT_ID` và `DISCORD_CLIENT_SECRET` → Save (Render tự deploy lại).
   5. Mở trang đăng nhập: có nút *Continue with Discord*. Discord của khách phải có email đã xác minh.
 
+## PayPal và SkyBlock accounts (2026-10-11)
+
+- **Migration**: `20261011010000_skyblock_accounts` (bảng `GameAccount`, cột mới ở `OrderItem` và `Order`) chạy tự động khi
+  Render khởi động. PayPal không cần migration và không cần biến môi trường mới.
+- **PayPal** (chủ shop tự làm):
+  1. Có tên PayPal.me (paypal.me/TênCủaBạn) gắn với tài khoản PayPal sẽ nhận tiền.
+  2. Admin → Settings → Payments → **PayPal**: nhập tên, (tùy chọn) email, phụ phí %, hướng dẫn cho khách → bật → Save.
+  3. Bấm **Test QR** rồi quét bằng điện thoại: PayPal phải mở trang trả **$1.00 USD** cho đúng tên bạn. Nếu PayPal bỏ qua số tiền
+     trên link thì khách vẫn thấy đúng số và nút Copy trên trang đơn.
+  4. PayPal **không báo về web**: khi khách bấm "I've paid with PayPal", Admin mở PayPal kiểm tra đúng số USD (khớp đến cent)
+     và ghi chú là mã đơn, rồi bấm Confirm payment như chuyển khoản.
+  5. Tranh chấp PayPal (Goods & Services) là quyết định kinh doanh của bạn; web lưu thời điểm khách mở xem tài khoản để làm
+     bằng chứng.
+- **Hypixel API key** (chủ shop tự làm): developer.hypixel.net → đăng nhập → **Create App** → loại **Personal API Key** →
+  chờ duyệt. Không dùng "Create API Key" (hết hạn sau 3 ngày). Dán vào Admin → Settings → **SkyBlock accounts** → Save → Test.
+  Key được mã hóa trong DB và không bao giờ gửi về trình duyệt. Hypixel không cho mua bán acc bằng tiền thật: nếu họ thu
+  hồi key, vẫn nhập tay thông số được.
+- **Trước khi đăng một acc**: trong game bật *Settings → API Settings* (Inventory, Banking, Collections…) cho acc đó, nếu
+  không web không đọc được armor/equipment/bank.
+- **KHÔNG ĐỔI `AUTH_SECRET`** khi đã có acc: thông tin đăng nhập acc (và khóa Hypixel) được mã hóa bằng khóa sinh ra từ
+  `AUTH_SECRET`; đổi đi là toàn bộ không mở lại được. Trước khi đổi phải xuất ra bằng nút **Reveal** trong từng acc.
+- Mật khẩu acc chỉ hiện cho đúng khách mua trên trang đơn, không có trong email. Khách mở xem lần đầu được ghi vào dòng thời
+  gian đơn (`accounts_viewed`). Acc đã giao rồi mà đơn bị hủy sẽ chuyển sang **Hidden** kèm ghi chú đổi mật khẩu; web không
+  bao giờ tự bán lại.
+
 ## Chạy Docker trên máy
 
 Cài Docker Desktop tương thích kiến trúc máy và bật Linux containers. Máy đã

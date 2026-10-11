@@ -187,7 +187,7 @@ export default function OrderPage({params}: {params: Promise<{locale: string; co
         {(order.status === 'payment_reported' || order.status === 'paid') && <section className="card">
           <span className="eyebrow">{order.status === 'paid' ? 'PAYMENT CONFIRMED' : 'CHECKING YOUR PAYMENT'}</span>
           {order.customerTxid && <p className="field-caption">{paypalPay ? `Your PayPal transaction: ${order.customerTxid}` : <>Your transaction: <a href={explorerTx(order.paymentMethod, order.customerTxid)} target="_blank" rel="noreferrer">{order.customerTxid.slice(0, 12)}…</a></>}</p>}
-          <h2>{order.status === 'paid' ? (order.slots.length || order.asap ? 'We are booking your appointment' : 'Payment received! When are you free?') : 'Thanks! We are confirming your payment'}</h2>
+          <h2>{order.status === 'paid' ? (order.slots.length || order.asap ? 'We are booking your appointment' : 'Payment received! When are you free?') : order.needsAppointment ? 'Thanks! We are confirming your transfer' : 'Thanks! We are confirming your payment'}</h2>
           {order.paymentSource && order.status === 'paid' && <p className="payment-seen">Payment confirmed automatically on the {crypto?.network ?? 'Litecoin'} network.</p>}
           {order.status === 'payment_reported' && order.paymentSeenAt && <p className="payment-seen" role="status">Payment seen on the {crypto?.network ?? 'Litecoin'} network{usdt ? '' : ` (${Math.min(order.txConfirmations ?? 0, 2)}/2 confirmations)`}. It is confirmed automatically.</p>}
           {order.asap && <p className="payment-seen">You are free right now: we will message you in <Link href={`/${locale}/workspace`}>Chat</Link> as soon as an Admin is available.</p>}
